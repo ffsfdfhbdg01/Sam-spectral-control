@@ -30,11 +30,9 @@ struct GlobalParams
     double mix = 1.0; ///< 0 … 1
     bool bypass = false;
     Quality quality = Quality::Normal;
-    int soloBand = -1; ///< band auditioned on its own (−1 = none); see auditionShapeFor()
+    int soloBand = -1;           ///< band auditioned on its own (−1 = none); see auditionShapeFor()
+    double maxLookaheadMs = 0.0; ///< delay of the main path; Dynamic bands look ahead up to this (DYN-8)
 };
-
-/** Filter used to audition ("solo") a band: the region of the spectrum the band works on. */
-filters::BandShape auditionShapeFor (const filters::BandShape& band) noexcept;
 
 /** Coefficient update interval (samples) per Quality level (research §8). */
 constexpr int controlBlockFor (Quality q) noexcept
@@ -78,7 +76,12 @@ public:
 
     const BandProcessor& band (int index) const noexcept { return bandProcessors[static_cast<std::size_t> (index)]; }
 
-    int getLatencySamples() const noexcept { return latencySamples; }
+    /** Applies configuration parameters (Max Lookahead, later phase mode and spectral engine) without
+        processing audio, so the latency is known right after prepare(). Audio thread or prepare. */
+    void configure (const GlobalParams& params) noexcept;
+
+    /** Current latency in samples; any thread. */
+    int getLatencySamples() const noexcept { return latencySamples.load (std::memory_order_relaxed); }
     const EngineConfig& getConfig() const noexcept { return cfg; }
 
     /** Blocks in which non-finite audio was replaced by silence (input or filter state); any thread. */
@@ -89,12 +92,22 @@ private:
     void processChunk (Sample* const* channels, int numChannels, int numSamples, const BandSettingsArray& bands) noexcept;
 
     static constexpr double kRampSeconds = 0.02;
+    static constexpr double kMaxLookaheadSeconds = 0.02;
 
     EngineConfig cfg;
-    int latencySamples = 0;
+    std::atomic<int> latencySamples { 0 };
 
     std::vector<std::vector<double>> dry, wet;
     std::vector<double*> dryPointers, wetPointers;
+
+    // Undelayed input history: the detection signal of Dynamic bands and the source of the
+    // main path, which is delayed by Max Lookahead.
+    std::vector<std::vector<double>> history;
+    std::vector<const double*> historyPointers;
+    int historyMask = 0;
+    int historyWrite = 0;
+    int lookaheadSamples = 0;
+    int maxLookaheadSamples = 0;
     std::array<BandProcessor, kNumBands> bandProcessors;
     BandProcessor soloProcessor;
     std::vector<std::vector<double>> solo;

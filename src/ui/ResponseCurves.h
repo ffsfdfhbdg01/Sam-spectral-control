@@ -26,7 +26,13 @@ public:
     /** Updates one band (nullopt = band not drawn); returns true if its curve changed. */
     bool updateBand (int band, const std::optional<filters::BandShape>& shape);
 
-    /** Recomputes the composite (sum in dB of every drawn band); call after updateBand(). */
+    /**
+        Sets the current dynamic gain change of a band (DYN-11). Changes below 0.05 dB are ignored;
+        returns true when the band's dynamic curve changed.
+    */
+    bool setDynamicGain (int band, float gainDb);
+
+    /** Recomputes the composite (sum in dB of every drawn band, dynamic curves where present). */
     void updateComposite();
 
     int numPoints() const noexcept { return static_cast<int> (hz.size()); }
@@ -36,6 +42,8 @@ public:
 
     bool hasBand (int band) const noexcept { return shapes[static_cast<std::size_t> (band)].has_value(); }
     const std::vector<float>& bandDb (int band) const noexcept { return curves[static_cast<std::size_t> (band)]; }
+    bool hasDynamic (int band) const noexcept { return ! dynamicCurves[static_cast<std::size_t> (band)].empty(); }
+    const std::vector<float>& dynamicDb (int band) const noexcept { return dynamicCurves[static_cast<std::size_t> (band)]; }
     const std::vector<float>& compositeDb() const noexcept { return composite; }
 
     /** Response of an arbitrary shape on the grid (ghost previews). */
@@ -48,12 +56,15 @@ public:
 
 private:
     void compute (const filters::BandShape& shape, std::vector<float>& out) const;
+    void computeDynamic (int band);
 
     std::vector<float> hz;
     int validPoints = 0;
     double fs = 48000.0;
     std::array<std::optional<filters::BandShape>, kNumBands> shapes {};
     std::array<std::vector<float>, kNumBands> curves {};
+    std::array<float, kNumBands> dynamicGains {};
+    std::array<std::vector<float>, kNumBands> dynamicCurves {};
     std::vector<float> composite;
 };
 } // namespace ssc::ui

@@ -213,3 +213,68 @@ TEST_CASE ("Typed values are parsed in display units (BAND-6)", "[ui][BAND-6]")
     REQUIRE (plugin::format::parseMilliseconds ("1.2 s") == Approx (1200.0f));
     REQUIRE (plugin::format::parseMilliseconds ("0.5") == Approx (0.5f));
 }
+
+TEST_CASE ("Mode changes move default thresholds; band lookahead raises Max Lookahead (DYN-4, DYN-8)", "[ui][DYN-4][DYN-8]")
+{
+    JuceEnvironment env;
+    plugin::SscAudioProcessor processor;
+    BandModel model (processor.getValueTreeState(), processor.getUndoManager());
+
+    const int band = model.createBand (Shape::Bell, 1000.0f, 0.0f);
+    auto plain = [&model, band] (BandParam p) {
+        auto& param = model.parameter (band, p);
+        return param.convertFrom0to1 (param.getValue());
+    };
+
+    model.setMode (band, BandMode::Spectral);
+    REQUIRE (static_cast<ThresholdMode> (juce::roundToInt (plain (BandParam::ThresholdMode))) == ThresholdMode::Relative);
+    REQUIRE (plain (BandParam::Threshold) == Approx (6.0f));
+
+    model.setMode (band, BandMode::Dynamic);
+    REQUIRE (static_cast<ThresholdMode> (juce::roundToInt (plain (BandParam::ThresholdMode))) == ThresholdMode::Absolute);
+    REQUIRE (plain (BandParam::Threshold) == Approx (-20.0f));
+
+    // A threshold the user changed is kept.
+    {
+        BandModel::ScopedEdit edit (model, "Change Threshold");
+        model.setValue (band, BandParam::Threshold, -32.0f);
+    }
+    model.setMode (band, BandMode::Spectral);
+    REQUIRE (plain (BandParam::Threshold) == Approx (-32.0f));
+
+    // Shapes without gain cannot become dynamic.
+    const int cut = model.createBand (Shape::LowCut, 40.0f, 0.0f);
+    model.setMode (cut, BandMode::Dynamic);
+    model.refresh();
+    REQUIRE (model.band (cut).mode == BandMode::Static);
+
+    auto* maxLookahead = processor.getValueTreeState().getParameter (plugin::id::maxLookahead);
+    REQUIRE (maxLookahead->convertFrom0to1 (maxLookahead->getValue()) == Approx (0.0f));
+    {
+        BandModel::ScopedEdit edit (model, "Change Lookahead");
+        model.setValue (band, BandParam::Lookahead, 7.5f);
+    }
+    REQUIRE (maxLookahead->convertFrom0to1 (maxLookahead->getValue()) == Approx (7.5f));
+}
+
+TEST_CASE ("Max Lookahead sets the reported latency (DYN-8, ARC-3)", "[plugin][DYN-8][ARC-3]")
+{
+    JuceEnvironment env;
+    plugin::SscAudioProcessor processor;
+    auto* maxLookahead = processor.getValueTreeState().getParameter (plugin::id::maxLookahead);
+    maxLookahead->setValueNotifyingHost (maxLookahead->convertTo0to1 (10.0f));
+
+    processor.setPlayConfigDetails (2, 2, 48000.0, 512);
+    processor.prepareToPlay (48000.0, 512);
+    REQUIRE (processor.getLatencySamples() == 480);
+
+    // An impulse comes out exactly the reported latency later.
+    juce::AudioBuffer<float> buffer (2, 512);
+    buffer.clear();
+    buffer.setSample (0, 10, 1.0f);
+    buffer.setSample (1, 10, 1.0f);
+    juce::MidiBuffer midi;
+    processor.processBlock (buffer, midi);
+    for (int i = 0; i < 512; ++i)
+        REQUIRE (buffer.getSample (0, i) == (i == 10 + 480 ? 1.0f : 0.0f));
+}

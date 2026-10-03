@@ -32,6 +32,7 @@ void ResponseCurves::setGrid (int numPoints, float minHz, float maxHz)
         curve.assign (hz.size(), 0.0f);
         if (shape.has_value())
             compute (*shape, curve);
+        computeDynamic (b);
     }
     updateComposite();
 }
@@ -56,7 +57,40 @@ bool ResponseCurves::updateBand (int band, const std::optional<filters::BandShap
     curve.assign (hz.size(), 0.0f);
     if (shape.has_value())
         compute (*shape, curve);
+    computeDynamic (band);
     return true;
+}
+
+bool ResponseCurves::setDynamicGain (int band, float gainDb)
+{
+    constexpr float threshold = 0.05f;
+    auto& current = dynamicGains[static_cast<std::size_t> (band)];
+    const bool wasShown = std::abs (current) >= threshold;
+    const bool show = std::abs (gainDb) >= threshold;
+    if (! show && ! wasShown)
+        return false;
+    if (show && wasShown && std::abs (gainDb - current) < threshold)
+        return false;
+
+    current = show ? gainDb : 0.0f;
+    computeDynamic (band);
+    return true;
+}
+
+void ResponseCurves::computeDynamic (int band)
+{
+    auto& curve = dynamicCurves[static_cast<std::size_t> (band)];
+    const auto& shape = shapes[static_cast<std::size_t> (band)];
+    const float gain = dynamicGains[static_cast<std::size_t> (band)];
+    if (! shape.has_value() || std::abs (gain) < 0.05f)
+    {
+        curve.clear();
+        return;
+    }
+    auto s = *shape;
+    s.gainDb += gain;
+    curve.assign (hz.size(), 0.0f);
+    compute (s, curve);
 }
 
 void ResponseCurves::updateComposite()
@@ -66,7 +100,7 @@ void ResponseCurves::updateComposite()
     {
         if (! shapes[static_cast<std::size_t> (b)].has_value())
             continue;
-        const auto& curve = curves[static_cast<std::size_t> (b)];
+        const auto& curve = hasDynamic (b) ? dynamicCurves[static_cast<std::size_t> (b)] : curves[static_cast<std::size_t> (b)];
         for (std::size_t i = 0; i < composite.size(); ++i)
             composite[i] = std::max (kFloorDb, composite[i] + curve[i]);
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 #include <optional>
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -49,6 +50,9 @@ public:
     void refreshFromAnalyzer();
 
     void setSampleRate (double sampleRate);
+
+    /** Source of the live dynamic gain change of each band (DYN-11); polled on every frame. */
+    std::function<float (int band)> dynamicGainProvider;
     void setChannelInfo (int numChannels, int numPairs);
 
     /** Visible EQ range: ±range dB (3, 6, 12, 18 or 30). */

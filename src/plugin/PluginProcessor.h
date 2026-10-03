@@ -13,7 +13,7 @@ namespace ssc::plugin
 {
 inline constexpr const char* kPluginName = "Sam Spectral Control";
 
-class SscAudioProcessor final : public juce::AudioProcessor
+class SscAudioProcessor final : public juce::AudioProcessor, private juce::Timer
 {
 public:
     SscAudioProcessor();
@@ -65,7 +65,13 @@ public:
     /** Undo history of band edits; lives here so it survives closing the editor. */
     juce::UndoManager& getUndoManager() noexcept { return undoManager; }
 
+    /** Current dynamic gain change of a band in dB (DYN-11); any thread. */
+    float getBandDynamicGainDb (int band) const noexcept { return engine.band (band).getDynamicGainDb(); }
+
 private:
+    /** Reports latency changes (Max Lookahead, spectral engine) to the host from the message thread. */
+    void timerCallback() override;
+
     template <typename Sample>
     void processImpl (juce::AudioBuffer<Sample>& buffer, bool forceBypass) noexcept;
 

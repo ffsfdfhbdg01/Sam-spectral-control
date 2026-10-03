@@ -117,6 +117,12 @@ public:
     /** Changes the shape and keeps the band consistent (slope, mode). */
     void setShape (int band, Shape shape);
 
+    /**
+        Changes the band mode. Thresholds still at the defaults of the previous mode move to the
+        defaults of the new one (Dynamic: Absolute −20 dBFS, Spectral: Relative +6 dB, DYN-4).
+    */
+    void setMode (int band, BandMode mode);
+
     void copyBand (int band) const;
     bool canPaste() const;
     bool pasteToBand (int band);

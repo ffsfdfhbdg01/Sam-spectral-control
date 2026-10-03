@@ -182,6 +182,10 @@ BandPanel::Choice& BandPanel::addChoice (BandParam param, const juce::String& na
         {
             model.setShape (band, static_cast<Shape> (id - 1));
         }
+        else if (c->param == BandParam::Mode)
+        {
+            model.setMode (band, static_cast<BandMode> (id - 1));
+        }
         else
         {
             BandModel::ScopedEdit edit (model, "Change " + c->title);

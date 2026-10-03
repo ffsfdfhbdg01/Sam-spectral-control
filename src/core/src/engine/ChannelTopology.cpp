@@ -32,12 +32,61 @@ namespace
     }
 } // namespace
 
+SpeakerGroup groupOf (SpeakerRole role) noexcept
+{
+    using R = SpeakerRole;
+    switch (role)
+    {
+        case R::Left:
+        case R::Right:
+        case R::LeftCentre:
+        case R::RightCentre: return SpeakerGroup::Front;
+        case R::Centre:
+        case R::Mono: return SpeakerGroup::Centre;
+        case R::Lfe:
+        case R::Lfe2: return SpeakerGroup::Lfe;
+        case R::LeftSurround:
+        case R::RightSurround:
+        case R::LeftSurroundSide:
+        case R::RightSurroundSide: return SpeakerGroup::SideSurround;
+        case R::LeftSurroundRear:
+        case R::RightSurroundRear:
+        case R::CentreSurround: return SpeakerGroup::RearSurround;
+        case R::LeftWide:
+        case R::RightWide: return SpeakerGroup::Wides;
+        case R::TopFrontLeft:
+        case R::TopFrontRight:
+        case R::TopFrontCentre: return SpeakerGroup::TopFront;
+        case R::TopMiddleLeft:
+        case R::TopMiddleRight:
+        case R::TopMiddleCentre: return SpeakerGroup::TopMiddle;
+        case R::TopRearLeft:
+        case R::TopRearRight:
+        case R::TopRearCentre: return SpeakerGroup::TopRear;
+        case R::Unknown:
+        case R::BottomFrontLeft:
+        case R::BottomFrontRight:
+        case R::BottomFrontCentre:
+        case R::ProximityLeft:
+        case R::ProximityRight:
+        case R::BottomSideLeft:
+        case R::BottomSideRight:
+        case R::BottomRearLeft:
+        case R::BottomRearRight:
+        case R::BottomRearCentre: break;
+    }
+    return SpeakerGroup::Other;
+}
+
 ChannelTopology ChannelTopology::fromRoles (const SpeakerRole* roles, int numChannels) noexcept
 {
     ChannelTopology t;
     t.numChannels = std::clamp (numChannels, 0, kMaxChannels);
     std::copy_n (roles, t.numChannels, t.roles.begin());
     t.pairIndex.fill (-1);
+    t.groups.fill (SpeakerGroup::Other);
+    for (int ch = 0; ch < t.numChannels; ++ch)
+        t.groups[static_cast<std::size_t> (ch)] = groupOf (t.roles[static_cast<std::size_t> (ch)]);
 
     for (const auto& [leftRole, rightRole] : kPairs)
     {

@@ -71,6 +71,23 @@ EqDisplay::~EqDisplay()
 void EqDisplay::refreshFromAnalyzer()
 {
     model.refresh();
+
+    if (dynamicGainProvider)
+    {
+        bool changed = false;
+        for (int b = 0; b < kNumBands; ++b)
+        {
+            const auto& v = model.band (b);
+            const float gain = v.active() && v.mode != BandMode::Static ? dynamicGainProvider (b) : 0.0f;
+            changed = curves.setDynamicGain (b, gain) || changed;
+        }
+        if (changed)
+        {
+            curves.updateComposite();
+            repaint();
+        }
+    }
+
     if (analyzer.frames().update())
     {
         hasFrame = true;
@@ -606,10 +623,8 @@ void EqDisplay::showBandMenu (int band)
     {
         const auto mode = static_cast<BandMode> (i);
         const bool allowed = mode == BandMode::Static || shapeUsesGain (v.shape);
-        modes.addItem (plugin::labels::bandModes()[i], allowed, v.mode == mode, forTargets ("Change Mode", [mode] (BandModel& m, int b) {
-                           if (mode == BandMode::Static || shapeUsesGain (m.band (b).shape))
-                               m.setValue (b, BandParam::Mode, static_cast<float> (mode));
-                       }));
+        modes.addItem (plugin::labels::bandModes()[i], allowed, v.mode == mode,
+                       forTargets ("Change Mode", [mode] (BandModel& m, int b) { m.setMode (b, mode); }));
     }
     menu.addSubMenu ("Mode", modes);
 
@@ -825,6 +840,34 @@ void EqDisplay::paintBandCurves (juce::Graphics& g) const
         {
             g.setColour (colour.withAlpha (0.85f));
             g.strokePath (path, juce::PathStrokeType (1.2f));
+        }
+
+        // Dynamic bands: the region between the static and the current curve (DYN-11).
+        if (curves.hasDynamic (b))
+        {
+            const auto dynamicPath = curvePath (curves.dynamicDb (b));
+            juce::Path region;
+            const auto& staticDb = curves.bandDb (b);
+            const auto& dynamicDb = curves.dynamicDb (b);
+            const auto h = static_cast<float> (getHeight());
+            const int n = juce::jmin (curves.numValidPoints(), static_cast<int> (staticDb.size()));
+            for (int i = 0; i < n; ++i)
+            {
+                const auto p = juce::Point<float> (xForFrequency (curves.frequency (i)),
+                                                   juce::jlimit (-20.0f, h + 20.0f, yForEqDb (staticDb[static_cast<std::size_t> (i)])));
+                if (i == 0)
+                    region.startNewSubPath (p);
+                else
+                    region.lineTo (p);
+            }
+            for (int i = n - 1; i >= 0; --i)
+                region.lineTo (xForFrequency (curves.frequency (i)),
+                               juce::jlimit (-20.0f, h + 20.0f, yForEqDb (dynamicDb[static_cast<std::size_t> (i)])));
+            region.closeSubPath();
+            g.setColour (colour.withAlpha (0.35f));
+            g.fillPath (region);
+            g.setColour (colour.withAlpha (0.95f));
+            g.strokePath (dynamicPath, juce::PathStrokeType (1.4f));
         }
     }
 }

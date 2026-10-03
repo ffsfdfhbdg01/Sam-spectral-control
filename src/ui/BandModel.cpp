@@ -269,6 +269,16 @@ void BandModel::setValue (int band, BandParam p, float plainValue)
     }
     if (! juce::exactlyEqual (param.getValue(), normalised))
         param.setValueNotifyingHost (normalised);
+
+    // A band lookahead beyond the global Max Lookahead raises it (DYN-8); the latency follows.
+    if (p == BandParam::Lookahead)
+        if (auto* maxLookahead = state.getParameter (plugin::id::maxLookahead))
+            if (maxLookahead->convertFrom0to1 (maxLookahead->getValue()) < plainValue)
+            {
+                maxLookahead->beginChangeGesture();
+                maxLookahead->setValueNotifyingHost (maxLookahead->convertTo0to1 (plainValue));
+                maxLookahead->endChangeGesture();
+            }
 }
 
 void BandModel::endEdit()
@@ -372,6 +382,38 @@ void BandModel::setShape (int band, Shape shape)
     setValue (band, BandParam::Slope, static_cast<float> (nearestAllowedSlope (shape, v.slope)));
     if (! shapeUsesGain (shape) && v.mode != BandMode::Static)
         setValue (band, BandParam::Mode, static_cast<float> (BandMode::Static));
+}
+
+void BandModel::setMode (int band, BandMode mode)
+{
+    struct Defaults
+    {
+        ThresholdMode mode;
+        float threshold;
+    };
+    constexpr Defaults dynamicDefaults { ThresholdMode::Absolute, -20.0f };
+    constexpr Defaults spectralDefaults { ThresholdMode::Relative, 6.0f };
+
+    const auto& v = values[static_cast<std::size_t> (band)];
+    if (mode != BandMode::Static && ! shapeUsesGain (v.shape))
+        return;
+
+    ScopedEdit edit (*this, "Change Mode");
+    setValue (band, BandParam::Mode, static_cast<float> (mode));
+
+    if (mode == BandMode::Static || v.mode == mode)
+        return;
+    const auto& from = mode == BandMode::Spectral ? dynamicDefaults : spectralDefaults;
+    const auto& to = mode == BandMode::Spectral ? spectralDefaults : dynamicDefaults;
+    auto& thresholdMode = parameter (band, BandParam::ThresholdMode);
+    auto& threshold = parameter (band, BandParam::Threshold);
+    const auto currentMode = static_cast<ThresholdMode> (juce::roundToInt (thresholdMode.convertFrom0to1 (thresholdMode.getValue())));
+    const float currentThreshold = threshold.convertFrom0to1 (threshold.getValue());
+    if (currentMode == from.mode && std::abs (currentThreshold - from.threshold) < 0.05f)
+    {
+        setValue (band, BandParam::ThresholdMode, static_cast<float> (to.mode));
+        setValue (band, BandParam::Threshold, to.threshold);
+    }
 }
 
 void BandModel::copyBand (int band) const

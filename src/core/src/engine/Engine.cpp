@@ -7,32 +7,6 @@
 
 namespace ssc::engine
 {
-filters::BandShape auditionShapeFor (const filters::BandShape& band) noexcept
-{
-    filters::BandShape a;
-    a.frequencyHz = band.frequencyHz;
-    a.slope = Slope::Db12;
-    switch (band.shape)
-    {
-        case Shape::LowShelf:
-        case Shape::LowCut:
-            a.shape = Shape::HighCut; // listen to the region below the band frequency
-            a.q = 0.70710678;
-            break;
-        case Shape::HighShelf:
-        case Shape::HighCut:
-            a.shape = Shape::LowCut; // listen to the region above the band frequency
-            a.q = 0.70710678;
-            break;
-        default:
-            a.shape = Shape::BandPass;
-            a.q = std::clamp (band.q, 0.5, 20.0);
-            a.slope = Slope::Db6;
-            break;
-    }
-    return a;
-}
-
 void Engine::prepare (const EngineConfig& config)
 {
     cfg = config;
@@ -59,11 +33,22 @@ void Engine::prepare (const EngineConfig& config)
     soloAmount.prepare (cfg.sampleRate, 0.01);
     soloAmount.setCurrentAndTarget (0.0);
 
-    // The processing chain has no latency yet; the delay is sized for the M2–M4 maximum.
-    latencySamples = 0;
+    // Input history for detection and the Max Lookahead delay of the main path (DYN-8).
+    maxLookaheadSamples = static_cast<int> (std::ceil (kMaxLookaheadSeconds * cfg.sampleRate));
+    const int historySize = nextPowerOfTwo (maxLookaheadSamples + cfg.maxBlockSize + 1);
+    history.assign (static_cast<std::size_t> (cfg.numChannels), std::vector<double> (static_cast<std::size_t> (historySize), 0.0));
+    historyPointers.resize (history.size());
+    for (std::size_t ch = 0; ch < history.size(); ++ch)
+        historyPointers[ch] = history[ch].data();
+    historyMask = historySize - 1;
+    historyWrite = 0;
+    lookaheadSamples = 0;
+
+    // Latency so far is the lookahead only; the dry delay is sized for the M3–M4 maximum.
+    latencySamples.store (0, std::memory_order_relaxed);
     const int maxLatency = static_cast<int> (cfg.sampleRate * 0.25);
     dryDelay.prepare (cfg.numChannels, maxLatency, cfg.maxBlockSize);
-    dryDelay.setDelay (latencySamples);
+    dryDelay.setDelay (0);
 
     outputGain.prepare (cfg.sampleRate, kRampSeconds);
     mix.prepare (cfg.sampleRate, kRampSeconds);
@@ -78,9 +63,24 @@ void Engine::prepare (const EngineConfig& config)
 void Engine::reset() noexcept
 {
     dryDelay.reset();
+    for (auto& h : history)
+        std::fill (h.begin(), h.end(), 0.0);
     for (auto& band : bandProcessors)
         band.reset();
     soloProcessor.reset();
+}
+
+void Engine::configure (const GlobalParams& params) noexcept
+{
+    // Max Lookahead is a configuration change: the latency follows it (ADR-0011).
+    const int lookahead =
+        std::clamp (static_cast<int> (std::lround (0.001 * params.maxLookaheadMs * cfg.sampleRate)), 0, maxLookaheadSamples);
+    if (lookahead != lookaheadSamples)
+    {
+        lookaheadSamples = lookahead;
+        dryDelay.setDelay (lookaheadSamples);
+        latencySamples.store (lookaheadSamples, std::memory_order_relaxed);
+    }
 }
 
 template <typename Sample>
@@ -94,6 +94,8 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
     soloAmount.setTarget (soloing ? 1.0 : 0.0);
     if (soloing)
         lastSoloShape = auditionShapeFor (bands[static_cast<std::size_t> (params.soloBand)].shape);
+
+    configure (params);
 
     outputGain.setTarget (dbToGain (params.outputGainDb));
     mix.setTarget (std::clamp (params.mix, 0.0, 1.0));
@@ -129,24 +131,39 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
                 inputSanitised = true;
             }
             dry[c][i] = x;
-            wet[c][i] = x;
+            history[c][static_cast<std::size_t> ((historyWrite + static_cast<int> (i)) & historyMask)] = x;
         }
     }
     if (inputSanitised)
         nonFiniteEvents.fetch_add (1, std::memory_order_relaxed);
 
+    // The main path is the input delayed by Max Lookahead (exactly the input when it is 0).
+    for (int ch = 0; ch < numChannels; ++ch)
+    {
+        const auto& h = history[static_cast<std::size_t> (ch)];
+        auto& w = wet[static_cast<std::size_t> (ch)];
+        for (std::size_t i = 0; i < n; ++i)
+            w[i] = h[static_cast<std::size_t> ((historyWrite + static_cast<int> (i) - lookaheadSamples) & historyMask)];
+    }
+
+    // Solo auditions the (delayed) input, so it is taken before the bands run.
+    const bool soloActive = soloAmount.isSmoothing() || soloAmount.getCurrent() > 0.0;
+    if (soloActive)
+        for (int ch = 0; ch < numChannels; ++ch)
+            std::copy (wet[static_cast<std::size_t> (ch)].begin(), wet[static_cast<std::size_t> (ch)].begin() + numSamples,
+                       solo[static_cast<std::size_t> (ch)].begin());
+
+    const DetectionInput detection { historyPointers.data(), historyMask, historyWrite, lookaheadSamples };
     for (std::size_t b = 0; b < bandProcessors.size(); ++b)
-        bandProcessors[b].process (bands[b], cfg.topology, wetPointers.data(), numChannels, numSamples, controlBlock);
+        bandProcessors[b].process (bands[b], cfg.topology, wetPointers.data(), numChannels, numSamples, controlBlock, detection);
+    historyWrite = (historyWrite + numSamples) & historyMask;
 
     // Solo: crossfade the processed signal with the band's audition filter applied to the input.
-    if (soloAmount.isSmoothing() || soloAmount.getCurrent() > 0.0)
+    if (soloActive)
     {
         BandSettings audition;
         audition.active = true;
         audition.shape = lastSoloShape;
-        for (int ch = 0; ch < numChannels; ++ch)
-            std::copy (dry[static_cast<std::size_t> (ch)].begin(), dry[static_cast<std::size_t> (ch)].begin() + numSamples,
-                       solo[static_cast<std::size_t> (ch)].begin());
         soloProcessor.process (audition, cfg.topology, soloPointers.data(), numChannels, numSamples, controlBlock);
         for (std::size_t i = 0; i < n; ++i)
         {

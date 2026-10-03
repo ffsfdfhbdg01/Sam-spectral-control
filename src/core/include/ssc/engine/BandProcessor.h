@@ -1,15 +1,36 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <vector>
 
+#include "ssc/dynamics/Dynamics.h"
 #include "ssc/engine/ChannelTopology.h"
+#include "ssc/engine/GainTable.h"
 #include "ssc/filters/BandDesign.h"
 #include "ssc/filters/SvfSection.h"
 
 namespace ssc::engine
 {
+/** Dynamic and Spectral settings of a band (research §6c, DYN-4). */
+struct DynamicSettings
+{
+    ThresholdMode thresholdMode = ThresholdMode::Absolute;
+    double thresholdDb = -20.0;
+    double ratio = 2.0;
+    Direction direction = Direction::Above;
+    double rangeDb = 12.0;
+    double attackMs = 5.0;
+    double releaseMs = 100.0;
+    double lookaheadMs = 0.0;
+    double kneeDb = 6.0;
+    double mix = 1.0;         ///< 0 … 1, scales the gain change (DYN-7)
+    double selectivity = 0.5; ///< 0 … 1 (Spectral)
+    DetectorLink link = DetectorLink::Group;
+    bool autoGain = false;
+};
+
 /** Everything the engine needs to run one band, read once per host block. */
 struct BandSettings
 {
@@ -20,8 +41,21 @@ struct BandSettings
     bool includeLfe = false;
     BandMode mode = BandMode::Static;
     Character character = Character::Clear;
+    DynamicSettings dynamics;
+};
 
-    bool operator== (const BandSettings&) const = default;
+/**
+    The undelayed engine input, used by Dynamic bands as their detection signal (sidechain).
+    rings[ch] is a circular buffer (size mask + 1, a power of two); blockStart is the ring index of
+    the newest input sample that corresponds to sample 0 of the processed block, whose main path
+    is delayed by mainDelay samples (Max Lookahead, DYN-8).
+*/
+struct DetectionInput
+{
+    const double* const* rings = nullptr;
+    int mask = 0;
+    int blockStart = 0;
+    int mainDelay = 0;
 };
 
 /** A signal processed by a band: a channel, or the Mid or Side component of a channel pair. */
@@ -53,12 +87,26 @@ struct LaneLayout
 LaneLayout makeLanes (StereoComponent component, std::uint64_t channelMask, bool includeLfe, const ChannelTopology& topology) noexcept;
 
 /**
+    Filter covering the region of the spectrum a band works on: used to audition ("solo") a band
+    and as the detection filter of Dynamic bands. Bell-like shapes: band pass at fc and Q; shelves
+    and cuts: the side of fc they act on.
+*/
+filters::BandShape auditionShapeFor (const filters::BandShape& band) noexcept;
+
+/** Detector link key of a lane: lanes with equal keys share one detection level (CH-5). */
+int linkKey (const Lane& lane, int laneIndex, DetectorLink link, const ChannelTopology& topology) noexcept;
+
+/**
     Runs one EQ band on the engine's working buffers.
 
-    Continuous parameters (frequency, gain, Q) are smoothed and the matched design is recomputed
-    per control block with per-sample interpolation of the SVF parameters. Changes of filter
-    topology (shape, slope, on/off, target) crossfade between two instances. Real-time safe after
-    prepare().
+    Static: continuous parameters (frequency, gain, Q) are smoothed and the matched design is
+    recomputed per control block with per-sample interpolation of the SVF parameters.
+    Dynamic: the detection filter (the band's region) runs on the undelayed input, an RMS
+    detector feeds the gain computer and attack/release smoothing, and the band gain is modulated
+    per sample through a gain table of SVF parameters, so the response at every gain equals the
+    static design (research §6c).
+    Changes of filter topology (shape, slope, on/off, target) crossfade between two instances.
+    Real-time safe after prepare().
 */
 class BandProcessor
 {
@@ -68,10 +116,16 @@ public:
 
     /** Processes numSamples in place; controlBlock is the coefficient update interval (Quality). */
     void process (const BandSettings& settings, const ChannelTopology& topology, double* const* channels, int numChannels, int numSamples,
-                  int controlBlock) noexcept;
+                  int controlBlock, const DetectionInput& detection = {}) noexcept;
 
     /** Design currently heard (after smoothing). */
     const filters::BandDesign& currentDesign() const noexcept { return instances[static_cast<std::size_t> (active)].design; }
+
+    /** Current dynamic gain change in dB (the lane with the largest change); any thread (DYN-11). */
+    float getDynamicGainDb() const noexcept { return dynamicGainDb.load (std::memory_order_relaxed); }
+
+    /** Dynamic gain change of one lane (tests). */
+    double getLaneGainDb (int lane) const noexcept { return dynLanes[static_cast<std::size_t> (lane)].gain; }
 
     static constexpr int kMaxControlBlock = 64;
 
@@ -82,14 +136,36 @@ private:
         std::array<filters::SvfParams, filters::kMaxSections> params {}; ///< parameters at the end of the last block
         LaneLayout lanes;
         int topologyKey = 0;
+        bool dynamic = false;
         std::array<std::array<filters::SectionState, filters::kMaxSections>, kMaxChannels> state {};
 
         void clearState() noexcept;
         bool isIdentity() const noexcept { return design.numSections == 0 || lanes.numLanes == 0; }
     };
 
+    struct DynamicLane
+    {
+        std::array<filters::SectionState, filters::kMaxSections> detect {};
+        std::array<filters::SectionState, filters::kMaxSections> context {};
+        dynamics::RmsDetector level, contextLevel;
+        dynamics::GainSmoother smoother;
+        double gain = 0.0;     ///< applied gain change (dB), ramped per sample
+        double gainStep = 0.0; ///< per-sample increment towards the latest smoothed value
+    };
+
+    enum class ParamSource
+    {
+        Frozen,      ///< params of the instance, unchanged
+        Interpolate, ///< from params to targetParams over the block
+        Dynamic      ///< per lane and sample from the gain table
+    };
+
     void advanceSmoothing (const BandSettings& target, int blockSize) noexcept;
-    void runInstance (Instance& instance, double* const* buffers, int numSamples, bool interpolate) noexcept;
+    void runInstance (Instance& instance, double* const* buffers, int numSamples, ParamSource source) noexcept;
+    void updateDetection (const BandSettings& settings) noexcept;
+    void runDetection (const BandSettings& settings, const Instance& instance, const ChannelTopology& topology,
+                       const DetectionInput& detection, const double* const* blockInput, int offset, int numSamples) noexcept;
+    void resetDynamics() noexcept;
 
     double sampleRate = 48000.0;
     int maxBlock = 0;
@@ -102,9 +178,23 @@ private:
     filters::BandShape designedShape;
     bool hasSmoothed = false;
     double smoothingTimeSeconds = 0.02;
+    double blockStartGainDb = 0.0; ///< smoothed static gain at the start of the current block
 
     std::array<filters::SvfParams, filters::kMaxSections> targetParams {};
     std::array<std::array<filters::SvfParams, filters::kMaxSections>, kMaxControlBlock> rampParams {};
+
+    // Dynamic mode
+    GainTable gainTable;
+    filters::BandDesign detectDesign, contextDesign;
+    filters::BandShape detectShape;
+    bool detectValid = false;
+    std::array<DynamicLane, kMaxChannels> dynLanes {};
+    std::array<std::array<double, kMaxControlBlock>, kMaxChannels> laneGain {};
+    int dynamicStep = 4;
+    int stepCounter = 1;
+    double dynamicMix = 1.0;
+    double lastAttackMs = -1.0, lastReleaseMs = -1.0, lastDetectorHz = -1.0;
+    std::atomic<float> dynamicGainDb { 0.0f };
 
     std::vector<std::vector<double>> fadeA, fadeB;
     std::vector<double*> fadeAPtr, fadeBPtr;

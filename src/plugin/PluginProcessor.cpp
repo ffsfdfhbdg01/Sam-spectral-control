@@ -14,9 +14,20 @@ SscAudioProcessor::SscAudioProcessor()
 {
     params.attach (state);
     state.state.setProperty (kVersionProperty, kStateVersion, nullptr);
+    startTimerHz (10);
 }
 
-SscAudioProcessor::~SscAudioProcessor() = default;
+SscAudioProcessor::~SscAudioProcessor()
+{
+    stopTimer();
+}
+
+void SscAudioProcessor::timerCallback()
+{
+    const int latency = engine.getLatencySamples();
+    if (latency != getLatencySamples())
+        setLatencySamples (latency);
+}
 
 void SscAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
@@ -28,6 +39,7 @@ void SscAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     cfg.numChannels = numChannels;
     cfg.topology = getChannelTopology();
     engine.prepare (cfg);
+    engine.configure (readGlobalParams (false));
 
     tapScratch.assign (static_cast<std::size_t> (std::max (1, samplesPerBlock)), 0.0f);
     analyzer.prepare (sampleRate);
@@ -83,6 +95,7 @@ engine::GlobalParams SscAudioProcessor::readGlobalParams (bool forceBypass) cons
     p.bypass = forceBypass || isOn (params.bypass);
     p.quality = choice (params.quality, Quality::Max);
     p.soloBand = soloBand.load (std::memory_order_relaxed);
+    p.maxLookaheadMs = params.maxLookahead->load (std::memory_order_relaxed);
     return p;
 }
 
@@ -103,6 +116,22 @@ void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) cons
         s.mode = choice (get (BandParam::Mode), BandMode::Spectral);
         s.component = choice (get (BandParam::Target), StereoComponent::Side);
         s.character = choice (get (BandParam::Character), Character::Sharp);
+
+        auto value = [&get] (BandParam p) { return static_cast<double> (get (p)->load (std::memory_order_relaxed)); };
+        auto& d = s.dynamics;
+        d.thresholdMode = choice (get (BandParam::ThresholdMode), ThresholdMode::Relative);
+        d.thresholdDb = value (BandParam::Threshold);
+        d.ratio = value (BandParam::Ratio);
+        d.direction = choice (get (BandParam::Direction), Direction::Below);
+        d.rangeDb = value (BandParam::Range);
+        d.attackMs = value (BandParam::Attack);
+        d.releaseMs = value (BandParam::Release);
+        d.lookaheadMs = value (BandParam::Lookahead);
+        d.kneeDb = value (BandParam::Knee);
+        d.mix = 0.01 * value (BandParam::Mix);
+        d.selectivity = 0.01 * value (BandParam::Selectivity);
+        d.link = choice (get (BandParam::Link), DetectorLink::All);
+        d.autoGain = isOn (get (BandParam::AutoGain));
     }
 }
 

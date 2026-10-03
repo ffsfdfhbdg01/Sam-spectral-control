@@ -3,6 +3,7 @@ add_library(ssc_core STATIC
     src/analysis/SpectrumAnalyzer.cpp
     src/engine/Engine.cpp
     src/engine/BandProcessor.cpp
+    src/engine/GainTable.cpp
     src/engine/ChannelTopology.cpp
     src/filters/MatchedDesign.cpp
     src/filters/BandDesign.cpp)

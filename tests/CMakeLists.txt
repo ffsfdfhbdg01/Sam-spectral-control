@@ -8,7 +8,9 @@ add_executable(ssc_core_tests
     core/TestSpectrumAnalyzer.cpp
     core/TestEngine.cpp
     core/TestFilterDesign.cpp
-    core/TestBandProcessor.cpp)
+    core/TestBandProcessor.cpp
+    core/TestDynamics.cpp
+    core/TestDynamicBands.cpp)
 
 target_include_directories(ssc_core_tests PRIVATE .)
 target_link_libraries(ssc_core_tests PRIVATE ssc_core ssc_options Catch2::Catch2WithMain)

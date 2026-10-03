@@ -49,6 +49,23 @@ enum class SpeakerRole : std::uint8_t
     BottomRearCentre
 };
 
+/** Loudspeaker groups used for detector linking (research §4). */
+enum class SpeakerGroup : std::uint8_t
+{
+    Front,
+    Centre,
+    Lfe,
+    SideSurround,
+    RearSurround,
+    Wides,
+    TopFront,
+    TopMiddle,
+    TopRear,
+    Other
+};
+
+SpeakerGroup groupOf (SpeakerRole role) noexcept;
+
 /**
     Channel layout as seen by the engine: roles, symmetric left/right pairs and LFE flags (research §4).
     Built on the message thread from the host bus layout; read-only on the audio thread.
@@ -66,6 +83,7 @@ struct ChannelTopology
     std::array<Pair, kMaxChannels / 2> pairs {};
     int numPairs = 0;
     std::array<int, kMaxChannels> pairIndex {}; ///< pair containing the channel, or −1 for singles
+    std::array<SpeakerGroup, kMaxChannels> groups {};
 
     bool isLfe (int channel) const noexcept
     {
