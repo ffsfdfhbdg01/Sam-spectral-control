@@ -78,7 +78,9 @@ void EqDisplay::refreshFromAnalyzer()
         for (int b = 0; b < kNumBands; ++b)
         {
             const auto& v = model.band (b);
-            const float gain = v.active() && v.mode != BandMode::Static ? dynamicGainProvider (b) : 0.0f;
+            if (v.mode == BandMode::Spectral)
+                continue; // drawn from the spectral view below
+            const float gain = v.active() && v.mode == BandMode::Dynamic ? dynamicGainProvider (b) : 0.0f;
             changed = curves.setDynamicGain (b, gain) || changed;
         }
         if (changed)
@@ -87,6 +89,21 @@ void EqDisplay::refreshFromAnalyzer()
             repaint();
         }
     }
+
+    if (spectralViewProvider)
+        if (const auto* view = spectralViewProvider())
+        {
+            for (int b = 0; b < kNumBands; ++b)
+            {
+                const auto& v = model.band (b);
+                if (v.mode != BandMode::Spectral)
+                    continue;
+                const bool live = v.active() && view->bandActive[static_cast<std::size_t> (b)];
+                curves.setSpectralGains (b, view->hz.data(), view->bandDb[static_cast<std::size_t> (b)].data(), live ? view->numPoints : 0);
+            }
+            curves.updateComposite();
+            repaint();
+        }
 
     if (analyzer.frames().update())
     {

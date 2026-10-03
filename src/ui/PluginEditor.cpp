@@ -27,6 +27,7 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
 
     bandModel.onSoloChanged = [this] (int band) { sscProcessor.setSoloBand (band); };
     display.dynamicGainProvider = [this] (int band) { return sscProcessor.getBandDynamicGainDb (band); };
+    display.spectralViewProvider = [this] { return sscProcessor.pollSpectralView(); };
     bandPanel.onPreferredSizeChanged = [this] { layoutBandPanel(); };
 
     for (int i = 0; i < static_cast<int> (std::size (kEqRanges)); ++i)

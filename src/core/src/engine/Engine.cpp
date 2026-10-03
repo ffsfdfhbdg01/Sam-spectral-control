@@ -45,8 +45,13 @@ void Engine::prepare (const EngineConfig& config)
     lookaheadSamples = 0;
 
     // Latency so far is the lookahead only; the dry delay is sized for the M3–M4 maximum.
+    spectralEngine.prepare (cfg.sampleRate, cfg.numChannels, cfg.maxBlockSize);
+    spectralEnabled = false;
+    const int maxSpectralLatency = spectral::fftSizeFor (Quality::Max, cfg.sampleRate);
+    soloDelay.prepare (cfg.numChannels, maxSpectralLatency, cfg.maxBlockSize);
+
     latencySamples.store (0, std::memory_order_relaxed);
-    const int maxLatency = static_cast<int> (cfg.sampleRate * 0.25);
+    const int maxLatency = maxLookaheadSamples + maxSpectralLatency + static_cast<int> (cfg.sampleRate * 0.05);
     dryDelay.prepare (cfg.numChannels, maxLatency, cfg.maxBlockSize);
     dryDelay.setDelay (0);
 
@@ -68,18 +73,39 @@ void Engine::reset() noexcept
     for (auto& band : bandProcessors)
         band.reset();
     soloProcessor.reset();
+    spectralEngine.reset();
+    soloDelay.reset();
 }
 
-void Engine::configure (const GlobalParams& params) noexcept
+float Engine::getBandGainChangeDb (int index) const noexcept
 {
-    // Max Lookahead is a configuration change: the latency follows it (ADR-0011).
+    const float dynamic = bandProcessors[static_cast<std::size_t> (index)].getDynamicGainDb();
+    return std::abs (dynamic) > 0.0f ? dynamic : spectralEngine.getBandGainDb (index);
+}
+
+void Engine::configure (const GlobalParams& params, const BandSettingsArray& bands) noexcept
+{
+    // Configuration changes set the latency (ADR-0011): Max Lookahead, and the spectral engine
+    // while at least one band is in Spectral mode (its frame size follows Quality).
     const int lookahead =
         std::clamp (static_cast<int> (std::lround (0.001 * params.maxLookaheadMs * cfg.sampleRate)), 0, maxLookaheadSamples);
-    if (lookahead != lookaheadSamples)
+    const bool wantSpectral = std::any_of (bands.begin(), bands.end(), [] (const BandSettings& b) { return b.isSpectral(); });
+
+    bool spectralChanged = wantSpectral != spectralEnabled;
+    if (wantSpectral)
+        spectralChanged = spectralEngine.setQuality (params.quality) || spectralChanged;
+    if (spectralChanged)
+        spectralEngine.reset();
+    spectralEnabled = wantSpectral;
+
+    const int spectralLatency = spectralEnabled ? spectralEngine.getLatencySamples() : 0;
+    const int latency = lookahead + spectralLatency;
+    if (lookahead != lookaheadSamples || latency != latencySamples.load (std::memory_order_relaxed))
     {
         lookaheadSamples = lookahead;
-        dryDelay.setDelay (lookaheadSamples);
-        latencySamples.store (lookaheadSamples, std::memory_order_relaxed);
+        dryDelay.setDelay (latency);
+        soloDelay.setDelay (spectralLatency);
+        latencySamples.store (latency, std::memory_order_relaxed);
     }
 }
 
@@ -95,7 +121,7 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
     if (soloing)
         lastSoloShape = auditionShapeFor (bands[static_cast<std::size_t> (params.soloBand)].shape);
 
-    configure (params);
+    configure (params, bands);
 
     outputGain.setTarget (dbToGain (params.outputGainDb));
     mix.setTarget (std::clamp (params.mix, 0.0, 1.0));
@@ -158,6 +184,9 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         bandProcessors[b].process (bands[b], cfg.topology, wetPointers.data(), numChannels, numSamples, controlBlock, detection);
     historyWrite = (historyWrite + numSamples) & historyMask;
 
+    if (spectralEnabled)
+        spectralEngine.process (wetPointers.data(), numChannels, numSamples, bands, cfg.topology);
+
     // Solo: crossfade the processed signal with the band's audition filter applied to the input.
     if (soloActive)
     {
@@ -165,6 +194,8 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         audition.active = true;
         audition.shape = lastSoloShape;
         soloProcessor.process (audition, cfg.topology, soloPointers.data(), numChannels, numSamples, controlBlock);
+        if (spectralEnabled)
+            soloDelay.processInPlace (soloPointers.data(), numChannels, numSamples);
         for (std::size_t i = 0; i < n; ++i)
         {
             const double s = soloAmount.next();

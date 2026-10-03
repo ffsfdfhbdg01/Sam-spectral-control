@@ -77,6 +77,43 @@ bool ResponseCurves::setDynamicGain (int band, float gainDb)
     return true;
 }
 
+void ResponseCurves::setSpectralGains (int band, const float* gridHz, const float* gridDb, int numPoints)
+{
+    auto& curve = dynamicCurves[static_cast<std::size_t> (band)];
+    const auto& shape = shapes[static_cast<std::size_t> (band)];
+    dynamicGains[static_cast<std::size_t> (band)] = 0.0f;
+
+    float largest = 0.0f;
+    for (int i = 0; i < numPoints; ++i)
+        largest = std::max (largest, std::abs (gridDb[i]));
+    if (! shape.has_value() || numPoints < 2 || largest < 0.05f)
+    {
+        curve.clear();
+        return;
+    }
+
+    const auto& base = curves[static_cast<std::size_t> (band)];
+    curve.assign (hz.size(), 0.0f);
+    int g = 0;
+    for (std::size_t j = 0; j < hz.size(); ++j)
+    {
+        const float f = hz[j];
+        while (g + 2 < numPoints && gridHz[g + 1] <= f)
+            ++g;
+        float change = 0.0f;
+        if (f <= gridHz[0])
+            change = gridDb[0];
+        else if (f >= gridHz[numPoints - 1])
+            change = gridDb[numPoints - 1];
+        else
+        {
+            const float t = (f - gridHz[g]) / (gridHz[g + 1] - gridHz[g]);
+            change = gridDb[g] + (gridDb[g + 1] - gridDb[g]) * t;
+        }
+        curve[j] = std::max (kFloorDb, base[j] + change);
+    }
+}
+
 void ResponseCurves::computeDynamic (int band)
 {
     auto& curve = dynamicCurves[static_cast<std::size_t> (band)];

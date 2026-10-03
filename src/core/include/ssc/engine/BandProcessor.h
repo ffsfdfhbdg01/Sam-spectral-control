@@ -35,6 +35,7 @@ struct DynamicSettings
 struct BandSettings
 {
     bool active = false; ///< band used and switched on
+    bool used = false;   ///< band exists (on or off): decides whether the spectral engine runs (ADR-0011)
     filters::BandShape shape;
     StereoComponent component = StereoComponent::All;
     std::uint64_t channelMask = ~std::uint64_t { 0 }; ///< selected channels (speaker panel, M5)
@@ -42,7 +43,12 @@ struct BandSettings
     BandMode mode = BandMode::Static;
     Character character = Character::Clear;
     DynamicSettings dynamics;
+
+    /** True for a band that uses the spectral engine (Spectral mode on a shape with gain). */
+    bool isSpectral() const noexcept { return used && mode == BandMode::Spectral && shapeHasGain (shape.shape); }
 };
+
+using BandSettingsArray = std::array<BandSettings, kNumBands>;
 
 /**
     The undelayed engine input, used by Dynamic bands as their detection signal (sidechain).

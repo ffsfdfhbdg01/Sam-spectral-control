@@ -39,7 +39,8 @@ void SscAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     cfg.numChannels = numChannels;
     cfg.topology = getChannelTopology();
     engine.prepare (cfg);
-    engine.configure (readGlobalParams (false));
+    readBandSettings (bandSettings);
+    engine.configure (readGlobalParams (false), bandSettings);
 
     tapScratch.assign (static_cast<std::size_t> (std::max (1, samplesPerBlock)), 0.0f);
     analyzer.prepare (sampleRate);
@@ -107,7 +108,8 @@ void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) cons
         auto get = [&raw] (BandParam p) { return raw[static_cast<std::size_t> (p)]; };
         auto& s = bands[static_cast<std::size_t> (b)];
 
-        s.active = isOn (get (BandParam::Used)) && isOn (get (BandParam::On));
+        s.used = isOn (get (BandParam::Used));
+        s.active = s.used && isOn (get (BandParam::On));
         s.shape.shape = choice (get (BandParam::Shape), Shape::AllPass);
         s.shape.frequencyHz = get (BandParam::Frequency)->load (std::memory_order_relaxed);
         s.shape.gainDb = get (BandParam::Gain)->load (std::memory_order_relaxed);

@@ -66,7 +66,10 @@ public:
     juce::UndoManager& getUndoManager() noexcept { return undoManager; }
 
     /** Current dynamic gain change of a band in dB (DYN-11); any thread. */
-    float getBandDynamicGainDb (int band) const noexcept { return engine.band (band).getDynamicGainDb(); }
+    float getBandDynamicGainDb (int band) const noexcept { return engine.getBandGainChangeDb (band); }
+
+    /** Newest gain view of the Spectral bands, or nullptr if nothing new (one UI reader). */
+    const spectral::SpectralEngine::MaskView* pollSpectralView() noexcept { return engine.pollSpectralView(); }
 
 private:
     /** Reports latency changes (Max Lookahead, spectral engine) to the host from the message thread. */

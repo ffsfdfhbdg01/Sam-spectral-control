@@ -8,6 +8,7 @@
 #include "ssc/engine/BandProcessor.h"
 #include "ssc/engine/ChannelTopology.h"
 #include "ssc/engine/Types.h"
+#include "ssc/spectral/SpectralEngine.h"
 #include "ssc/util/DelayLine.h"
 #include "ssc/util/LinearSmoother.h"
 
@@ -20,8 +21,6 @@ struct EngineConfig
     int numChannels = 2;
     ChannelTopology topology = ChannelTopology::stereo();
 };
-
-using BandSettingsArray = std::array<BandSettings, kNumBands>;
 
 /** Global (non-band) parameter values, read once per host block. */
 struct GlobalParams
@@ -76,9 +75,17 @@ public:
 
     const BandProcessor& band (int index) const noexcept { return bandProcessors[static_cast<std::size_t> (index)]; }
 
+    /** Live gain change of a band: its Dynamic gain, or the largest Spectral change; any thread (DYN-11). */
+    float getBandGainChangeDb (int index) const noexcept;
+
+    bool isSpectralEngineRunning() const noexcept { return spectralEnabled; }
+
+    /** Reader side of the spectral mask view (one UI thread); see SpectralEngine::pollMaskView(). */
+    const spectral::SpectralEngine::MaskView* pollSpectralView() noexcept { return spectralEngine.pollMaskView(); }
+
     /** Applies configuration parameters (Max Lookahead, later phase mode and spectral engine) without
         processing audio, so the latency is known right after prepare(). Audio thread or prepare. */
-    void configure (const GlobalParams& params) noexcept;
+    void configure (const GlobalParams& params, const BandSettingsArray& bands) noexcept;
 
     /** Current latency in samples; any thread. */
     int getLatencySamples() const noexcept { return latencySamples.load (std::memory_order_relaxed); }
@@ -119,5 +126,10 @@ private:
 
     LinearSmoother<double> outputGain, mix, bypass;
     std::atomic<std::uint32_t> nonFiniteEvents { 0 };
+
+    // Spectral engine: runs while at least one band is in Spectral mode (ADR-0011).
+    spectral::SpectralEngine spectralEngine;
+    bool spectralEnabled = false;
+    MultiChannelDelay<double> soloDelay;
 };
 } // namespace ssc::engine

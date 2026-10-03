@@ -7,6 +7,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "plugin/AnalyzerService.h"
+#include "ssc/spectral/SpectralEngine.h"
 #include "ui/BandLogic.h"
 #include "ui/BandModel.h"
 #include "ui/ResponseCurves.h"
@@ -53,6 +54,9 @@ public:
 
     /** Source of the live dynamic gain change of each band (DYN-11); polled on every frame. */
     std::function<float (int band)> dynamicGainProvider;
+
+    /** Source of the live gain change of Spectral bands over frequency; polled on every frame. */
+    std::function<const spectral::SpectralEngine::MaskView*()> spectralViewProvider;
     void setChannelInfo (int numChannels, int numPairs);
 
     /** Visible EQ range: ±range dB (3, 6, 12, 18 or 30). */

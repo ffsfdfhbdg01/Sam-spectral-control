@@ -32,6 +32,12 @@ public:
     */
     bool setDynamicGain (int band, float gainDb);
 
+    /**
+        Sets the current gain change of a Spectral band as a function of frequency (sorted points);
+        the drawn dynamic curve is the static curve plus this change.
+    */
+    void setSpectralGains (int band, const float* hz, const float* db, int numPoints);
+
     /** Recomputes the composite (sum in dB of every drawn band, dynamic curves where present). */
     void updateComposite();
 
