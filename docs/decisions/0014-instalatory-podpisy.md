@@ -1,6 +1,6 @@
 # ADR-0014: Instalatory i podpisy
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** REL-1…REL-3
 
 ## Decyzja

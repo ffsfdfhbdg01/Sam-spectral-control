@@ -1,6 +1,6 @@
 # ADR-0009: Analog Feel — modele N/P/S i nazewnictwo
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** PH-1, PH-2, CHR-4, CH-6
 
 ## Decyzja

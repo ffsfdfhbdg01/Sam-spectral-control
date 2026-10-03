@@ -1,6 +1,6 @@
 # ADR-0013: Biblioteka FFT
 
-- **Status:** Proponowana (M0) — bramka benchmarku w M1
+- **Status:** Zaakceptowana (M0, 2026-10-03) — bramka benchmarku FFT do wykonania
 - **Wymagania:** DYN-9, AG-3, VIS-1, NFR-1
 
 ## Decyzja

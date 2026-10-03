@@ -1,6 +1,6 @@
 # ADR-0001: Framework — JUCE 9 + CMake + C++20
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** PLT-1, PLT-2, PLT-3
 
 ## Kontekst

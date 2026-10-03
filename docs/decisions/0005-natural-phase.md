@@ -1,6 +1,6 @@
 # ADR-0005: Natural Phase — dopasowany IIR + korektor fazy FIR
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** PH-1, PH-2, PH-3, BAND-3 (Brickwall)
 
 ## Kontekst

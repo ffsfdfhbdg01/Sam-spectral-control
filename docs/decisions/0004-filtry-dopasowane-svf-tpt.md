@@ -1,6 +1,6 @@
 # ADR-0004: Filtry dopasowane realizowane jako SVF-TPT
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** BAND-2, BAND-3, BAND-6, DYN-2, PH-1, PH-2
 
 ## Kontekst

@@ -1,0 +1,11 @@
+/build/
+/cmake-build-*/
+/out/
+.vs/
+.vscode/
+.idea/
+*.user
+.DS_Store
+compile_commands.json
+/pluginval*
+/pv-*/

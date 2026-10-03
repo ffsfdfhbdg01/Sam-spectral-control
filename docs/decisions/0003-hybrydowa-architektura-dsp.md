@@ -1,6 +1,6 @@
 # ADR-0003: Hybrydowa architektura DSP
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** ARC-1, DYN-1…DYN-3, PH-1
 
 ## Kontekst

@@ -1,6 +1,6 @@
 # ADR-0015: Strategia testów
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** TST-1…TST-4, NFR-4, DoD
 
 ## Decyzja

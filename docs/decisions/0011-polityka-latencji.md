@@ -1,6 +1,6 @@
 # ADR-0011: Polityka latencji
 
-- **Status:** Proponowana (M0) — **doprecyzowuje ARC-3**, wymaga akceptacji użytkownika
+- **Status:** Zaakceptowana (M0, 2026-10-03) — doprecyzowuje ARC-3
 - **Wymagania:** ARC-3, DYN-8, GLB-1, OS-3
 
 ## Kontekst

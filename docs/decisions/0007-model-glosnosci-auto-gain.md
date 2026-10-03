@@ -1,6 +1,6 @@
 # ADR-0007: Model głośności dla Auto Gain
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** AG-1…AG-6
 
 ## Kontekst

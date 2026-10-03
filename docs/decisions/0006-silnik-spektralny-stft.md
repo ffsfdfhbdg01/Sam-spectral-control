@@ -1,6 +1,6 @@
 # ADR-0006: Silnik spektralny STFT
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** DYN-3, DYN-9, DYN-10, PH-2
 
 ## Decyzja

@@ -1,6 +1,6 @@
 # ADR-0008: Oversampling
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** OS-1…OS-5, ARC-2
 
 ## Decyzja

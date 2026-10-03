@@ -1,6 +1,6 @@
 # ADR-0012: Rendering GUI
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** VIS-2, VIS-3, VIS-6, VIS-7
 
 ## Decyzja

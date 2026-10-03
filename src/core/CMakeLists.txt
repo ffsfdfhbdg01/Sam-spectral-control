@@ -1,0 +1,11 @@
+add_library(ssc_core STATIC
+    src/fft/RealFft.cpp
+    src/analysis/SpectrumAnalyzer.cpp
+    src/engine/Engine.cpp)
+
+target_include_directories(ssc_core PUBLIC include)
+target_compile_features(ssc_core PUBLIC cxx_std_20)
+target_link_libraries(ssc_core
+    PUBLIC ssc_pffft
+    PRIVATE ssc_options)
+set_target_properties(ssc_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

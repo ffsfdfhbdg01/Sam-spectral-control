@@ -1,6 +1,6 @@
 # ADR-0010: Wątki, komunikacja i real-time safety
 
-- **Status:** Proponowana (M0)
+- **Status:** Zaakceptowana (M0, 2026-10-03)
 - **Wymagania:** ARC-4, PLT-5, NFR-3, PR-2, MTR-4
 
 ## Decyzja
