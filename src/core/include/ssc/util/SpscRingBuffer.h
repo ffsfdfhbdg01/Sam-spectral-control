@@ -7,6 +7,11 @@
 
 #include "ssc/util/Math.h"
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4324) // padding from alignas(64) is the point: no false sharing
+#endif
+
 namespace ssc
 {
 /**
@@ -89,3 +94,7 @@ private:
     alignas (64) std::atomic<std::size_t> readPos { 0 };
 };
 } // namespace ssc
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
