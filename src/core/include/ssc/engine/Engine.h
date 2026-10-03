@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "ssc/engine/BandProcessor.h"
@@ -73,7 +74,7 @@ public:
         process (channels, numChannels, numSamples, params, none);
     }
 
-    const BandProcessor& band (int index) const noexcept { return bandProcessors[static_cast<std::size_t> (index)]; }
+    const BandProcessor& band (int index) const noexcept { return (*bandProcessors)[static_cast<std::size_t> (index)]; }
 
     /** Live gain change of a band: its Dynamic gain, or the largest Spectral change; any thread (DYN-11). */
     float getBandGainChangeDb (int index) const noexcept;
@@ -81,7 +82,7 @@ public:
     bool isSpectralEngineRunning() const noexcept { return spectralEnabled; }
 
     /** Reader side of the spectral mask view (one UI thread); see SpectralEngine::pollMaskView(). */
-    const spectral::SpectralEngine::MaskView* pollSpectralView() noexcept { return spectralEngine.pollMaskView(); }
+    const spectral::SpectralEngine::MaskView* pollSpectralView() noexcept { return spectralEngine->pollMaskView(); }
 
     /** Applies configuration parameters (Max Lookahead, later phase mode and spectral engine) without
         processing audio, so the latency is known right after prepare(). Audio thread or prepare. */
@@ -115,8 +116,9 @@ private:
     int historyWrite = 0;
     int lookaheadSamples = 0;
     int maxLookaheadSamples = 0;
-    std::array<BandProcessor, kNumBands> bandProcessors;
-    BandProcessor soloProcessor;
+    // Large state lives on the heap, so an Engine fits on any thread's stack (Windows: 1 MB).
+    std::unique_ptr<std::array<BandProcessor, kNumBands>> bandProcessors = std::make_unique<std::array<BandProcessor, kNumBands>>();
+    std::unique_ptr<BandProcessor> soloProcessor = std::make_unique<BandProcessor>();
     std::vector<std::vector<double>> solo;
     std::vector<double*> soloPointers;
     LinearSmoother<double> soloAmount;
@@ -128,7 +130,7 @@ private:
     std::atomic<std::uint32_t> nonFiniteEvents { 0 };
 
     // Spectral engine: runs while at least one band is in Spectral mode (ADR-0011).
-    spectral::SpectralEngine spectralEngine;
+    std::unique_ptr<spectral::SpectralEngine> spectralEngine = std::make_unique<spectral::SpectralEngine>();
     bool spectralEnabled = false;
     MultiChannelDelay<double> soloDelay;
 };

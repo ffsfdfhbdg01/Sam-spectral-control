@@ -64,7 +64,10 @@ jobs:
 
       - name: Test
         shell: bash
-        run: ctest --test-dir build -C Release --output-on-failure
+        # Linux and macOS run the tests with a 1 MB stack, the Windows default, to catch large stack frames early.
+        run: |
+          if [ "${{ runner.os }}" != "Windows" ]; then ulimit -s 1024; fi
+          ctest --test-dir build -C Release --output-on-failure
 
       - name: Download pluginval
         shell: bash

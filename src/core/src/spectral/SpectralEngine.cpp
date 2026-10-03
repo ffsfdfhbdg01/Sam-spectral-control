@@ -328,7 +328,7 @@ void SpectralEngine::runFrame (const engine::BandSettingsArray& bands, const eng
     pairHasSide.fill (false);
     std::array<bool, kMaxChannels> spectralNow {};
 
-    auto& view = maskViews.writeBuffer();
+    auto& view = maskViews->writeBuffer();
     view.numPoints = numGrid;
     for (int i = 0; i < numGrid; ++i)
         view.hz[static_cast<std::size_t> (i)] = static_cast<float> (grid[static_cast<std::size_t> (i)].hz);
@@ -436,7 +436,7 @@ void SpectralEngine::runFrame (const engine::BandSettingsArray& bands, const eng
         bandGains[static_cast<std::size_t> (b)].store (extreme, std::memory_order_relaxed);
     }
     channelSpectral = spectralNow;
-    maskViews.publish();
+    maskViews->publish();
 
     // Apply: Mid/Side masks per pair, then the channel masks.
     const int bins = fftSize / 2 + 1;

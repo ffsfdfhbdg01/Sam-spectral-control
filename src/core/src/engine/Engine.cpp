@@ -23,9 +23,9 @@ void Engine::prepare (const EngineConfig& config)
         wetPointers[ch] = wet[ch].data();
     }
 
-    for (auto& band : bandProcessors)
+    for (auto& band : *bandProcessors)
         band.prepare (cfg.sampleRate, cfg.maxBlockSize);
-    soloProcessor.prepare (cfg.sampleRate, cfg.maxBlockSize);
+    soloProcessor->prepare (cfg.sampleRate, cfg.maxBlockSize);
     solo = dry;
     soloPointers.resize (solo.size());
     for (std::size_t ch = 0; ch < solo.size(); ++ch)
@@ -45,7 +45,7 @@ void Engine::prepare (const EngineConfig& config)
     lookaheadSamples = 0;
 
     // Latency so far is the lookahead only; the dry delay is sized for the M3–M4 maximum.
-    spectralEngine.prepare (cfg.sampleRate, cfg.numChannels, cfg.maxBlockSize);
+    spectralEngine->prepare (cfg.sampleRate, cfg.numChannels, cfg.maxBlockSize);
     spectralEnabled = false;
     const int maxSpectralLatency = spectral::fftSizeFor (Quality::Max, cfg.sampleRate);
     soloDelay.prepare (cfg.numChannels, maxSpectralLatency, cfg.maxBlockSize);
@@ -70,17 +70,17 @@ void Engine::reset() noexcept
     dryDelay.reset();
     for (auto& h : history)
         std::fill (h.begin(), h.end(), 0.0);
-    for (auto& band : bandProcessors)
+    for (auto& band : *bandProcessors)
         band.reset();
-    soloProcessor.reset();
-    spectralEngine.reset();
+    soloProcessor->reset();
+    spectralEngine->reset();
     soloDelay.reset();
 }
 
 float Engine::getBandGainChangeDb (int index) const noexcept
 {
-    const float dynamic = bandProcessors[static_cast<std::size_t> (index)].getDynamicGainDb();
-    return std::abs (dynamic) > 0.0f ? dynamic : spectralEngine.getBandGainDb (index);
+    const float dynamic = (*bandProcessors)[static_cast<std::size_t> (index)].getDynamicGainDb();
+    return std::abs (dynamic) > 0.0f ? dynamic : spectralEngine->getBandGainDb (index);
 }
 
 void Engine::configure (const GlobalParams& params, const BandSettingsArray& bands) noexcept
@@ -93,12 +93,12 @@ void Engine::configure (const GlobalParams& params, const BandSettingsArray& ban
 
     bool spectralChanged = wantSpectral != spectralEnabled;
     if (wantSpectral)
-        spectralChanged = spectralEngine.setQuality (params.quality) || spectralChanged;
+        spectralChanged = spectralEngine->setQuality (params.quality) || spectralChanged;
     if (spectralChanged)
-        spectralEngine.reset();
+        spectralEngine->reset();
     spectralEnabled = wantSpectral;
 
-    const int spectralLatency = spectralEnabled ? spectralEngine.getLatencySamples() : 0;
+    const int spectralLatency = spectralEnabled ? spectralEngine->getLatencySamples() : 0;
     const int latency = lookahead + spectralLatency;
     if (lookahead != lookaheadSamples || latency != latencySamples.load (std::memory_order_relaxed))
     {
@@ -180,12 +180,12 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
                        solo[static_cast<std::size_t> (ch)].begin());
 
     const DetectionInput detection { historyPointers.data(), historyMask, historyWrite, lookaheadSamples };
-    for (std::size_t b = 0; b < bandProcessors.size(); ++b)
-        bandProcessors[b].process (bands[b], cfg.topology, wetPointers.data(), numChannels, numSamples, controlBlock, detection);
+    for (std::size_t b = 0; b < bandProcessors->size(); ++b)
+        (*bandProcessors)[b].process (bands[b], cfg.topology, wetPointers.data(), numChannels, numSamples, controlBlock, detection);
     historyWrite = (historyWrite + numSamples) & historyMask;
 
     if (spectralEnabled)
-        spectralEngine.process (wetPointers.data(), numChannels, numSamples, bands, cfg.topology);
+        spectralEngine->process (wetPointers.data(), numChannels, numSamples, bands, cfg.topology);
 
     // Solo: crossfade the processed signal with the band's audition filter applied to the input.
     if (soloActive)
@@ -193,7 +193,7 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         BandSettings audition;
         audition.active = true;
         audition.shape = lastSoloShape;
-        soloProcessor.process (audition, cfg.topology, soloPointers.data(), numChannels, numSamples, controlBlock);
+        soloProcessor->process (audition, cfg.topology, soloPointers.data(), numChannels, numSamples, controlBlock);
         if (spectralEnabled)
             soloDelay.processInPlace (soloPointers.data(), numChannels, numSamples);
         for (std::size_t i = 0; i < n; ++i)
@@ -214,9 +214,9 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
             energy += wet[static_cast<std::size_t> (ch)][i] * wet[static_cast<std::size_t> (ch)][i];
     if (! std::isfinite (energy))
     {
-        for (auto& band : bandProcessors)
+        for (auto& band : *bandProcessors)
             band.reset();
-        soloProcessor.reset();
+        soloProcessor->reset();
         for (int ch = 0; ch < numChannels; ++ch)
             std::fill (wet[static_cast<std::size_t> (ch)].begin(), wet[static_cast<std::size_t> (ch)].begin() + numSamples, 0.0);
         nonFiniteEvents.fetch_add (1, std::memory_order_relaxed);

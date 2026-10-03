@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <memory>
 #include <vector>
 
 #include "ssc/engine/BandProcessor.h"
@@ -59,7 +60,7 @@ public:
     };
 
     /** Reader side (one thread, e.g. the UI): the newest mask view, or nullptr if nothing new. */
-    const MaskView* pollMaskView() noexcept { return maskViews.update() ? &maskViews.read() : nullptr; }
+    const MaskView* pollMaskView() noexcept { return maskViews->update() ? &maskViews->read() : nullptr; }
 
     void prepare (double sampleRate, int numChannels, int maxBlockSize);
     void reset() noexcept;
@@ -134,7 +135,7 @@ private:
     std::array<float, kMaxChannels> stftAmount {};
 
     std::array<BandState, kNumBands> states;
-    TripleBuffer<MaskView> maskViews;
+    std::unique_ptr<TripleBuffer<MaskView>> maskViews = std::make_unique<TripleBuffer<MaskView>>();
     std::array<std::atomic<float>, kNumBands> bandGains {};
 };
 } // namespace ssc::spectral
