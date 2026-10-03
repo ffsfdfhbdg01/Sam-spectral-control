@@ -52,6 +52,22 @@ Zakresy (10 Hz–30 kHz, ±30 dB, Q 0,025–40) są typowe dla profesjonalnych E
 
 Dynamic i Spectral są dostępne dla kształtów z parametrem gain (Bell, Low/High Shelf, Tilt Shelf, Flat Tilt). Cut, Band Pass, Notch i All Pass są tylko statyczne — UI wyszarza wtedy opcje dynamiczne z tooltipem.
 
+### Realizacja w M2 i zmierzona dokładność
+Implementacja: `ssc/filters/MatchedDesign` i `ssc/filters/BandDesign` (rdzeń DSP), `ssc/engine/BandProcessor` (wygładzanie, przełączanie topologii, linie M/S).
+
+- **Projekt dopasowany sekcji 2. rzędu.** Bieguny: odwzorowanie impulsowo-niezmiennicze (z = e^{sT}), więc rezonanse zachowują częstotliwość i tłumienie aż do Nyquista. Zera: |H|² sekcji jest liniowe względem trzech współczynników w bazie φ (φ1 = sin²(ω/2), φ0 = 1 − φ1, φ2 = 4φ0φ1), więc dopasowanie |H|² prototypu przy DC, przy Nyquiście i w fc to układ 3×3; licznik jest potem faktoryzowany do postaci minimalnofazowej. Sekcje 1. rzędu dopasowujemy przy DC i w fc.
+- **Cięcia jako odwrotność wzmocnień.** Bell i półki z ujemnym gain to dokładna odwrotność projektu z dodatnim gain (H(−G) = 1/H(+G)), więc boost i cut są symetryczne co do bitu. Wysokie półki dopasowujemy w orientacji „cut” (bieguny w paśmie), a następnie odwracamy — to usuwa błędy rzędu dziesiątek dB, które daje dopasowanie bezpośrednie.
+- **Realizacja SVF-TPT.** Każdy biquad jest odwzorowany na parametry SVF (g, k, m0, m1, m2); impuls SVF zgadza się z transmitancją biquada (test „SVF realisation…”). Parametry są przeliczane co blok kontrolny (Quality: Eco 32, Normal 16, High 8, Max 4 próbki) i interpolowane liniowo per próbka; zmiany kształtu, slope, celu i włączenia pasma przechodzą crossfadem 10 ms między dwiema instancjami filtra (tylko na kanałach, których dotyczą).
+- **Zmierzona obwiednia błędu amplitudy** (cyfrowy vs prototyp analogowy, fs 44,1/48/96 kHz, Q 0,5–10, gain ±18 dB, poziomy powyżej −30 dB): gain w fc, przy DC i przy Nyquiście dokładny; w oktawie wokół fc ≤ 0,12 dB dla fc ≤ fs/16 i ≤ 0,45 dB dla fc ≤ fs/8; w całym zakresie 10 Hz–0,45·fs ≤ 0,5 dB i ≤ 0,8 dB. Półki (Q 0,707, 6–24 dB/oct): plateau dokładne, połowa gain w fc (±0,02 dB), ≤ 0,2 dB lokalnie i ≤ 0,6 dB globalnie. Cięcia: −3,01 dB w fc i nominalne nachylenie ±0,5 dB/oct dla 6–96 dB/oct.
+- **Odstępstwo od pierwotnego kryterium (±0,1 dB do 20 kHz przy 44,1 kHz).** Filtr IIR minimalnofazowy rzędu 2 na sekcję nie może jednocześnie dokładnie odtworzyć amplitudy prototypu analogowego w całym paśmie dla fc blisko Nyquista (wynik znany z literatury o filtrach dopasowanych). Kryterium ±0,1 dB realizują: Natural Phase (korektor FIR amplitudy i fazy, M4) oraz Quality Max (wewnętrzne 2× dla pasm powyżej fs/8, M4). Kryterium BAND-2 w tabeli niżej opisuje teraz to, co Minimum Phase gwarantuje i co jest testowane.
+- **Ta sama barwa przy 44,1 i 96 kHz (NFR-2):** różnica odpowiedzi ≤ 0,25 dB w paśmie przepustowym dla fc ≤ 2,5 kHz i ≤ 0,6 dB dla fc ≤ 5 kHz (≤ 0,5 / 1,0 dB na zboczach −30…−12 dB).
+
+### Edycja w UI (M2)
+- Węzeł pasma: dla kształtów z gain na wysokości gain, dla Low/High Cut na poziomie odpowiedzi w fc (rezonans widać na wysokości węzła), dla Notch, Band Pass i All Pass na linii 0 dB; pionowe przeciąganie zmienia wtedy Q.
+- Każda edycja to transakcja (`ui/BandModel`): pierwszy ruch parametru otwiera gest hosta, koniec gestu myszy lub akcji menu zamyka wszystkie gesty i zapisuje jeden krok Undo (migawka znormalizowanych wartości 24 × 23 parametrów). Historia Undo należy do procesora, więc przetrwa zamknięcie edytora.
+- Solo (odsłuch) nie jest parametrem: to stan monitoringu edytora, kasowany przy jego zamknięciu. Filtr odsłuchu: Band Pass o fc i Q pasma (Q ograniczone do 0,5–20), dla półek i cięć Low/High Cut po stronie, na którą działa pasmo; przejście crossfadem 10 ms.
+- Panel pasma jest zadokowany pod wyświetlaczem i przenosi się na górę, gdy zasłaniałby węzeł edytowanego pasma.
+
 ### Tworzenie pasm kliknięciem (BAND-4)
 Funkcja czysta `ShapeForGesture(x, y, gesture)` w znormalizowanych współrzędnych wyświetlacza (x: 0…1 na logarytmicznej osi częstotliwości, y: 0…1 od góry do dołu):
 
@@ -84,7 +100,7 @@ Funkcja czysta `ShapeForGesture(x, y, gesture)` w znormalizowanych współrzędn
 | ID | Kryterium | Metoda |
 |---|---|---|
 | BAND-1 | 24 pasma działają jednocześnie (stereo, Minimum Phase, Normal) w budżecie CPU z NFR-1 | benchmark |
-| BAND-2 | Amplituda Bell/Shelf/Notch vs prototyp analogowy: ±0,1 dB do 20 kHz przy 44,1 kHz (Q 0,1–40, gain ±30 dB, fc 10 Hz–20 kHz; Quality ≥ Normal) | test jednostkowy na siatce parametrów |
+| BAND-2 | Minimum Phase (zmierzone w M2, fs 44,1/48/96 kHz, Q 0,5–10, gain ±18 dB): gain dokładny w fc, przy DC i przy Nyquiście; błąd amplitudy vs prototyp w oktawie wokół fc ≤ 0,12 dB (fc ≤ fs/16) i ≤ 0,45 dB (fc ≤ fs/8), w 10 Hz–0,45·fs ≤ 0,5 / 0,8 dB; półki ≤ 0,2 dB lokalnie, ≤ 0,6 dB globalnie. Pierwotne ±0,1 dB do 20 kHz przy 44,1 kHz — w Natural Phase i Quality Max (M4) | test jednostkowy na siatce parametrów (`[BAND-2]`) |
 | BAND-3 | Nachylenie Cut mierzone 2–3 oktawy od fc: wartość nominalna ±0,5 dB/oct dla 6–96 dB/oct | test jednostkowy |
 | BAND-4 | `ShapeForGesture` zwraca kształty zgodnie z tabelą stref (pokrycie wszystkich stref i granic) | test jednostkowy |
 | BAND-5 | Menu pokazuje Slope tylko dla kształtów, które go mają; zmiana slope z menu jest jedną transakcją Undo | test UI / checklista |

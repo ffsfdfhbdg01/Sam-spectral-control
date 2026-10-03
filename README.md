@@ -8,9 +8,24 @@ Korektor parametryczny z pasmami statycznymi, dynamicznymi i spektralno-dynamicz
 |---|---|---|
 | M0 | Research, architektura, decyzje (ADR) | ✅ zaakceptowane |
 | M1 | Szkielet: CMake + JUCE 9 + VST3, CI, parametry, stan, bypass, analizator | ✅ |
-| M2–M8 | Pasma, dynamika, tryby fazy, surround, modele analogowe, wizualizacje, wydanie | ⏳ |
+| M2 | 24 pasma statyczne (filtry dopasowane, SVF-TPT), cele L/R/M/S, edycja na wyświetlaczu, panel pasma, Undo/Redo | ✅ |
+| M3–M8 | Dynamika i Spectral, Auto Gain, tryby fazy, surround, modele analogowe, wizualizacje, wydanie | ⏳ |
 
 Szczegółowy stan każdego wymagania: [docs/traceability.md](docs/traceability.md).
+
+## Obsługa pasm (M2)
+
+| Akcja | Gest |
+|---|---|
+| Nowe pasmo | podwójne kliknięcie tła (skraje: Low/High Cut, dolny pas: Notch, reszta: Bell z gain z pozycji) lub przeciągnięcie krzywej (przy końcach: półka) |
+| Częstotliwość / gain | przeciąganie węzła (Shift — precyzyjnie); dla kształtów bez gain pion zmienia Q |
+| Q | kółko myszy nad węzłem |
+| Włącz / wyłącz pasmo | podwójne kliknięcie węzła |
+| Solo (odsłuch obszaru pasma) | Alt/Option + przytrzymanie węzła albo przycisk Solo w panelu |
+| Zaznaczanie wielu pasm | prostokąt na tle, Cmd/Ctrl + klik; zaznaczone pasma przesuwają się razem |
+| Menu pasma | prawy przycisk: kształt, slope / Q, tryb, cel (All/L/R/M/S), Character, Auto Gain, bypass, solo, kopiuj/wklej, reset, usuń |
+| Usuń, Undo, Redo, zaznacz wszystko | Delete, Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z (lub Ctrl+Y), Cmd/Ctrl+A |
+| Wpisanie wartości | podwójne kliknięcie pola wartości w panelu (np. „1.5k”, „-3 dB”, „1.2 s”) |
 
 ## Budowanie
 
@@ -28,6 +43,8 @@ Gotowa wtyczka: `build/release/src/SamSpectralControl_artefacts/Release/VST3/Sam
 
 Inne presety: `dev` (Debug), `core-tests` (tylko rdzeń DSP, szybko), `sanitize` (rdzeń z ASan/UBSan).
 
+Styl kodu: `.clang-format` (clang-format 18, sprawdzany w CI). `-DSSC_WARNINGS_AS_ERRORS=ON` traktuje ostrzeżenia w kodzie projektu jak błędy (włączone w CI).
+
 - **macOS (universal):** dodaj `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0`.
 - **Windows:** `cmake -B build -G "Visual Studio 17 2022" -A x64` i `cmake --build build --config Release`.
 - **Linux:** pakiety `libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libxi-dev libglu1-mesa-dev`.
@@ -38,7 +55,7 @@ Inne presety: `dev` (Debug), `core-tests` (tylko rdzeń DSP, szybko), `sanitize`
 ```
 src/core/      rdzeń DSP (bez GUI): FFT, analizator, silnik, narzędzia lock-free
 src/plugin/    procesor JUCE, parametry, stan, usługa analizatora
-src/ui/        edytor: wyświetlacz widma, pasek sterowania, motyw
+src/ui/        edytor: wyświetlacz (analizator, krzywe, węzły), panel pasma, model edycji z Undo, pasek sterowania
 tests/         testy Catch2 (rdzeń i procesor)
 tools/         narzędzia deweloperskie
 docs/          research, architektura, ADR, śledzenie wymagań, testy w hostach

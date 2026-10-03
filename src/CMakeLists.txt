@@ -1,10 +1,15 @@
 set(SSC_PLUGIN_SOURCES
     plugin/Parameters.cpp
+    plugin/ChannelLayout.cpp
     plugin/StateMigration.cpp
     plugin/AnalyzerService.cpp
     plugin/PluginProcessor.cpp
     ui/Theme.cpp
+    ui/BandLogic.cpp
+    ui/BandModel.cpp
+    ui/ResponseCurves.cpp
     ui/EqDisplay.cpp
+    ui/BandPanel.cpp
     ui/ControlBar.cpp
     ui/PluginEditor.cpp)
 list(TRANSFORM SSC_PLUGIN_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
@@ -14,7 +19,6 @@ set(SSC_PLUGIN_DEFINITIONS
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
-    JUCE_DISPLAY_SPLASH_SCREEN=0
     SSC_VERSION_STRING="${PROJECT_VERSION}")
 set(SSC_PLUGIN_DEFINITIONS ${SSC_PLUGIN_DEFINITIONS} PARENT_SCOPE)
 
@@ -42,6 +46,7 @@ juce_add_plugin(SamSpectralControl
     AU_MAIN_TYPE kAudioUnitType_Effect)
 
 target_sources(SamSpectralControl PRIVATE ${SSC_PLUGIN_SOURCES})
+ssc_enable_werror_for_sources(${SSC_PLUGIN_SOURCES})
 target_include_directories(SamSpectralControl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(SamSpectralControl PUBLIC ${SSC_PLUGIN_DEFINITIONS})
 target_link_libraries(SamSpectralControl

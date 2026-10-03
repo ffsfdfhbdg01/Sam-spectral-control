@@ -9,13 +9,13 @@ namespace ssc::analysis
 struct SpectrumAnalyzerConfig
 {
     double sampleRate = 48000.0;
-    int fftSize = 4096;            ///< power of two
-    int hopSize = 1024;            ///< samples between frames
-    double smoothingMs = 300.0;    ///< exponential averaging time constant (power domain); 0 = off
-    int numDisplayPoints = 512;    ///< log-spaced output points
+    int fftSize = 4096;         ///< power of two
+    int hopSize = 1024;         ///< samples between frames
+    double smoothingMs = 300.0; ///< exponential averaging time constant (power domain); 0 = off
+    int numDisplayPoints = 512; ///< log-spaced output points
     double minHz = 10.0;
-    double maxHz = 30000.0;        ///< clamped to Nyquist
-    double tiltDbPerOctave = 0.0;  ///< display tilt around 1 kHz
+    double maxHz = 30000.0;       ///< clamped to Nyquist
+    double tiltDbPerOctave = 0.0; ///< display tilt around 1 kHz
 };
 
 /**

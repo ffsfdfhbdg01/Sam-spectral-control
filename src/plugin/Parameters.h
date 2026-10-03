@@ -87,6 +87,11 @@ namespace format
     juce::String ratio (float ratio);
     juce::String milliseconds (float ms);
     juce::String percent (float value);
+
+    /** Inverse of frequency(): accepts "1500", "1.5k", "1.5 kHz". */
+    float parseFrequency (const juce::String& text);
+    /** Inverse of milliseconds(): accepts "12", "12 ms", "1.2 s". */
+    float parseMilliseconds (const juce::String& text);
 } // namespace format
 
 /** Raw atomic values for lock-free reads on the audio thread. */

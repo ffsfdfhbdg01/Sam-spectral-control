@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <vector>
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -54,6 +55,16 @@ public:
     AnalyzerService& getAnalyzer() noexcept { return analyzer; }
     double getCpuLoad() const noexcept { return loadMeasurer.getLoadAsProportion(); }
 
+    /** Band auditioned on its own (−1 = none). A monitoring aid: not a parameter, not saved. */
+    void setSoloBand (int band) noexcept { soloBand.store (band, std::memory_order_relaxed); }
+    int getSoloBand() const noexcept { return soloBand.load (std::memory_order_relaxed); }
+
+    /** Channel topology of the current main bus layout (message thread). */
+    engine::ChannelTopology getChannelTopology() const;
+
+    /** Undo history of band edits; lives here so it survives closing the editor. */
+    juce::UndoManager& getUndoManager() noexcept { return undoManager; }
+
 private:
     template <typename Sample>
     void processImpl (juce::AudioBuffer<Sample>& buffer, bool forceBypass) noexcept;
@@ -62,10 +73,14 @@ private:
     void pushAnalyzerTap (const juce::AudioBuffer<Sample>& buffer, bool post) noexcept;
 
     engine::GlobalParams readGlobalParams (bool forceBypass) const noexcept;
+    void readBandSettings (engine::BandSettingsArray& bands) const noexcept;
 
+    juce::UndoManager undoManager { 0, 100 };
     juce::AudioProcessorValueTreeState state;
     ParameterPointers params;
     engine::Engine engine;
+    engine::BandSettingsArray bandSettings {};
+    std::atomic<int> soloBand { -1 };
     AnalyzerService analyzer;
     std::vector<float> tapScratch;
     juce::AudioProcessLoadMeasurer loadMeasurer;

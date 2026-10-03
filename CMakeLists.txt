@@ -13,6 +13,7 @@ option(SSC_FORMAT_AU "Build the Audio Unit format (macOS only)" OFF)
 option(SSC_ENABLE_SANITIZERS "Build tests with ASan/UBSan" OFF)
 option(SSC_ENABLE_RTSAN "Build tests with RealtimeSanitizer (Clang 20+)" OFF)
 option(SSC_BUILD_TOOLS "Build developer tools (screenshot, measurement)" OFF)
+option(SSC_WARNINGS_AS_ERRORS "Treat warnings in project sources as errors (CI)" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(SscCompilerOptions)

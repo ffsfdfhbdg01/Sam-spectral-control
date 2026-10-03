@@ -84,7 +84,7 @@ Każdy model składa się z trzech warstw:
 
 | ID | Kryterium | Metoda |
 |---|---|---|
-| PH-1 | Minimum Phase: amplituda ±0,1 dB vs prototyp analogowy do 20 kHz przy 44,1 kHz (Quality ≥ Normal) | test jednostkowy |
+| PH-1 | Minimum Phase: obwiednia błędu amplitudy jak w research/05 §d (BAND-2), zmierzona w M2; ±0,1 dB do 20 kHz przy 44,1 kHz zapewnia Quality Max z wewnętrznym 2× dla pasm powyżej fs/8 (M4) | test jednostkowy |
 | PH-1 | Natural Phase: amplituda ±0,1 dB; błąd fazy vs prototyp ≤ 5° (Normal) i ≤ 2° (Max) w 20 Hz–0,9·Nyquist; latencja = D; pre-ring (kryterium −60 dB) ≤ D | test jednostkowy |
 | PH-1 | Analog Feel: odpowiedź dla ustawień referencyjnych ±0,5 dB względem krzywych referencyjnych (np. model WDF EQP-1A); THD w punktach kalibracji w oknie docelowym ±3 dB | test pomiarowy |
 | PH-2 | Tabela CPU i latencji wszystkich kombinacji tryb × Quality wygenerowana przez benchmark; błąd odpowiedzi maleje monotonicznie z Quality | benchmark |

@@ -19,6 +19,7 @@ namespace colours
     inline const juce::Colour accent { 0xfff5a524 };
     inline const juce::Colour spectrumPre { 0xff3a414d };
     inline const juce::Colour spectrumPost { 0xffd9e4f2 };
+    inline const juce::Colour curve { 0xfff1f4f8 };
     inline const juce::Colour powerOn { 0xff4cc38a };
     inline const juce::Colour powerOff { 0xff5a616c };
 } // namespace colours
@@ -33,10 +34,10 @@ class LookAndFeel final : public juce::LookAndFeel_V4
 public:
     LookAndFeel();
 
-    void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height, float sliderPos,
-                           float rotaryStartAngle, float rotaryEndAngle, juce::Slider&) override;
-    void drawComboBox (juce::Graphics&, int width, int height, bool isButtonDown,
-                       int buttonX, int buttonY, int buttonW, int buttonH, juce::ComboBox&) override;
+    void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height, float sliderPos, float rotaryStartAngle,
+                           float rotaryEndAngle, juce::Slider&) override;
+    void drawComboBox (juce::Graphics&, int width, int height, bool isButtonDown, int buttonX, int buttonY, int buttonW, int buttonH,
+                       juce::ComboBox&) override;
     juce::Font getComboBoxFont (juce::ComboBox&) override;
     juce::Font getLabelFont (juce::Label&) override;
     juce::Font getPopupMenuFont() override;

@@ -1,5 +1,5 @@
 // Renders the plugin editor with live test audio and saves a PNG.
-// Usage: ssc_screenshot <output.png> [width height] [paramId=value ...]
+// Usage: ssc_screenshot <output.png> [width height] [paramId=value ...] [select=<band 1-24>]
 // Run under a display server (e.g. xvfb-run on Linux).
 
 #include <atomic>
@@ -37,12 +37,15 @@ int main (int argc, char** argv)
     }
 
     auto& state = processor->getValueTreeState();
+    int selectBand = -1;
     for (; argIndex < argc; ++argIndex)
     {
         const juce::String assignment (argv[argIndex]);
         const auto paramId = assignment.upToFirstOccurrenceOf ("=", false, false);
         const auto value = assignment.fromFirstOccurrenceOf ("=", false, false).getFloatValue();
-        if (auto* param = state.getParameter (paramId))
+        if (paramId == "select")
+            selectBand = juce::roundToInt (value) - 1;
+        else if (auto* param = state.getParameter (paramId))
             param->setValueNotifyingHost (param->convertTo0to1 (value));
         else
             std::fprintf (stderr, "unknown parameter: %s\n", paramId.toRawUTF8());
@@ -51,6 +54,11 @@ int main (int argc, char** argv)
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor->createEditor());
     if (width > 0 && height > 0)
         editor->setSize (width, height);
+    if (auto* ssc = dynamic_cast<ssc::ui::SscEditor*> (editor.get()); ssc != nullptr && selectBand >= 0)
+    {
+        ssc->getBandModel().refresh();
+        ssc->getBandModel().select (selectBand, false);
+    }
 
     // Rendered offscreen: no window manager or vblank needed.
     editor->setVisible (true);
@@ -68,7 +76,8 @@ int main (int argc, char** argv)
             for (int i = 0; i < blockSize; ++i)
             {
                 const double t = static_cast<double> (sample++) / sampleRate;
-                const float tones = static_cast<float> (0.05 * std::sin (ssc::kTwoPi * 220.0 * t) + 0.03 * std::sin (ssc::kTwoPi * 3150.0 * t));
+                const float tones =
+                    static_cast<float> (0.05 * std::sin (ssc::kTwoPi * 220.0 * t) + 0.03 * std::sin (ssc::kTwoPi * 3150.0 * t));
                 const float v = noise[position] * 0.8f + tones;
                 position = (position + 1) % noise.size();
                 buffer.setSample (0, i, v);

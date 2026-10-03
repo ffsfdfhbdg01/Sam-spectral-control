@@ -30,7 +30,8 @@ void PowerButton::paint (juce::Graphics& g)
     }
 
     juce::Path arc;
-    arc.addCentredArc (circle.getCentreX(), circle.getCentreY(), size * 0.36f, size * 0.36f, 0.0f, 0.65f, juce::MathConstants<float>::twoPi - 0.65f, true);
+    arc.addCentredArc (circle.getCentreX(), circle.getCentreY(), size * 0.36f, size * 0.36f, 0.0f, 0.65f,
+                       juce::MathConstants<float>::twoPi - 0.65f, true);
     g.setColour (colour);
     g.strokePath (arc, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     g.drawLine (circle.getCentreX(), circle.getY() + size * 0.08f, circle.getCentreX(), circle.getCentreY(), 2.0f);
@@ -56,7 +57,8 @@ ControlBar::ControlBar (juce::AudioProcessorValueTreeState& s)
     setupCombo (autoGainSpeed, "Speed", plugin::id::autoGainSpeed);
 
     addAndMakeVisible (autoGainButton);
-    autoGainAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, plugin::id::autoGain, autoGainButton);
+    autoGainAttachment =
+        std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, plugin::id::autoGain, autoGainButton);
 
     setupKnob (mix, "Mix", plugin::id::mix);
     setupKnob (output, "Output", plugin::id::outputGain);
@@ -109,39 +111,51 @@ void ControlBar::paint (juce::Graphics& g)
 
 void ControlBar::resized()
 {
-    auto area = getLocalBounds().reduced (8, 6);
+    constexpr int gap = 8;
+    auto area = getLocalBounds().reduced (gap, 6);
     power.setBounds (area.removeFromLeft (area.getHeight()));
-    area.removeFromLeft (8);
+    area.removeFromLeft (gap);
 
-    auto placeCombo = [&area] (LabelledCombo& c, int width) {
-        auto column = area.removeFromLeft (width);
-        c.label.setBounds (column.removeFromTop (14));
-        c.box.setBounds (column.removeFromTop (24));
-        area.removeFromLeft (8);
-    };
-
-    placeCombo (phaseMode, 130);
-    placeCombo (analogModel, 96);
-    placeCombo (quality, 84);
-    placeCombo (oversampling, 96);
-
-    {
-        auto column = area.removeFromLeft (92);
-        column.removeFromTop (14);
-        autoGainButton.setBounds (column.removeFromTop (24));
-        area.removeFromLeft (8);
-    }
-    placeCombo (autoGainWeighting, 90);
-    placeCombo (autoGainSpeed, 96);
-
-    auto right = area.removeFromRight (250);
-    auto placeKnob = [&right] (LabelledKnob& k) {
-        auto column = right.removeFromLeft (120);
+    // Mix and Output keep their place on the right; the settings share the rest and shrink
+    // proportionally in narrow windows.
+    auto right = area.removeFromRight (juce::jmin (250, area.getWidth() / 4));
+    const int knobWidth = (right.getWidth() - gap) / 2;
+    auto placeKnob = [&right, knobWidth] (LabelledKnob& k) {
+        auto column = right.removeFromLeft (knobWidth);
         k.label.setBounds (column.removeFromTop (14));
         k.slider.setBounds (column.removeFromTop (30));
-        right.removeFromLeft (8);
+        right.removeFromLeft (gap);
     };
     placeKnob (mix);
     placeKnob (output);
+    area.removeFromRight (gap);
+
+    constexpr int widths[] = { 130, 96, 84, 96, 92, 90, 96 };
+    int total = 0;
+    for (int w : widths)
+        total += w + gap;
+    const float scale = juce::jlimit (0.5f, 1.0f, static_cast<float> (area.getWidth()) / static_cast<float> (total));
+    int index = 0;
+    auto nextWidth = [&] { return juce::roundToInt (static_cast<float> (widths[index++]) * scale); };
+
+    auto placeCombo = [&] (LabelledCombo& c) {
+        auto column = area.removeFromLeft (nextWidth());
+        c.label.setBounds (column.removeFromTop (14));
+        c.box.setBounds (column.removeFromTop (24));
+        area.removeFromLeft (gap);
+    };
+
+    placeCombo (phaseMode);
+    placeCombo (analogModel);
+    placeCombo (quality);
+    placeCombo (oversampling);
+    {
+        auto column = area.removeFromLeft (nextWidth());
+        column.removeFromTop (14);
+        autoGainButton.setBounds (column.removeFromTop (24));
+        area.removeFromLeft (gap);
+    }
+    placeCombo (autoGainWeighting);
+    placeCombo (autoGainSpeed);
 }
 } // namespace ssc::ui

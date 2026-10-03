@@ -58,9 +58,32 @@ namespace
     juce::NormalisableRange<float> logRange (float start, float end)
     {
         return { start, end,
-                 [] (float s, float e, float x) { return static_cast<float> (s * std::pow (static_cast<double> (e) / s, static_cast<double> (x))); },
-                 [] (float s, float e, float v) { return static_cast<float> (std::log (static_cast<double> (v) / s) / std::log (static_cast<double> (e) / s)); },
+                 [] (float s, float e, float x) {
+                     return static_cast<float> (s * std::pow (static_cast<double> (e) / s, static_cast<double> (x)));
+                 },
+                 [] (float s, float e, float v) {
+                     return static_cast<float> (std::log (static_cast<double> (v) / s) / std::log (static_cast<double> (e) / s));
+                 },
                  [] (float s, float e, float v) { return juce::jlimit (s, e, roundToSignificantDigits (v)); } };
+    }
+
+    /**
+        Linear range whose legal values are exact multiples of step. The snap is computed in double
+        relative to zero, so it does not depend on floating-point contraction: JUCE's default snap
+        (start + interval * n) becomes an FMA on arm64 and turns a 0 dB default into -5e-7 dB.
+    */
+    juce::NormalisableRange<float> linearRange (float start, float end, double step)
+    {
+        juce::NormalisableRange<float> range {
+            start, end,
+            [] (float s, float e, float x) { return static_cast<float> (s + (static_cast<double> (e) - s) * static_cast<double> (x)); },
+            [] (float s, float e, float v) { return static_cast<float> ((static_cast<double> (v) - s) / (static_cast<double> (e) - s)); },
+            [step] (float s, float e, float v) {
+                return juce::jlimit (s, e, static_cast<float> (std::round (static_cast<double> (v) / step) * step));
+            }
+        };
+        range.interval = static_cast<float> (step); // step count reported to hosts
+        return range;
     }
 
     juce::ParameterID pid (const juce::String& name)
@@ -68,24 +91,23 @@ namespace
         return { name, kVersion };
     }
 
-    std::unique_ptr<juce::AudioParameterFloat> floatParam (const juce::String& paramId,
-                                                           const juce::String& name,
-                                                           juce::NormalisableRange<float> range,
-                                                           float defaultValue,
-                                                           std::function<juce::String (float)> toText,
-                                                           const juce::String& label = {})
+    std::unique_ptr<juce::AudioParameterFloat> floatParam (const juce::String& paramId, const juce::String& name,
+                                                           juce::NormalisableRange<float> range, float defaultValue,
+                                                           std::function<juce::String (float)> toText, const juce::String& label = {},
+                                                           std::function<float (const juce::String&)> fromText = {})
     {
+        if (! fromText)
+            fromText = [] (const juce::String& text) { return text.getFloatValue(); };
+
         auto attributes = juce::AudioParameterFloatAttributes()
                               .withLabel (label)
-                              .withStringFromValueFunction ([toText] (float v, int) { return toText (v); });
+                              .withStringFromValueFunction ([toText] (float v, int) { return toText (v); })
+                              .withValueFromStringFunction ([fromText] (const juce::String& text) { return fromText (text); });
         return std::make_unique<juce::AudioParameterFloat> (pid (paramId), name, range, defaultValue, attributes);
     }
 
-    std::unique_ptr<juce::AudioParameterChoice> choiceParam (const juce::String& paramId,
-                                                             const juce::String& name,
-                                                             const juce::StringArray& choices,
-                                                             int defaultIndex,
-                                                             bool automatable = true)
+    std::unique_ptr<juce::AudioParameterChoice> choiceParam (const juce::String& paramId, const juce::String& name,
+                                                             const juce::StringArray& choices, int defaultIndex, bool automatable = true)
     {
         return std::make_unique<juce::AudioParameterChoice> (pid (paramId), name, choices, defaultIndex,
                                                              juce::AudioParameterChoiceAttributes().withAutomatable (automatable));
@@ -104,9 +126,11 @@ namespace
         group.addChild (boolParam (bandId (BandParam::Used), prefix + "Used", false));
         group.addChild (boolParam (bandId (BandParam::On), prefix + "On", true));
         group.addChild (choiceParam (bandId (BandParam::Shape), prefix + "Shape", labels::shapes(), 0));
-        group.addChild (floatParam (bandId (BandParam::Frequency), prefix + "Frequency", logRange (10.0f, 30000.0f), 1000.0f, format::frequency));
-        group.addChild (floatParam (bandId (BandParam::Gain), prefix + "Gain", { -30.0f, 30.0f, 0.01f }, 0.0f,
-                                    [] (float v) { return format::decibels (v); }, "dB"));
+        group.addChild (floatParam (bandId (BandParam::Frequency), prefix + "Frequency", logRange (10.0f, 30000.0f), 1000.0f,
+                                    format::frequency, {}, format::parseFrequency));
+        group.addChild (floatParam (
+            bandId (BandParam::Gain), prefix + "Gain", linearRange (-30.0f, 30.0f, 0.01), 0.0f,
+            [] (float v) { return format::decibels (v); }, "dB"));
         group.addChild (floatParam (bandId (BandParam::Q), prefix + "Q", logRange (0.025f, 40.0f), 1.0f,
                                     [] (float v) { return juce::String (v, v < 10.0f ? 2 : 1); }));
         group.addChild (choiceParam (bandId (BandParam::Slope), prefix + "Slope", labels::slopes(), static_cast<int> (Slope::Db12)));
@@ -116,19 +140,26 @@ namespace
         group.addChild (choiceParam (bandId (BandParam::Character), prefix + "Character", labels::characters(), 0));
         group.addChild (boolParam (bandId (BandParam::AutoGain), prefix + "Auto Gain", false));
         group.addChild (choiceParam (bandId (BandParam::ThresholdMode), prefix + "Threshold Mode", labels::thresholdModes(), 0));
-        group.addChild (floatParam (bandId (BandParam::Threshold), prefix + "Threshold", { -80.0f, 30.0f, 0.1f }, -20.0f,
-                                    [] (float v) { return format::decibels (v, false); }, "dB"));
+        group.addChild (floatParam (
+            bandId (BandParam::Threshold), prefix + "Threshold", linearRange (-80.0f, 30.0f, 0.1), -20.0f,
+            [] (float v) { return format::decibels (v, false); }, "dB"));
         group.addChild (floatParam (bandId (BandParam::Ratio), prefix + "Ratio", logRange (0.1f, 100.0f), 2.0f, format::ratio));
         group.addChild (choiceParam (bandId (BandParam::Direction), prefix + "Direction", labels::directions(), 0));
-        group.addChild (floatParam (bandId (BandParam::Range), prefix + "Range", { 0.0f, 30.0f, 0.1f }, 12.0f,
-                                    [] (float v) { return format::decibels (v, false); }, "dB"));
-        group.addChild (floatParam (bandId (BandParam::Attack), prefix + "Attack", logRange (0.05f, 500.0f), 5.0f, format::milliseconds));
-        group.addChild (floatParam (bandId (BandParam::Release), prefix + "Release", logRange (1.0f, 5000.0f), 100.0f, format::milliseconds));
-        group.addChild (floatParam (bandId (BandParam::Lookahead), prefix + "Lookahead", { 0.0f, 20.0f, 0.01f }, 0.0f, format::milliseconds));
-        group.addChild (floatParam (bandId (BandParam::Knee), prefix + "Knee", { 0.0f, 24.0f, 0.1f }, 6.0f,
-                                    [] (float v) { return format::decibels (v, false); }, "dB"));
-        group.addChild (floatParam (bandId (BandParam::Mix), prefix + "Mix", { 0.0f, 100.0f, 0.1f }, 100.0f, format::percent));
-        group.addChild (floatParam (bandId (BandParam::Selectivity), prefix + "Selectivity", { 0.0f, 100.0f, 0.1f }, 50.0f, format::percent));
+        group.addChild (floatParam (
+            bandId (BandParam::Range), prefix + "Range", linearRange (0.0f, 30.0f, 0.1), 12.0f,
+            [] (float v) { return format::decibels (v, false); }, "dB"));
+        group.addChild (floatParam (bandId (BandParam::Attack), prefix + "Attack", logRange (0.05f, 500.0f), 5.0f, format::milliseconds, {},
+                                    format::parseMilliseconds));
+        group.addChild (floatParam (bandId (BandParam::Release), prefix + "Release", logRange (1.0f, 5000.0f), 100.0f, format::milliseconds,
+                                    {}, format::parseMilliseconds));
+        group.addChild (floatParam (bandId (BandParam::Lookahead), prefix + "Lookahead", linearRange (0.0f, 20.0f, 0.01), 0.0f,
+                                    format::milliseconds, {}, format::parseMilliseconds));
+        group.addChild (floatParam (
+            bandId (BandParam::Knee), prefix + "Knee", linearRange (0.0f, 24.0f, 0.1), 6.0f,
+            [] (float v) { return format::decibels (v, false); }, "dB"));
+        group.addChild (floatParam (bandId (BandParam::Mix), prefix + "Mix", linearRange (0.0f, 100.0f, 0.1), 100.0f, format::percent));
+        group.addChild (
+            floatParam (bandId (BandParam::Selectivity), prefix + "Selectivity", linearRange (0.0f, 100.0f, 0.1), 50.0f, format::percent));
         group.addChild (choiceParam (bandId (BandParam::Link), prefix + "Link", labels::links(), static_cast<int> (DetectorLink::Group)));
     }
 } // namespace
@@ -144,9 +175,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
 
     auto global = std::make_unique<juce::AudioProcessorParameterGroup> ("global", "Global", "|");
     global->addChild (boolParam (id::bypass, "Bypass", false));
-    global->addChild (floatParam (id::outputGain, "Output", { -24.0f, 24.0f, 0.01f }, 0.0f,
-                                  [] (float v) { return format::decibels (v); }, "dB"));
-    global->addChild (floatParam (id::mix, "Mix", { 0.0f, 100.0f, 0.1f }, 100.0f, format::percent));
+    global->addChild (floatParam (
+        id::outputGain, "Output", linearRange (-24.0f, 24.0f, 0.01), 0.0f, [] (float v) { return format::decibels (v); }, "dB"));
+    global->addChild (floatParam (id::mix, "Mix", linearRange (0.0f, 100.0f, 0.1), 100.0f, format::percent));
     // Latency-affecting settings are not automatable (ADR-0011).
     global->addChild (choiceParam (id::phaseMode, "Phase Mode", labels::phaseModes(), 0, false));
     global->addChild (choiceParam (id::analogModel, "Analog Model", labels::analogModels(), 0));
@@ -154,19 +185,21 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     global->addChild (choiceParam (id::oversampling, "Oversampling", labels::oversampling(), 0, false));
     global->addChild (boolParam (id::autoGain, "Auto Gain", false));
     global->addChild (choiceParam (id::autoGainWeighting, "Auto Gain Weighting", labels::autoGainWeightings(), 0));
-    global->addChild (choiceParam (id::autoGainSpeed, "Auto Gain Speed", labels::autoGainSpeeds(), static_cast<int> (AutoGainSpeed::Stable)));
+    global->addChild (
+        choiceParam (id::autoGainSpeed, "Auto Gain Speed", labels::autoGainSpeeds(), static_cast<int> (AutoGainSpeed::Stable)));
     {
         auto maxLookahead = std::make_unique<juce::AudioParameterFloat> (
-            pid (id::maxLookahead), "Max Lookahead", juce::NormalisableRange<float> { 0.0f, 20.0f, 0.01f }, 0.0f,
-            juce::AudioParameterFloatAttributes().withAutomatable (false).withStringFromValueFunction ([] (float v, int) { return format::milliseconds (v); }));
+            pid (id::maxLookahead), "Max Lookahead", linearRange (0.0f, 20.0f, 0.01), 0.0f,
+            juce::AudioParameterFloatAttributes().withAutomatable (false).withStringFromValueFunction (
+                [] (float v, int) { return format::milliseconds (v); }));
         global->addChild (std::move (maxLookahead));
     }
     layout.add (std::move (global));
 
     for (int band = 0; band < kNumBands; ++band)
     {
-        auto group = std::make_unique<juce::AudioProcessorParameterGroup> ("band" + juce::String (band + 1),
-                                                                           "Band " + juce::String (band + 1), "|");
+        auto group =
+            std::make_unique<juce::AudioProcessorParameterGroup> ("band" + juce::String (band + 1), "Band " + juce::String (band + 1), "|");
         addBand (*group, band);
         layout.add (std::move (group));
     }
@@ -178,12 +211,14 @@ namespace labels
 {
     const juce::StringArray& shapes()
     {
-        static const juce::StringArray s { "Bell", "Low Shelf", "High Shelf", "Low Cut", "High Cut", "Notch", "Band Pass", "Tilt Shelf", "Flat Tilt", "All Pass" };
+        static const juce::StringArray s { "Bell",  "Low Shelf", "High Shelf", "Low Cut",   "High Cut",
+                                           "Notch", "Band Pass", "Tilt Shelf", "Flat Tilt", "All Pass" };
         return s;
     }
     const juce::StringArray& slopes()
     {
-        static const juce::StringArray s { "6 dB/oct", "12 dB/oct", "18 dB/oct", "24 dB/oct", "30 dB/oct", "36 dB/oct", "48 dB/oct", "72 dB/oct", "96 dB/oct", "Brickwall" };
+        static const juce::StringArray s { "6 dB/oct",  "12 dB/oct", "18 dB/oct", "24 dB/oct", "30 dB/oct",
+                                           "36 dB/oct", "48 dB/oct", "72 dB/oct", "96 dB/oct", "Brickwall" };
         return s;
     }
     const juce::StringArray& bandModes()
@@ -284,6 +319,21 @@ namespace format
     juce::String percent (float value)
     {
         return juce::String (juce::roundToInt (value)) + "%";
+    }
+
+    float parseFrequency (const juce::String& text)
+    {
+        const auto t = text.trim().toLowerCase();
+        const float value = t.getFloatValue();
+        return t.containsChar ('k') ? value * 1000.0f : value;
+    }
+
+    float parseMilliseconds (const juce::String& text)
+    {
+        const auto t = text.trim().toLowerCase();
+        const float value = t.getFloatValue();
+        const bool seconds = t.endsWithChar ('s') && ! t.endsWith ("ms");
+        return seconds ? value * 1000.0f : value;
     }
 } // namespace format
 

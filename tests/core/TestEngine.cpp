@@ -16,7 +16,9 @@ struct StereoBuffer
     std::vector<float> left, right;
     float* ptrs[2];
 
-    explicit StereoBuffer (const std::vector<float>& source) : left (source), right (source)
+    explicit StereoBuffer (const std::vector<float>& source)
+        : left (source),
+          right (source)
     {
         for (auto& v : right)
             v = -v;
@@ -25,21 +27,23 @@ struct StereoBuffer
     }
 };
 
-ssc::engine::Engine makeEngine (int maxBlock = 256)
+/** Stereo engine at 48 kHz, prepared for the given block size. */
+struct PreparedEngine : ssc::engine::Engine
 {
-    ssc::engine::Engine e;
-    ssc::engine::EngineConfig cfg;
-    cfg.sampleRate = 48000.0;
-    cfg.maxBlockSize = maxBlock;
-    cfg.numChannels = 2;
-    e.prepare (cfg);
-    return e;
-}
+    explicit PreparedEngine (int maxBlock = 256)
+    {
+        ssc::engine::EngineConfig config;
+        config.sampleRate = 48000.0;
+        config.maxBlockSize = maxBlock;
+        config.numChannels = 2;
+        prepare (config);
+    }
+};
 } // namespace
 
 TEST_CASE ("Engine with default parameters is a bit-exact pass-through", "[engine][CH-6]")
 {
-    auto engine = makeEngine();
+    PreparedEngine engine;
     const auto source = ssc::test::sine (997.0, 0.7, 48000.0, 4096);
     StereoBuffer buffer (source);
 
@@ -58,7 +62,7 @@ TEST_CASE ("Engine with default parameters is a bit-exact pass-through", "[engin
 
 TEST_CASE ("Engine processes host blocks larger than the prepared block size", "[engine]")
 {
-    auto engine = makeEngine (64);
+    PreparedEngine engine (64);
     const auto source = ssc::test::sine (440.0, 0.5, 48000.0, 1000);
     StereoBuffer buffer (source);
 
@@ -73,7 +77,7 @@ TEST_CASE ("Engine processes host blocks larger than the prepared block size", "
 
 TEST_CASE ("Output gain and mix reach their targets after the ramp", "[engine]")
 {
-    auto engine = makeEngine();
+    PreparedEngine engine;
     const auto source = ssc::test::sine (1000.0, 0.5, 48000.0, 9600);
     StereoBuffer buffer (source);
 
@@ -94,7 +98,7 @@ TEST_CASE ("Output gain and mix reach their targets after the ramp", "[engine]")
 
 TEST_CASE ("Bypass crossfades without discontinuities and keeps latency (GLB-1)", "[engine][GLB-1]")
 {
-    auto engine = makeEngine();
+    PreparedEngine engine;
     const auto source = ssc::test::sine (1000.0, 0.8, 48000.0, 24000);
     StereoBuffer buffer (source);
 

@@ -1,7 +1,12 @@
 #pragma once
 
+#include <array>
+#include <atomic>
+#include <cstdint>
 #include <vector>
 
+#include "ssc/engine/BandProcessor.h"
+#include "ssc/engine/ChannelTopology.h"
 #include "ssc/engine/Types.h"
 #include "ssc/util/DelayLine.h"
 #include "ssc/util/LinearSmoother.h"
@@ -13,15 +18,36 @@ struct EngineConfig
     double sampleRate = 48000.0;
     int maxBlockSize = 512;
     int numChannels = 2;
+    ChannelTopology topology = ChannelTopology::stereo();
 };
+
+using BandSettingsArray = std::array<BandSettings, kNumBands>;
 
 /** Global (non-band) parameter values, read once per host block. */
 struct GlobalParams
 {
     double outputGainDb = 0.0;
-    double mix = 1.0;      ///< 0 … 1
+    double mix = 1.0; ///< 0 … 1
     bool bypass = false;
+    Quality quality = Quality::Normal;
+    int soloBand = -1; ///< band auditioned on its own (−1 = none); see auditionShapeFor()
 };
+
+/** Filter used to audition ("solo") a band: the region of the spectrum the band works on. */
+filters::BandShape auditionShapeFor (const filters::BandShape& band) noexcept;
+
+/** Coefficient update interval (samples) per Quality level (research §8). */
+constexpr int controlBlockFor (Quality q) noexcept
+{
+    switch (q)
+    {
+        case Quality::Eco: return 32;
+        case Quality::Normal: return 16;
+        case Quality::High: return 8;
+        case Quality::Max: return 4;
+    }
+    return 16;
+}
 
 /**
     Top-level DSP engine. Owns the processing chain and the dry path used by Mix and Bypass.
@@ -39,24 +65,46 @@ public:
     void reset() noexcept;
 
     template <typename Sample>
-    void process (Sample* const* channels, int numChannels, int numSamples, const GlobalParams& params) noexcept;
+    void process (Sample* const* channels, int numChannels, int numSamples, const GlobalParams& params,
+                  const BandSettingsArray& bands) noexcept;
+
+    /** Convenience overload without bands (all inactive). */
+    template <typename Sample>
+    void process (Sample* const* channels, int numChannels, int numSamples, const GlobalParams& params) noexcept
+    {
+        static const BandSettingsArray none {};
+        process (channels, numChannels, numSamples, params, none);
+    }
+
+    const BandProcessor& band (int index) const noexcept { return bandProcessors[static_cast<std::size_t> (index)]; }
 
     int getLatencySamples() const noexcept { return latencySamples; }
     const EngineConfig& getConfig() const noexcept { return cfg; }
 
+    /** Blocks in which non-finite audio was replaced by silence (input or filter state); any thread. */
+    std::uint32_t getNonFiniteEvents() const noexcept { return nonFiniteEvents.load (std::memory_order_relaxed); }
+
 private:
     template <typename Sample>
-    void processChunk (Sample* const* channels, int numChannels, int numSamples) noexcept;
+    void processChunk (Sample* const* channels, int numChannels, int numSamples, const BandSettingsArray& bands) noexcept;
 
     static constexpr double kRampSeconds = 0.02;
 
     EngineConfig cfg;
     int latencySamples = 0;
 
-    std::vector<std::vector<double>> dry;
-    std::vector<double*> dryPointers;
+    std::vector<std::vector<double>> dry, wet;
+    std::vector<double*> dryPointers, wetPointers;
+    std::array<BandProcessor, kNumBands> bandProcessors;
+    BandProcessor soloProcessor;
+    std::vector<std::vector<double>> solo;
+    std::vector<double*> soloPointers;
+    LinearSmoother<double> soloAmount;
+    filters::BandShape lastSoloShape;
+    int controlBlock = 16;
     MultiChannelDelay<double> dryDelay;
 
     LinearSmoother<double> outputGain, mix, bypass;
+    std::atomic<std::uint32_t> nonFiniteEvents { 0 };
 };
 } // namespace ssc::engine

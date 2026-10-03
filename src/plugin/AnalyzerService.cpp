@@ -10,7 +10,8 @@ namespace
     constexpr std::size_t kFifoSeconds = 2;
 } // namespace
 
-AnalyzerService::AnalyzerService() : juce::Thread ("Sam Spectral Control analyzer")
+AnalyzerService::AnalyzerService()
+    : juce::Thread ("Sam Spectral Control analyzer")
 {
     prepare (sampleRate);
 }

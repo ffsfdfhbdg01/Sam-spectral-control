@@ -1,13 +1,17 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
 #include <random>
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "TestSignals.h"
+#include "plugin/ChannelLayout.h"
 #include "plugin/Parameters.h"
 #include "plugin/PluginProcessor.h"
 
+using Catch::Approx;
 using ssc::plugin::SscAudioProcessor;
 
 namespace
@@ -16,6 +20,13 @@ struct JuceEnvironment
 {
     juce::ScopedJuceInitialiser_GUI init;
 };
+
+void setPlain (SscAudioProcessor& p, const juce::String& paramId, float plain)
+{
+    auto* param = p.getValueTreeState().getParameter (paramId);
+    REQUIRE (param != nullptr);
+    param->setValueNotifyingHost (param->convertTo0to1 (plain));
+}
 
 bool supports (SscAudioProcessor& p, const juce::AudioChannelSet& in, const juce::AudioChannelSet& out)
 {
@@ -32,12 +43,26 @@ TEST_CASE ("Processor accepts mono, stereo and surround/immersive layouts (CH-1)
     SscAudioProcessor p;
 
     using S = juce::AudioChannelSet;
-    const std::vector<S> accepted { S::mono(), S::stereo(), S::createLCR(), S::createLCRS(), S::quadraphonic(),
-                                    S::create5point0(), S::create5point1(), S::create6point1(), S::create7point0(),
-                                    S::create7point1(), S::create5point1point2(), S::create5point1point4(),
-                                    S::create7point1point2(), S::create7point1point4(), S::create7point1point6(),
-                                    S::create9point1point4(), S::create9point1point6(), S::discreteChannels (1),
-                                    S::discreteChannels (24), S::discreteChannels (32) };
+    const std::vector<S> accepted { S::mono(),
+                                    S::stereo(),
+                                    S::createLCR(),
+                                    S::createLCRS(),
+                                    S::quadraphonic(),
+                                    S::create5point0(),
+                                    S::create5point1(),
+                                    S::create6point1(),
+                                    S::create7point0(),
+                                    S::create7point1(),
+                                    S::create5point1point2(),
+                                    S::create5point1point4(),
+                                    S::create7point1point2(),
+                                    S::create7point1point4(),
+                                    S::create7point1point6(),
+                                    S::create9point1point4(),
+                                    S::create9point1point6(),
+                                    S::discreteChannels (1),
+                                    S::discreteChannels (24),
+                                    S::discreteChannels (32) };
     for (const auto& set : accepted)
     {
         INFO (set.getDescription().toStdString());
@@ -177,4 +202,92 @@ TEST_CASE ("Double-precision processing is supported", "[plugin][PLT-4]")
     juce::MidiBuffer midi;
     p.processBlock (buffer, midi);
     REQUIRE (buffer.getSample (0, 100) == std::sin (1.0));
+}
+
+TEST_CASE ("Band parameters drive the engine; untargeted channels stay bit-exact (BAND-1, CH-3)", "[plugin][BAND-1][CH-3]")
+{
+    JuceEnvironment env;
+    SscAudioProcessor p;
+    p.setPlayConfigDetails (2, 2, 48000.0, 512);
+    p.prepareToPlay (48000.0, 512);
+
+    using ssc::plugin::BandParam;
+    using ssc::plugin::bandParamId;
+    setPlain (p, bandParamId (4, BandParam::Used), 1.0f);
+    setPlain (p, bandParamId (4, BandParam::Frequency), 1000.0f);
+    setPlain (p, bandParamId (4, BandParam::Gain), 6.0f);
+    setPlain (p, bandParamId (4, BandParam::Target), 1.0f); // Left
+
+    constexpr int total = 48128;
+    const auto source = ssc::test::sine (1000.0, 0.25, 48000.0, total);
+    juce::AudioBuffer<float> buffer (2, 512);
+    juce::MidiBuffer midi;
+    double inSum = 0.0, leftSum = 0.0;
+    for (int offset = 0; offset < total; offset += 512)
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            buffer.copyFrom (ch, 0, source.data() + offset, 512);
+        p.processBlock (buffer, midi);
+
+        for (int i = 0; i < 512; ++i)
+        {
+            const auto x = source[static_cast<std::size_t> (offset + i)];
+            REQUIRE (buffer.getSample (1, i) == x);
+            if (offset >= 24000)
+            {
+                inSum += static_cast<double> (x) * x;
+                leftSum += static_cast<double> (buffer.getSample (0, i)) * buffer.getSample (0, i);
+            }
+        }
+    }
+    REQUIRE (10.0 * std::log10 (leftSum / inSum) == Approx (6.0).margin (0.05));
+
+    // Switching the band off returns to bit-exact pass-through after the crossfade.
+    setPlain (p, bandParamId (4, BandParam::On), 0.0f);
+    for (int block = 0; block < 4; ++block)
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            buffer.copyFrom (ch, 0, source.data(), 512);
+        p.processBlock (buffer, midi);
+    }
+    for (int i = 0; i < 512; ++i)
+        REQUIRE (buffer.getSample (0, i) == source[static_cast<std::size_t> (i)]);
+}
+
+TEST_CASE ("Host layouts map to speaker pairs and LFE flags (CH-1, CH-4)", "[plugin][CH-1][CH-4]")
+{
+    using S = juce::AudioChannelSet;
+    using ssc::plugin::topologyFor;
+
+    const auto mono = topologyFor (S::mono());
+    REQUIRE (mono.numChannels == 1);
+    REQUIRE (mono.numPairs == 0);
+
+    const auto stereo = topologyFor (S::stereo());
+    REQUIRE (stereo.numPairs == 1);
+    REQUIRE (stereo.pairs[0].left == 0);
+    REQUIRE (stereo.pairs[0].right == 1);
+
+    auto countLfe = [] (const ssc::engine::ChannelTopology& t) {
+        int n = 0;
+        for (int ch = 0; ch < t.numChannels; ++ch)
+            n += t.isLfe (ch) ? 1 : 0;
+        return n;
+    };
+
+    const auto surround51 = topologyFor (S::create5point1());
+    REQUIRE (surround51.numPairs == 2); // L/R, Ls/Rs
+    REQUIRE (countLfe (surround51) == 1);
+
+    const auto atmos714 = topologyFor (S::create7point1point4());
+    REQUIRE (atmos714.numChannels == 12);
+    REQUIRE (atmos714.numPairs == 5); // L/R, Lss/Rss, Lrs/Rrs, Ltf/Rtf, Ltr/Rtr
+    REQUIRE (countLfe (atmos714) == 1);
+
+    const auto atmos916 = topologyFor (S::create9point1point6());
+    REQUIRE (atmos916.numPairs == 7); // + Lw/Rw and Ltm/Rtm
+
+    const auto discrete = topologyFor (S::discreteChannels (6));
+    REQUIRE (discrete.numPairs == 0);
+    REQUIRE (countLfe (discrete) == 0);
 }

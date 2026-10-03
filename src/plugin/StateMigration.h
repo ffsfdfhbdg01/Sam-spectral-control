@@ -11,6 +11,7 @@ inline const juce::Identifier kStateType { "SamSpectralControl" };
 inline const juce::Identifier kVersionProperty { "version" };
 inline const juce::Identifier kUiWidth { "uiWidth" };
 inline const juce::Identifier kUiHeight { "uiHeight" };
+inline const juce::Identifier kUiEqRange { "uiEqRange" };
 
 /**
     Upgrades a saved state tree to kStateVersion in place.

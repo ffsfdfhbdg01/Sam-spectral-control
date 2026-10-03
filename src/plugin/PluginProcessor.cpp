@@ -1,5 +1,6 @@
 #include "plugin/PluginProcessor.h"
 
+#include "plugin/ChannelLayout.h"
 #include "plugin/StateMigration.h"
 #include "ui/PluginEditor.h"
 
@@ -25,6 +26,7 @@ void SscAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     cfg.sampleRate = sampleRate;
     cfg.maxBlockSize = samplesPerBlock;
     cfg.numChannels = numChannels;
+    cfg.topology = getChannelTopology();
     engine.prepare (cfg);
 
     tapScratch.assign (static_cast<std::size_t> (std::max (1, samplesPerBlock)), 0.0f);
@@ -52,13 +54,56 @@ bool SscAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) cons
     return true;
 }
 
+engine::ChannelTopology SscAudioProcessor::getChannelTopology() const
+{
+    return topologyFor (getChannelLayoutOfBus (false, 0));
+}
+
+namespace
+{
+    /** Choice parameter value (stored as the index) as an enum, limited to [0, last]. */
+    template <typename Enum>
+    Enum choice (const std::atomic<float>* raw, Enum last) noexcept
+    {
+        const auto index = static_cast<int> (std::lround (raw->load (std::memory_order_relaxed)));
+        return static_cast<Enum> (juce::jlimit (0, static_cast<int> (last), index));
+    }
+
+    bool isOn (const std::atomic<float>* raw) noexcept
+    {
+        return raw->load (std::memory_order_relaxed) >= 0.5f;
+    }
+} // namespace
+
 engine::GlobalParams SscAudioProcessor::readGlobalParams (bool forceBypass) const noexcept
 {
     engine::GlobalParams p;
     p.outputGainDb = params.outputGain->load (std::memory_order_relaxed);
     p.mix = params.mix->load (std::memory_order_relaxed) * 0.01;
-    p.bypass = forceBypass || params.bypass->load (std::memory_order_relaxed) >= 0.5f;
+    p.bypass = forceBypass || isOn (params.bypass);
+    p.quality = choice (params.quality, Quality::Max);
+    p.soloBand = soloBand.load (std::memory_order_relaxed);
     return p;
+}
+
+void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) const noexcept
+{
+    for (int b = 0; b < kNumBands; ++b)
+    {
+        const auto& raw = params.bands[static_cast<std::size_t> (b)];
+        auto get = [&raw] (BandParam p) { return raw[static_cast<std::size_t> (p)]; };
+        auto& s = bands[static_cast<std::size_t> (b)];
+
+        s.active = isOn (get (BandParam::Used)) && isOn (get (BandParam::On));
+        s.shape.shape = choice (get (BandParam::Shape), Shape::AllPass);
+        s.shape.frequencyHz = get (BandParam::Frequency)->load (std::memory_order_relaxed);
+        s.shape.gainDb = get (BandParam::Gain)->load (std::memory_order_relaxed);
+        s.shape.q = get (BandParam::Q)->load (std::memory_order_relaxed);
+        s.shape.slope = choice (get (BandParam::Slope), Slope::Brickwall);
+        s.mode = choice (get (BandParam::Mode), BandMode::Spectral);
+        s.component = choice (get (BandParam::Target), StereoComponent::Side);
+        s.character = choice (get (BandParam::Character), Character::Sharp);
+    }
 }
 
 template <typename Sample>
@@ -101,7 +146,9 @@ void SscAudioProcessor::processImpl (juce::AudioBuffer<Sample>& buffer, bool for
 
     pushAnalyzerTap (buffer, false);
 
-    engine.process (buffer.getArrayOfWritePointers(), buffer.getNumChannels(), buffer.getNumSamples(), readGlobalParams (forceBypass));
+    readBandSettings (bandSettings);
+    engine.process (buffer.getArrayOfWritePointers(), buffer.getNumChannels(), buffer.getNumSamples(), readGlobalParams (forceBypass),
+                    bandSettings);
 
     pushAnalyzerTap (buffer, true);
 }

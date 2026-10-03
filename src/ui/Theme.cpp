@@ -37,8 +37,8 @@ LookAndFeel::LookAndFeel()
     setColour (juce::TooltipWindow::outlineColourId, colours::panelEdge);
 }
 
-void LookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height, float sliderPos,
-                                    float rotaryStartAngle, float rotaryEndAngle, juce::Slider&)
+void LookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height, float sliderPos, float rotaryStartAngle,
+                                    float rotaryEndAngle, juce::Slider&)
 {
     const auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat().reduced (3.0f);
     const auto radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
