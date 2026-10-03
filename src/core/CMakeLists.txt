@@ -8,6 +8,7 @@ add_library(ssc_core STATIC
     src/spectral/SpectralEngine.cpp
     src/loudness/Loudness.cpp
     src/loudness/AutoGain.cpp
+    src/oversampling/Oversampler.cpp
     src/filters/MatchedDesign.cpp
     src/filters/BandDesign.cpp)
 
