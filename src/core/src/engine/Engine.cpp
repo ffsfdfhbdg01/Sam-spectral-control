@@ -46,6 +46,12 @@ void Engine::prepare (const EngineConfig& config)
 
     // Latency so far is the lookahead only; the dry delay is sized for the M3–M4 maximum.
     spectralEngine->prepare (cfg.sampleRate, cfg.numChannels, cfg.maxBlockSize);
+    autoGain->prepare (cfg.sampleRate, cfg.numChannels);
+    const auto erbBands = static_cast<std::size_t> (autoGain->getBands().numBands());
+    bandCurvesDb.assign (static_cast<std::size_t> (kNumBands), std::vector<double> (erbBands, 0.0));
+    channelCurveDb.assign (erbBands, 0.0);
+    curveActive.fill (false);
+    curveLanes.fill ({});
     spectralEnabled = false;
     const int maxSpectralLatency = spectral::fftSizeFor (Quality::Max, cfg.sampleRate);
     soloDelay.prepare (cfg.numChannels, maxSpectralLatency, cfg.maxBlockSize);
@@ -75,6 +81,79 @@ void Engine::reset() noexcept
     soloProcessor->reset();
     spectralEngine->reset();
     soloDelay.reset();
+    autoGain->reset();
+}
+
+void Engine::updateAutoGainCurves (const BandSettingsArray& bands) noexcept
+{
+    // EQ magnitude at the ERB band centres per channel, for the Stable speed. Only changed bands
+    // are redesigned, so automation of one band costs one design per block.
+    const auto& erb = autoGain->getBands();
+    bool changed = false;
+    for (int b = 0; b < kNumBands; ++b)
+    {
+        const auto bi = static_cast<std::size_t> (b);
+        const auto& band = bands[bi];
+        const bool active = band.active && ! filters::isIdentity (band.shape);
+        const auto lanes = active ? makeLanes (band.component, band.channelMask, band.includeLfe, cfg.topology) : LaneLayout {};
+        if (active == curveActive[bi] && (! active || band.shape == curveShapes[bi]) && lanes == curveLanes[bi])
+            continue;
+        changed = true;
+        curveActive[bi] = active;
+        curveShapes[bi] = band.shape;
+        curveLanes[bi] = lanes;
+        auto& curve = bandCurvesDb[bi];
+        std::fill (curve.begin(), curve.end(), 0.0);
+        if (active)
+        {
+            const auto design = filters::designBand (band.shape, cfg.sampleRate);
+            for (int e = 0; e < erb.numBands(); ++e)
+                curve[static_cast<std::size_t> (e)] = gainToDb (std::abs (design.digitalResponse (erb.centreHz (e), cfg.sampleRate)));
+        }
+    }
+
+    // Which channels the bands process; BS.1770 weights (surrounds +1.5 dB, LFE excluded).
+    auto& covered = autoGainCovered;
+    covered.fill (false);
+    for (int b = 0; b < kNumBands; ++b)
+        for (int l = 0; l < curveLanes[static_cast<std::size_t> (b)].numLanes; ++l)
+        {
+            const auto& lane = curveLanes[static_cast<std::size_t> (b)].lanes[static_cast<std::size_t> (l)];
+            if (lane.a >= 0)
+                covered[static_cast<std::size_t> (lane.a)] = true;
+            if (lane.b >= 0)
+                covered[static_cast<std::size_t> (lane.b)] = true;
+        }
+    for (int ch = 0; ch < cfg.numChannels; ++ch)
+    {
+        const auto c = static_cast<std::size_t> (ch);
+        float weight = 0.0f;
+        if (! cfg.topology.isLfe (ch))
+        {
+            const auto group = cfg.topology.groups[c];
+            weight = group == SpeakerGroup::SideSurround || group == SpeakerGroup::RearSurround ? 1.41f : 1.0f;
+        }
+        autoGainWeights[c] = weight;
+        covered[c] = covered[c] && weight > 0.0f;
+    }
+
+    if (! changed)
+        return;
+    for (int ch = 0; ch < cfg.numChannels; ++ch)
+    {
+        std::fill (channelCurveDb.begin(), channelCurveDb.end(), 0.0);
+        for (int b = 0; b < kNumBands; ++b)
+        {
+            const auto& lanes = curveLanes[static_cast<std::size_t> (b)];
+            bool touches = false;
+            for (int l = 0; l < lanes.numLanes; ++l)
+                touches = touches || lanes.lanes[static_cast<std::size_t> (l)].a == ch || lanes.lanes[static_cast<std::size_t> (l)].b == ch;
+            if (touches)
+                for (std::size_t e = 0; e < channelCurveDb.size(); ++e)
+                    channelCurveDb[e] += bandCurvesDb[static_cast<std::size_t> (b)][e];
+        }
+        autoGain->setStaticCurve (ch, channelCurveDb.data());
+    }
 }
 
 float Engine::getBandGainChangeDb (int index) const noexcept
@@ -122,6 +201,9 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
         lastSoloShape = auditionShapeFor (bands[static_cast<std::size_t> (params.soloBand)].shape);
 
     configure (params, bands);
+    autoGainSettings = { params.autoGain, params.autoGainWeighting, params.autoGainSpeed };
+    if (params.autoGain)
+        updateAutoGainCurves (bands);
 
     outputGain.setTarget (dbToGain (params.outputGainDb));
     mix.setTarget (std::clamp (params.mix, 0.0, 1.0));
@@ -187,6 +269,14 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
     if (spectralEnabled)
         spectralEngine->process (wetPointers.data(), numChannels, numSamples, bands, cfg.topology);
 
+    // Dry path aligned with the processed path (latency).
+    dryDelay.processInPlace (dryPointers.data(), numChannels, numSamples);
+
+    // Global Auto Gain on the processed channels, before Solo, so the audition is unaffected (AG-5).
+    if (autoGainSettings.enabled || std::abs (autoGain->getCorrectionDb()) > 0.0f)
+        autoGain->process (dryPointers.data(), wetPointers.data(), numChannels, numSamples, autoGainSettings, autoGainWeights,
+                           autoGainCovered);
+
     // Solo: crossfade the processed signal with the band's audition filter applied to the input.
     if (soloActive)
     {
@@ -221,8 +311,6 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
             std::fill (wet[static_cast<std::size_t> (ch)].begin(), wet[static_cast<std::size_t> (ch)].begin() + numSamples, 0.0);
         nonFiniteEvents.fetch_add (1, std::memory_order_relaxed);
     }
-
-    dryDelay.processInPlace (dryPointers.data(), numChannels, numSamples);
 
     const bool identity = ! outputGain.isSmoothing() && ! mix.isSmoothing() && ! bypass.isSmoothing() && outputGain.getCurrent() == 1.0
         && mix.getCurrent() == 1.0 && bypass.getCurrent() == 0.0;

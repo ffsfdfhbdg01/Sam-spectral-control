@@ -11,7 +11,9 @@ add_executable(ssc_core_tests
     core/TestBandProcessor.cpp
     core/TestDynamics.cpp
     core/TestDynamicBands.cpp
-    core/TestSpectral.cpp)
+    core/TestSpectral.cpp
+    core/TestAutoGain.cpp
+    core/TestDeterminism.cpp)
 
 target_include_directories(ssc_core_tests PRIVATE .)
 target_link_libraries(ssc_core_tests PRIVATE ssc_core ssc_options Catch2::Catch2WithMain)

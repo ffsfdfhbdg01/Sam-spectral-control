@@ -60,6 +60,29 @@ Uzasadnienie: krzywe Fletchera–Munsona są historyczne; ISO 226 jest ich wspó
 - **Pełny ISO 532-3 w czasie rzeczywistym jako domyślny** — za drogi obliczeniowo przy wielu kanałach; wariant P1.
 - **Kompensacja tylko z krzywej EQ (bez widma sygnału)** — ignoruje treść materiału (np. boost w paśmie, w którym nic nie gra); w trybie Stable łączymy krzywą z LTAS.
 
+### Realizacja w M3 i wyniki pomiarów
+Kod: `ssc/loudness/Loudness` (ISO 226:2003, pasma ERB, sony), `ssc/loudness/AutoGain` (globalny), make-up pasm w `BandProcessor` i `SpectralEngine`.
+
+- **Model**: pasma 1 ERB z FFT (Hann, 4096 przy 48 kHz; 1024 dla Very Fast, żeby okno analizy nie dominowało nad τ = 50 ms), kalibracja K-20 (−20 dBFS RMS różowego szumu ≈ 83 dB SPL), fony z odwrotnego wzoru ISO 226:2003 (wartości konturu 40 fon zgodne z tabelą normy, np. 100 Hz: 64,37 dB SPL), sony, suma.
+- **Prędkości Very Fast…Long**: różnica głośności wejście/wyjście każdej ramki jest wygładzana **w dB** stałą czasową prędkości — odpowiedź skokowa jest wykładnicza, a 63 % wartości końcowej przypada na τ (+ opóźnienie analizy: pół ramki i hop; ok. 17 ms dla Very Fast, 75 ms dla pozostałych). Uśrednianie mocy dawało 63 % już po ~0,76 τ.
+- **Stable**: długoterminowe widmo wejścia (τ = 30 s, bramkowane) każdego kanału jest liczone stale, także zanim pasmo zacznie działać; korekcja = głośność tego widma minus głośność tego samego widma przeprowadzonego przez aktualną krzywą EQ kanału (projekty pasm w środkach pasm ERB, przeliczane tylko dla zmienionych pasm). Zmiana ustawień daje nową korekcję od razu; muzyka przy stałym EQ nie powoduje pompowania.
+- **Kanały**: mierzone są wszystkie kanały poza LFE (wagi BS.1770: przestrzenne +1,5 dB), porównywane i korygowane tylko kanały objęte pasmami (AG-1, CH-6).
+- **Zabezpieczenia**: limit ±24 dB, bramka −70 dBFS zamraża pomiar i korekcję, zmiana korekcji ≤ 0,5 dB/ms z krótkim wygładzaniem 5 ms; Auto Gain działa przed odsłuchem Solo, więc go nie zmienia.
+- **Make-up pasm (AG-2)**: średnia zmiany wzmocnienia ważona energią detekcji (Dynamic: energia filtra obszaru; Spectral: energia punktów siatki w obszarze pasma), uśredniana stałą czasową globalnej prędkości Auto Gain, zamrażana w ciszy, ograniczona do Range; w trybie Spectral dodawana z wagą kształtu pasma.
+
+**Zmierzone (testy Catch2)**
+| Kryterium | Wynik |
+|---|---|
+| AG-6 Fletcher (Stable, Medium) | model −0,06 / −0,08 dB; BS.1770 −0,19 / −0,21 LU |
+| AG-3 Digital | RMS −0,03 / −0,02 dB |
+| AG-4 stałe czasowe (63 %) | Very Fast 0,067 s, Fast 0,45 s, Medium 3,04 s, Long 11,99 s |
+| AG-4 Stable | stabilna ≤ 1 s po zmianie EQ (±0,1 dB) |
+| AG-5 60 s ciszy | dryf ≤ 0,1 dB, brak skoków > 0,5 dB/ms |
+| AG-1 | kanał bez pasm bit-exact |
+| AG-2 make-up | ton w paśmie: −12 dB bez make-up → 0,001 dB (Dynamic) / −0,06 dB (Spectral) |
+
+**Odstępstwo od kryterium AG-4**: tolerancja ±20 % τ obejmuje dodatkowo opóźnienie analizy (pół ramki + hop), nieuniknione przy pomiarze w paśmie ERB.
+
 ## d) Kryteria akceptacji
 
 | ID | Kryterium | Metoda |

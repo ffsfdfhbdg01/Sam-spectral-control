@@ -83,6 +83,37 @@ Wynik: g ograniczone do [−Range, +Range]. Znak g wynika automatycznie z tabeli
 - **Bank filtrów IIR (np. 1/6 oktawy) zamiast STFT** — gorsza selektywność, trudna idealna rekonstrukcja; odrzucone.
 - **sliCQ (stały Q) jako domyślny silnik** — lepsza rozdzielczość w basie, ale większa złożoność i latencja; do oceny w benchmarku M3 jako wariant High/Max.
 
+### Realizacja w M3 i wyniki pomiarów
+Kod: `ssc/dynamics/Dynamics.h` (komputer wzmocnienia, wygładzanie, detektor), `ssc/engine/GainTable`, `ssc/engine/BandProcessor` (tryb Dynamic), `ssc/spectral/SpectralEngine` (tryb Spectral).
+
+**Dynamic**
+- **Sygnał detekcji = wejście wtyczki** (nieopóźnione, z bufora historii) przepuszczone przez filtr obszaru pasma (ten sam co odsłuch Solo). Dzięki temu lookahead jest możliwy, a zachowanie pasma nie zależy od kolejności pasm. Tor główny jest opóźniony o Max Lookahead; pasmo z lookahead L czyta detekcję z opóźnieniem Max − L.
+- **Detektor**: średni kwadrat z dwoma kaskadowymi biegunami (każdy o połowie stałej czasowej, łącznie max (2 ms, 2 okresy fc)). Pojedynczy biegun dawał tętnienie ±0,17 dB na 2·f, które przez asymetrię attack/release przesuwało charakterystykę statyczną o ~0,11 dB; kaskada zmniejsza tętnienie ok. 13×.
+- **Komputer wzmocnienia, attack/release i Mix** dokładnie wg wzorów z §c; liczone co ~1/12000 s (4 próbki przy 48 kHz) z liniową rampą per próbka.
+- **Modulacja filtra**: tablica parametrów SVF w funkcji wzmocnienia (krok 0,25 dB, ±60 dB) projektowana leniwie projektem dopasowanym i interpolowana per próbka — odpowiedź przy każdym wzmocnieniu równa projektowi pasma Static (różnica w fc ≤ 0,01 dB, test „Static gain of a Dynamic band…”). Zmiana fc/Q/kształtu unieważnia tablicę w O(1).
+- **Próg Relative w trybie Dynamic**: poziom pasma minus poziom kontekstu. Dla kształtów dzwonowych kontekst to filtr pasmowy 4× szerszy (z normalizacją +6 dB: płaskie widmo → 0 dB, wystający rezonans → wartości dodatnie); dla półek i tiltu kontekstem jest cały sygnał lane. Wynik nie zależy od poziomu materiału (DYN-10).
+- **Linkowanie**: poziom zbioru = maksimum poziomów lane (Independent / Pair / Group / All; grupy głośników jak w §4), osobne wygładzanie per lane z tym samym wejściem — identyczne wzmocnienie w zbiorze.
+
+**Spectral**
+- STFT √Hann/WOLA, N = 2048/4096/8192/8192 przy 48 kHz (skalowane z fs), hop N/4 (Max N/8); latencja = N próbek i tylko wtedy, gdy istnieje pasmo w trybie Spectral (ADR-0011). Kanały bez lane spektralnych omijają STFT dokładną linią opóźniającą o tej samej długości (bit-exact, CH-6).
+- Detekcja i maska na **siatce ERB (8 punktów/ERB)** zamiast na binach: poziom w paśmie o szerokości zależnej od Selectivity (2 ERB … ⅛ ERB, min. listek główny okna), kalibrowany do dBFS sinusa; próg Relative względem średniej z ±2 ERB. Siatka daje naturalne wygładzenie maski w częstotliwości i stały, niewielki stan per pasmo (≈ 330 punktów), niezależny od N i fs.
+- Ważenie kształtem pasma (1 w środku/plateau), wygładzanie attack/release per punkt w tempie hopu, suma pasm w dB w jedną maskę na kanał i na parę (Mid/Side), interpolacja do binów.
+
+**Zmierzone (testy Catch2)**
+| Kryterium | Wynik |
+|---|---|
+| DYN-4/5 charakterystyka statyczna (R ∈ {0,5; 2; 4; ∞} × Above/Below × knee {0, 6}) | ±0,1 dB (sinus w fc, −50…−10 dBFS) |
+| DYN-4 |g| ≤ Range | 20 000 losowych przypadków |
+| DYN-6 stałe czasowe | 63 % po τ ±2 % (attack i release) |
+| DYN-7 Mix 50 % | połowa zmiany ±0,05 dB |
+| DYN-8 lookahead 5 ms | redukcja przed transjentem; latencja = Max Lookahead |
+| CH-5 linkowanie | różnica wzmocnień w zbiorze ≤ 1e-6 dB |
+| DYN-9 maska = 1 | residuum −139 dB |
+| DYN-3 multiton | ton 1 kHz −7,5 dB, tony 1,1 kHz i 3 kHz < 0,001 dB |
+| DYN-10 Relative | identyczne wzmocnienie przy −30 i −10 dBFS (Dynamic i Spectral) |
+
+**Odstępstwa i dalsze kroki**: lookahead w trybie Spectral nie jest jeszcze kwantowany do hopu (ramka STFT i tak „widzi” transjent ~N/2 wcześniej); okienkowanie odpowiedzi impulsowej maski w Quality Max i tryb Low Latency (P1) — M4; zachowanie program-dependent (P1) — później.
+
 ## d) Kryteria akceptacji
 
 | ID | Kryterium | Metoda |

@@ -9,6 +9,7 @@
 #include "ssc/engine/BandProcessor.h"
 #include "ssc/engine/ChannelTopology.h"
 #include "ssc/engine/Types.h"
+#include "ssc/loudness/AutoGain.h"
 #include "ssc/spectral/SpectralEngine.h"
 #include "ssc/util/DelayLine.h"
 #include "ssc/util/LinearSmoother.h"
@@ -32,6 +33,9 @@ struct GlobalParams
     Quality quality = Quality::Normal;
     int soloBand = -1;           ///< band auditioned on its own (−1 = none); see auditionShapeFor()
     double maxLookaheadMs = 0.0; ///< delay of the main path; Dynamic bands look ahead up to this (DYN-8)
+    bool autoGain = false;       ///< global Auto Gain (AG-1)
+    AutoGainWeighting autoGainWeighting = AutoGainWeighting::Fletcher;
+    AutoGainSpeed autoGainSpeed = AutoGainSpeed::Stable;
 };
 
 /** Coefficient update interval (samples) per Quality level (research §8). */
@@ -80,6 +84,9 @@ public:
     float getBandGainChangeDb (int index) const noexcept;
 
     bool isSpectralEngineRunning() const noexcept { return spectralEnabled; }
+
+    /** Global Auto Gain correction currently applied (dB); any thread. */
+    float getAutoGainDb() const noexcept { return autoGain->getCorrectionDb(); }
 
     /** Reader side of the spectral mask view (one UI thread); see SpectralEngine::pollMaskView(). */
     const spectral::SpectralEngine::MaskView* pollSpectralView() noexcept { return spectralEngine->pollMaskView(); }
@@ -131,6 +138,18 @@ private:
 
     // Spectral engine: runs while at least one band is in Spectral mode (ADR-0011).
     std::unique_ptr<spectral::SpectralEngine> spectralEngine = std::make_unique<spectral::SpectralEngine>();
+
+    // Global Auto Gain: measured on the channels the bands process (CH-6), BS.1770 channel weights.
+    void updateAutoGainCurves (const BandSettingsArray& bands) noexcept;
+    std::unique_ptr<loudness::AutoGain> autoGain = std::make_unique<loudness::AutoGain>();
+    std::array<float, kMaxChannels> autoGainWeights {};
+    std::array<bool, kMaxChannels> autoGainCovered {};
+    loudness::AutoGain::Settings autoGainSettings;
+    std::array<filters::BandShape, kNumBands> curveShapes {};
+    std::array<bool, kNumBands> curveActive {};
+    std::array<LaneLayout, kNumBands> curveLanes {};
+    std::vector<std::vector<double>> bandCurvesDb; ///< [band][ERB band]
+    std::vector<double> channelCurveDb;            ///< scratch [ERB band]
     bool spectralEnabled = false;
     MultiChannelDelay<double> soloDelay;
 };

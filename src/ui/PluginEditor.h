@@ -35,6 +35,9 @@ public:
 private:
     void timerCallback() override;
     juce::String statusText() const;
+
+    int shownLatency = -1;
+    int latencyHighlightTicks = 0; ///< the status flashes for a moment when the latency changes (ADR-0011)
     void layoutBandPanel();
     void setEqRange (float rangeDb);
 

@@ -1,5 +1,6 @@
 #include "ui/PluginEditor.h"
 
+#include "plugin/Parameters.h"
 #include "plugin/PluginProcessor.h"
 #include "plugin/StateMigration.h"
 
@@ -124,7 +125,7 @@ void SscEditor::resized()
     auto header = area.removeFromTop (kHeaderHeight).reduced (12, 0);
     eqRange.setBounds (header.removeFromRight (84).withSizeKeepingCentre (84, 24));
     header.removeFromRight (12);
-    status.setBounds (header.removeFromRight (320));
+    status.setBounds (header.removeFromRight (440));
     controlBar.setBounds (area.removeFromBottom (kControlBarHeight));
     display.setBounds (area);
     layoutBandPanel();
@@ -142,6 +143,13 @@ void SscEditor::refreshLiveViews()
 
 void SscEditor::timerCallback()
 {
+    // A latency change (Max Lookahead, first/last Spectral band, Quality) is pointed out briefly.
+    const int latency = sscProcessor.getLatencySamples();
+    if (shownLatency >= 0 && latency != shownLatency)
+        latencyHighlightTicks = 12;
+    shownLatency = latency;
+    status.setColour (juce::Label::textColourId, latencyHighlightTicks > 0 ? colours::accent : colours::textDim);
+    latencyHighlightTicks = std::max (0, latencyHighlightTicks - 1);
     status.setText (statusText(), juce::dontSendNotification);
 
     display.setSampleRate (sscProcessor.getSampleRate());
@@ -159,6 +167,11 @@ juce::String SscEditor::statusText() const
     const double sampleRate = sscProcessor.getSampleRate();
     const int latency = sscProcessor.getLatencySamples();
     const double latencyMs = sampleRate > 0.0 ? 1000.0 * latency / sampleRate : 0.0;
-    return "Latency " + juce::String (latencyMs, 1) + " ms  |  CPU " + juce::String (sscProcessor.getCpuLoad() * 100.0, 1) + "%";
+    juce::String text;
+    auto* autoGain = sscProcessor.getValueTreeState().getRawParameterValue (plugin::id::autoGain);
+    if (autoGain != nullptr && autoGain->load() >= 0.5f)
+        text << "Auto Gain " << plugin::format::decibels (sscProcessor.getAutoGainDb()) << "  |  ";
+    text << "Latency " << juce::String (latencyMs, 1) << " ms  |  CPU " << juce::String (sscProcessor.getCpuLoad() * 100.0, 1) << "%";
+    return text;
 }
 } // namespace ssc::ui

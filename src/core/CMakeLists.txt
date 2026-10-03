@@ -6,6 +6,8 @@ add_library(ssc_core STATIC
     src/engine/GainTable.cpp
     src/engine/ChannelTopology.cpp
     src/spectral/SpectralEngine.cpp
+    src/loudness/Loudness.cpp
+    src/loudness/AutoGain.cpp
     src/filters/MatchedDesign.cpp
     src/filters/BandDesign.cpp)
 

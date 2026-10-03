@@ -68,6 +68,9 @@ public:
     /** Current dynamic gain change of a band in dB (DYN-11); any thread. */
     float getBandDynamicGainDb (int band) const noexcept { return engine.getBandGainChangeDb (band); }
 
+    /** Global Auto Gain correction currently applied (dB); any thread. */
+    float getAutoGainDb() const noexcept { return engine.getAutoGainDb(); }
+
     /** Newest gain view of the Spectral bands, or nullptr if nothing new (one UI reader). */
     const spectral::SpectralEngine::MaskView* pollSpectralView() noexcept { return engine.pollSpectralView(); }
 

@@ -28,7 +28,8 @@ struct DynamicSettings
     double mix = 1.0;         ///< 0 … 1, scales the gain change (DYN-7)
     double selectivity = 0.5; ///< 0 … 1 (Spectral)
     DetectorLink link = DetectorLink::Group;
-    bool autoGain = false;
+    bool autoGain = false;         ///< automatic make-up of the band (AG-2)
+    double autoGainSeconds = 30.0; ///< averaging time of the make-up (global Auto Gain speed)
 };
 
 /** Everything the engine needs to run one band, read once per host block. */
@@ -130,8 +131,11 @@ public:
     /** Current dynamic gain change in dB (the lane with the largest change); any thread (DYN-11). */
     float getDynamicGainDb() const noexcept { return dynamicGainDb.load (std::memory_order_relaxed); }
 
-    /** Dynamic gain change of one lane (tests). */
+    /** Applied dynamic gain change of one lane, make-up included (tests). */
     double getLaneGainDb (int lane) const noexcept { return dynLanes[static_cast<std::size_t> (lane)].gain; }
+
+    /** Automatic make-up of one lane (AG-2). */
+    double getLaneMakeupDb (int lane) const noexcept { return dynLanes[static_cast<std::size_t> (lane)].makeup; }
 
     static constexpr int kMaxControlBlock = 64;
 
@@ -155,8 +159,10 @@ private:
         std::array<filters::SectionState, filters::kMaxSections> context {};
         dynamics::RmsDetector level, contextLevel;
         dynamics::GainSmoother smoother;
-        double gain = 0.0;     ///< applied gain change (dB), ramped per sample
-        double gainStep = 0.0; ///< per-sample increment towards the latest smoothed value
+        double gain = 0.0;                       ///< applied gain change (dB), ramped per sample
+        double gainStep = 0.0;                   ///< per-sample increment towards the latest smoothed value
+        double weightedGain = 0.0, weight = 0.0; ///< energy-weighted mean of the change (AG-2)
+        double makeup = 0.0;                     ///< automatic make-up (dB), applied with the change
     };
 
     enum class ParamSource
@@ -182,6 +188,7 @@ private:
 
     filters::BandShape smoothed;
     filters::BandShape designedShape;
+    filters::BandDesign scratchDesign;
     bool hasSmoothed = false;
     double smoothingTimeSeconds = 0.02;
     double blockStartGainDb = 0.0; ///< smoothed static gain at the start of the current block

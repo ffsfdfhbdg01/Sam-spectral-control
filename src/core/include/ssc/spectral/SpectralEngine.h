@@ -90,14 +90,16 @@ private:
         filters::BandShape weightShape;
         bool weightsValid = false;
         engine::LaneLayout lanes;
-        std::vector<float> weights; ///< per grid point, 0 … 1
-        std::vector<float> gains;   ///< per lane and grid point (dB), smoothed
+        std::vector<float> weights;              ///< per grid point, 0 … 1
+        std::vector<float> gains;                ///< per lane and grid point (dB), smoothed
+        double weightedGain = 0.0, weight = 0.0; ///< energy-weighted mean of the change (AG-2)
+        float makeup = 0.0f;                     ///< automatic make-up (dB) at the band's centre
     };
 
     void configureSize (int sizeIndex) noexcept;
     void runFrame (const engine::BandSettingsArray& bands, const engine::ChannelTopology& topology) noexcept;
     void updateWeights (BandState& state, const filters::BandShape& shape) noexcept;
-    void laneLevels (const engine::Lane& lane, const engine::BandSettings& band, float* levelsOut) noexcept;
+    void laneLevels (const engine::Lane& lane, const engine::BandSettings& band, float* levelsOut, float* absoluteOut) noexcept;
     void applyMask (const float* maskDb, float* gainsOut) noexcept;
 
     double fs = 48000.0;
@@ -124,9 +126,10 @@ private:
     std::vector<float> binGridFrac;
     std::vector<double> powerPrefix;
     std::vector<double> levelPrefix;
-    std::vector<float> laneLevel;   ///< [lane][grid]
-    std::vector<float> linkLevel;   ///< [lane][grid]
-    std::vector<float> maskScratch; ///< linear gains per grid point
+    std::vector<float> laneLevel;    ///< [lane][grid]
+    std::vector<float> laneAbsolute; ///< [lane][grid] absolute level, weights the make-up
+    std::vector<float> linkLevel;    ///< [lane][grid]
+    std::vector<float> maskScratch;  ///< linear gains per grid point
     std::vector<float> binGains, binGainsB;
 
     std::vector<float> channelMask;       ///< [channel][grid] dB

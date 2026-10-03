@@ -97,6 +97,9 @@ engine::GlobalParams SscAudioProcessor::readGlobalParams (bool forceBypass) cons
     p.quality = choice (params.quality, Quality::Max);
     p.soloBand = soloBand.load (std::memory_order_relaxed);
     p.maxLookaheadMs = params.maxLookahead->load (std::memory_order_relaxed);
+    p.autoGain = isOn (params.autoGain);
+    p.autoGainWeighting = choice (params.autoGainWeighting, AutoGainWeighting::Digital);
+    p.autoGainSpeed = choice (params.autoGainSpeed, AutoGainSpeed::Stable);
     return p;
 }
 
@@ -134,6 +137,7 @@ void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) cons
         d.selectivity = 0.01 * value (BandParam::Selectivity);
         d.link = choice (get (BandParam::Link), DetectorLink::All);
         d.autoGain = isOn (get (BandParam::AutoGain));
+        d.autoGainSeconds = loudness::autoGainSeconds (choice (params.autoGainSpeed, AutoGainSpeed::Stable));
     }
 }
 

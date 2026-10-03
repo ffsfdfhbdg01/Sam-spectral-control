@@ -41,6 +41,19 @@ namespace
         return x;
     }
 
+    bool sameLanes (const LaneLayout& a, const LaneLayout& b) noexcept
+    {
+        if (a.numLanes != b.numLanes)
+            return false;
+        for (int l = 0; l < a.numLanes; ++l)
+            if (! (a.lanes[static_cast<std::size_t> (l)] == b.lanes[static_cast<std::size_t> (l)]))
+                return false;
+        return true;
+    }
+
+    const LaneLayout kNoLanes {};
+    const filters::BandDesign kNoDesign {};
+
     double laneSample (const Lane& lane, const double* const* source, std::size_t index) noexcept
     {
         switch (lane.kind)
@@ -224,6 +237,13 @@ void BandProcessor::advanceSmoothing (const BandSettings& target, int blockSize)
         return;
     }
 
+    // Settled: nothing to compute (the common case).
+    if (smoothed == t)
+    {
+        blockStartGainDb = smoothed.gainDb;
+        return;
+    }
+
     blockStartGainDb = smoothed.gainDb;
     const double alpha = std::exp (-blockSize / (smoothingTimeSeconds * sampleRate));
     smoothed.shape = t.shape;
@@ -311,6 +331,10 @@ void BandProcessor::runDetection (const BandSettings& settings, const Instance& 
     const int lookahead = std::clamp (static_cast<int> (std::lround (0.001 * dyn.lookaheadMs * sampleRate)), 0, detection.mainDelay);
     const int detectionDelay = detection.mainDelay - lookahead;
 
+    // Make-up averaging per dynamics step; −70 dBFS as a mean square (full-scale sine = 0.5).
+    const double makeupCoeff = std::exp (-dynamicStep / (std::max (0.01, dyn.autoGainSeconds) * sampleRate));
+    constexpr double kMakeupGate = 0.5e-7;
+
     std::array<double, kMaxChannels> levels {};
     for (int i = 0; i < numSamples; ++i)
     {
@@ -351,7 +375,25 @@ void BandProcessor::runDetection (const BandSettings& settings, const Instance& 
                 auto& d = dynLanes[static_cast<std::size_t> (l)];
                 const double linked = levels[static_cast<std::size_t> (representative[static_cast<std::size_t> (l)])];
                 const double target = d.smoother.process (computer (linked));
-                d.gainStep = (target - d.gain) / dynamicStep;
+
+                // Automatic make-up (AG-2): the energy-weighted mean of the change, averaged with the
+                // Auto Gain speed and frozen in silence (below −70 dBFS), is given back.
+                if (dyn.autoGain)
+                {
+                    const double energy = d.level.meanSquare;
+                    if (energy > kMakeupGate)
+                    {
+                        d.weightedGain = makeupCoeff * d.weightedGain + (1.0 - makeupCoeff) * energy * target;
+                        d.weight = makeupCoeff * d.weight + (1.0 - makeupCoeff) * energy;
+                    }
+                    if (d.weight > 0.0)
+                        d.makeup = std::clamp (-d.weightedGain / d.weight, -dyn.rangeDb, dyn.rangeDb);
+                }
+                else
+                {
+                    d.weightedGain = d.weight = d.makeup = 0.0;
+                }
+                d.gainStep = (target + d.makeup - d.gain) / dynamicStep;
             }
         }
 
@@ -366,7 +408,7 @@ void BandProcessor::runDetection (const BandSettings& settings, const Instance& 
     float extreme = 0.0f;
     for (int l = 0; l < numLanes; ++l)
     {
-        const auto g = static_cast<float> (dynamicMix * dynLanes[static_cast<std::size_t> (l)].gain);
+        const auto g = static_cast<float> (dynamicMix * dynLanes[static_cast<std::size_t> (l)].gain); // includes the make-up
         if (std::abs (g) > std::abs (extreme))
             extreme = g;
     }
@@ -381,6 +423,65 @@ void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, 
     const int sections = inst.design.numSections;
     const auto& digital = inst.design.digital;
 
+    // Applies a per-sample filter to every lane (channels, or the Mid/Side of pairs).
+    auto forEachLane = [&] (auto&& filter) {
+        for (int l = 0; l < inst.lanes.numLanes; ++l)
+        {
+            const auto li = static_cast<std::size_t> (l);
+            auto& states = inst.state[li];
+            const auto& lane = inst.lanes.lanes[li];
+            switch (lane.kind)
+            {
+                case Lane::Kind::Channel:
+                {
+                    double* x = buffers[lane.a];
+                    for (int i = 0; i < n; ++i)
+                        x[i] = filter (l, i, states, x[i]);
+                    break;
+                }
+                case Lane::Kind::Mid:
+                case Lane::Kind::Side:
+                {
+                    double* left = buffers[lane.a];
+                    double* right = buffers[lane.b];
+                    const bool mid = lane.kind == Lane::Kind::Mid;
+                    for (int i = 0; i < n; ++i)
+                    {
+                        double m = 0.5 * (left[i] + right[i]);
+                        double s = 0.5 * (left[i] - right[i]);
+                        if (mid)
+                            m = filter (l, i, states, m);
+                        else
+                            s = filter (l, i, states, s);
+                        left[i] = m + s;
+                        right[i] = m - s;
+                    }
+                    break;
+                }
+            }
+        }
+    };
+
+    using States = std::array<filters::SectionState, filters::kMaxSections>;
+
+    if (source == ParamSource::Frozen)
+    {
+        // Steady state: coefficients prepared once for the whole block.
+        std::array<filters::SvfPrepared, filters::kMaxSections> prepared {};
+        for (int s = 0; s < sections; ++s)
+            prepared[static_cast<std::size_t> (s)] =
+                filters::prepareSection (inst.params[static_cast<std::size_t> (s)], digital[static_cast<std::size_t> (s)].firstOrder);
+        forEachLane ([&] (int, int, States& states, double x) noexcept {
+            for (int s = 0; s < sections; ++s)
+            {
+                const auto si = static_cast<std::size_t> (s);
+                x = filters::processPrepared (prepared[si], digital[si].firstOrder, states[si], x);
+            }
+            return x;
+        });
+        return;
+    }
+
     if (source == ParamSource::Interpolate)
     {
         for (int i = 0; i < n; ++i)
@@ -390,72 +491,34 @@ void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, 
                 rampParams[static_cast<std::size_t> (i)][static_cast<std::size_t> (s)] =
                     filters::lerp (inst.params[static_cast<std::size_t> (s)], targetParams[static_cast<std::size_t> (s)], t);
         }
-    }
-
-    GainTable::Params dynamicParams = inst.params;
-    for (int l = 0; l < inst.lanes.numLanes; ++l)
-    {
-        const auto li = static_cast<std::size_t> (l);
-        auto& states = inst.state[li];
-        const auto& gains = laneGain[li];
-
-        auto filter = [&] (int i, double x) noexcept {
-            const GainTable::Params* p = &inst.params;
-            if (source == ParamSource::Interpolate)
-            {
-                p = &rampParams[static_cast<std::size_t> (i)];
-            }
-            else if (source == ParamSource::Dynamic)
-            {
-                const double staticGain = blockStartGainDb + (smoothed.gainDb - blockStartGainDb) * (i + 1) / n;
-                gainTable.lookup (staticGain + dynamicMix * gains[static_cast<std::size_t> (i)], sections, dynamicParams);
-                p = &dynamicParams;
-            }
+        forEachLane ([&] (int, int i, States& states, double x) noexcept {
+            const auto& p = rampParams[static_cast<std::size_t> (i)];
             for (int s = 0; s < sections; ++s)
             {
                 const auto si = static_cast<std::size_t> (s);
-                x = filters::processSection ((*p)[si], digital[si].firstOrder, states[si], x);
+                x = filters::processSection (p[si], digital[si].firstOrder, states[si], x);
             }
             return x;
-        };
-
-        const auto& lane = inst.lanes.lanes[li];
-        switch (lane.kind)
-        {
-            case Lane::Kind::Channel:
-            {
-                double* x = buffers[lane.a];
-                for (int i = 0; i < n; ++i)
-                    x[i] = filter (i, x[i]);
-                break;
-            }
-            case Lane::Kind::Mid:
-            case Lane::Kind::Side:
-            {
-                double* left = buffers[lane.a];
-                double* right = buffers[lane.b];
-                const bool mid = lane.kind == Lane::Kind::Mid;
-                for (int i = 0; i < n; ++i)
-                {
-                    double m = 0.5 * (left[i] + right[i]);
-                    double s = 0.5 * (left[i] - right[i]);
-                    if (mid)
-                        m = filter (i, m);
-                    else
-                        s = filter (i, s);
-                    left[i] = m + s;
-                    right[i] = m - s;
-                }
-                break;
-            }
-        }
-    }
-
-    if (source == ParamSource::Interpolate)
+        });
         for (int s = 0; s < sections; ++s)
             inst.params[static_cast<std::size_t> (s)] = targetParams[static_cast<std::size_t> (s)];
-    else if (source == ParamSource::Dynamic)
-        inst.params = dynamicParams; // a frozen state if the instance is faded out later
+        return;
+    }
+
+    // Dynamic: per lane and sample from the gain table.
+    GainTable::Params dynamicParams = inst.params;
+    forEachLane ([&] (int l, int i, States& states, double x) noexcept {
+        const double staticGain = blockStartGainDb + (smoothed.gainDb - blockStartGainDb) * (i + 1) / n;
+        gainTable.lookup (staticGain + dynamicMix * laneGain[static_cast<std::size_t> (l)][static_cast<std::size_t> (i)], sections,
+                          dynamicParams);
+        for (int s = 0; s < sections; ++s)
+        {
+            const auto si = static_cast<std::size_t> (s);
+            x = filters::processSection (dynamicParams[si], digital[si].firstOrder, states[si], x);
+        }
+        return x;
+    });
+    inst.params = dynamicParams; // a frozen state if the instance is faded out later
 }
 
 void BandProcessor::process (const BandSettings& settings, const ChannelTopology& topology, double* const* channels, int numChannels,
@@ -464,6 +527,22 @@ void BandProcessor::process (const BandSettings& settings, const ChannelTopology
     const int block = std::clamp (controlBlock, 1, kMaxControlBlock);
     const bool dynamicMode = settings.mode == BandMode::Dynamic && shapeHasGain (settings.shape.shape);
     dynamicMix = std::clamp (settings.dynamics.mix, 0.0, 1.0);
+
+    // A band that is off and fully faded out costs nothing; it snaps to its settings when it returns.
+    {
+        const auto& current = instances[static_cast<std::size_t> (active)];
+        if (! settings.active && fadeRemaining == 0 && current.isIdentity() && ! current.dynamic)
+        {
+            hasSmoothed = false;
+            if (lastAttackMs >= 0.0)
+                resetDynamics();
+            return;
+        }
+    }
+
+    // Lanes depend only on the settings and the topology: once per call.
+    const LaneLayout activeLanes =
+        settings.active ? makeLanes (settings.component, settings.channelMask, settings.includeLfe, topology) : LaneLayout {};
 
     for (int offset = 0; offset < numSamples; offset += block)
     {
@@ -476,8 +555,7 @@ void BandProcessor::process (const BandSettings& settings, const ChannelTopology
 
         // What the band should be now.
         const bool wantActive = settings.active && (dynamicMode || ! filters::isIdentity (smoothed));
-        const LaneLayout lanes =
-            wantActive ? makeLanes (settings.component, settings.channelMask, settings.includeLfe, topology) : LaneLayout {};
+        const LaneLayout& lanes = wantActive ? activeLanes : kNoLanes;
         auto& current = instances[static_cast<std::size_t> (active)];
 
         auto source = current.dynamic ? ParamSource::Dynamic : ParamSource::Frozen;
@@ -486,14 +564,13 @@ void BandProcessor::process (const BandSettings& settings, const ChannelTopology
             const bool shapeChanged = ! (smoothed == designedShape);
             const bool wantDynamic = dynamicMode && wantActive;
             const bool modeChanged = current.dynamic != wantDynamic;
-            filters::BandDesign design = current.design;
-            if (wantActive && (shapeChanged || modeChanged || current.design.numSections == 0))
-                design = filters::designBand (dynamicMode ? withNonZeroGain (smoothed) : smoothed, sampleRate);
-            else if (! wantActive)
-                design = {};
+            const bool redesign = wantActive && (shapeChanged || modeChanged || current.design.numSections == 0);
+            if (redesign)
+                scratchDesign = filters::designBand (dynamicMode ? withNonZeroGain (smoothed) : smoothed, sampleRate);
+            const filters::BandDesign& design = redesign ? scratchDesign : (wantActive ? current.design : kNoDesign);
 
             const int key = design.topology();
-            if (key != current.topologyKey || ! (lanes == current.lanes))
+            if (key != current.topologyKey || ! sameLanes (lanes, current.lanes))
             {
                 // Topology change: prepare the other instance and crossfade to it.
                 auto& next = instances[static_cast<std::size_t> (1 - active)];
@@ -505,9 +582,9 @@ void BandProcessor::process (const BandSettings& settings, const ChannelTopology
                 next.clearState();
                 fadeRemaining = fadeLength;
             }
-            else if (wantActive && (shapeChanged || modeChanged))
+            else if (redesign)
             {
-                current.design = design;
+                current.design = scratchDesign;
                 current.dynamic = wantDynamic;
                 if (wantDynamic)
                 {

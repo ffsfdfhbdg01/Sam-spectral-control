@@ -97,6 +97,7 @@ void SpectralEngine::prepare (double sampleRate, int numChannels, int /*maxBlock
     const auto gridSize = static_cast<std::size_t> (numGrid);
     levelPrefix.assign (gridSize + 1, 0.0);
     laneLevel.assign (static_cast<std::size_t> (kMaxChannels) * gridSize, 0.0f);
+    laneAbsolute.assign (static_cast<std::size_t> (kMaxChannels) * gridSize, 0.0f);
     linkLevel.assign (static_cast<std::size_t> (kMaxChannels) * gridSize, 0.0f);
     maskScratch.assign (gridSize, 1.0f);
     channelMask.assign (static_cast<std::size_t> (kMaxChannels) * gridSize, 0.0f);
@@ -227,7 +228,7 @@ void SpectralEngine::updateWeights (BandState& state, const filters::BandShape& 
     }
 }
 
-void SpectralEngine::laneLevels (const engine::Lane& lane, const engine::BandSettings& band, float* out) noexcept
+void SpectralEngine::laneLevels (const engine::Lane& lane, const engine::BandSettings& band, float* out, float* absolute) noexcept
 {
     const int bins = fftSize / 2 + 1;
     const double binHz = fs / fftSize;
@@ -267,6 +268,7 @@ void SpectralEngine::laneLevels (const engine::Lane& lane, const engine::BandSet
         const int k1 = std::clamp (static_cast<int> (std::floor (hi)), k0, bins - 1);
         const double power = (powerPrefix[static_cast<std::size_t> (k1 + 1)] - powerPrefix[static_cast<std::size_t> (k0)]) * calibration;
         out[i] = power > 1.0e-20 ? static_cast<float> (10.0 * std::log10 (power)) : kSilenceDb;
+        absolute[i] = out[i];
     }
 
     // Relative threshold: level above the mean level within ±2 ERB (DYN-10).
@@ -372,7 +374,8 @@ void SpectralEngine::runFrame (const engine::BandSettingsArray& bands, const eng
         for (int l = 0; l < numLanes; ++l)
         {
             const auto& lane = lanes.lanes[static_cast<std::size_t> (l)];
-            laneLevels (lane, band, laneLevel.data() + static_cast<std::size_t> (l) * gridSize);
+            laneLevels (lane, band, laneLevel.data() + static_cast<std::size_t> (l) * gridSize,
+                        laneAbsolute.data() + static_cast<std::size_t> (l) * gridSize);
             const int key = engine::linkKey (lane, l, dyn.link, topology);
             representative[static_cast<std::size_t> (l)] = l;
             for (int m = 0; m < l; ++m)
@@ -393,6 +396,11 @@ void SpectralEngine::runFrame (const engine::BandSettingsArray& bands, const eng
             for (std::size_t i = 0; i < gridSize; ++i)
                 target[i] = std::max (target[i], source[i]);
         }
+
+        // Automatic make-up (AG-2): energy-weighted mean of the change over lanes, points and time.
+        const double makeupCoeff = std::exp (-hopSeconds / std::max (0.01, dyn.autoGainSeconds));
+        double frameWeightedGain = 0.0, frameWeight = 0.0;
+        const float makeup = dyn.autoGain ? state.makeup : 0.0f;
 
         float extreme = 0.0f;
         for (int l = 0; l < numLanes; ++l)
@@ -425,13 +433,35 @@ void SpectralEngine::runFrame (const engine::BandSettingsArray& bands, const eng
                 float& g = gains[i];
                 const float a = std::abs (target) > std::abs (g) ? attack : release;
                 g = a * g + (1.0f - a) * target;
-                const float applied = mix * g;
+                if (dyn.autoGain && weight > 1.0e-4f)
+                {
+                    const double energy = weight * std::pow (10.0, 0.1 * laneAbsolute[static_cast<std::size_t> (l) * gridSize + i]);
+                    frameWeightedGain += energy * g;
+                    frameWeight += energy;
+                }
+                const float applied = mix * (g + makeup * weight);
                 maskDb[i] += applied;
                 if (std::abs (applied) > std::abs (bandView[i]))
                     bandView[i] = applied;
                 if (std::abs (applied) > std::abs (extreme))
                     extreme = applied;
             }
+        }
+        if (dyn.autoGain)
+        {
+            // Frozen in silence (below −70 dBFS in the band region).
+            if (frameWeight > 1.0e-7)
+            {
+                state.weightedGain = makeupCoeff * state.weightedGain + (1.0 - makeupCoeff) * frameWeightedGain / frameWeight;
+                state.weight = makeupCoeff * state.weight + (1.0 - makeupCoeff);
+            }
+            if (state.weight > 0.0)
+                state.makeup = static_cast<float> (std::clamp (-state.weightedGain / state.weight, -dyn.rangeDb, dyn.rangeDb));
+        }
+        else
+        {
+            state.weightedGain = state.weight = 0.0;
+            state.makeup = 0.0f;
         }
         bandGains[static_cast<std::size_t> (b)].store (extreme, std::memory_order_relaxed);
     }
