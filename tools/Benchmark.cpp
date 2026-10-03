@@ -24,6 +24,7 @@ struct Case
     int numBands;
     Quality quality;
     bool autoGain = false;
+    Character character = Character::Clear;
 };
 
 std::vector<SpeakerRole> stereo()
@@ -71,7 +72,7 @@ double run (const Case& c, double seconds)
     {
         auto& s = bands[static_cast<std::size_t> (b)];
         s.used = s.active = true;
-        s.shape = { Shape::Bell, 60.0 * std::pow (2.0, 0.9 * b), b % 2 == 0 ? 4.0 : -4.0, 2.0, Slope::Db12 };
+        s.shape = { Shape::Bell, 60.0 * std::pow (2.0, 0.9 * b), b % 2 == 0 ? 4.0 : -4.0, 2.0, Slope::Db12, c.character };
         s.mode = c.mode;
         s.dynamics.thresholdMode = c.mode == BandMode::Spectral ? ThresholdMode::Relative : ThresholdMode::Absolute;
         s.dynamics.thresholdDb = c.mode == BandMode::Spectral ? 6.0 : -30.0;
@@ -114,6 +115,8 @@ int main (int argc, char** argv)
     const std::vector<Case> cases {
         { "stereo, 8 Static, Normal (NFR-1 ≤ 1 %)", 48000.0, 2, stereo(), BandMode::Static, 8, Quality::Normal },
         { "stereo, 24 Static, Normal", 48000.0, 2, stereo(), BandMode::Static, 24, Quality::Normal },
+        { "stereo, 8 Static Warm, Normal", 48000.0, 2, stereo(), BandMode::Static, 8, Quality::Normal, false, Character::Warm },
+        { "stereo, 8 Static Sharp, Normal", 48000.0, 2, stereo(), BandMode::Static, 8, Quality::Normal, false, Character::Sharp },
         { "stereo, 8 Dynamic, Normal", 48000.0, 2, stereo(), BandMode::Dynamic, 8, Quality::Normal },
         { "stereo, 8 Spectral, Normal (NFR-1 ≤ 5 %)", 48000.0, 2, stereo(), BandMode::Spectral, 8, Quality::Normal },
         { "stereo, 8 Spectral, Normal, Auto Gain", 48000.0, 2, stereo(), BandMode::Spectral, 8, Quality::Normal, true },

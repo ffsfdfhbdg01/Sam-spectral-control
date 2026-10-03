@@ -10,7 +10,8 @@ add_library(ssc_core STATIC
     src/loudness/AutoGain.cpp
     src/oversampling/Oversampler.cpp
     src/filters/MatchedDesign.cpp
-    src/filters/BandDesign.cpp)
+    src/filters/BandDesign.cpp
+    src/filters/Character.cpp)
 
 target_include_directories(ssc_core PUBLIC include)
 target_compile_features(ssc_core PUBLIC cxx_std_20)

@@ -177,6 +177,7 @@ void BandProcessor::Instance::clearState() noexcept
 {
     for (auto& lane : state)
         lane.fill ({});
+    shaperState.fill ({});
 }
 
 void BandProcessor::prepare (double newSampleRate, int maxBlockSize)
@@ -186,6 +187,8 @@ void BandProcessor::prepare (double newSampleRate, int maxBlockSize)
     fadeLength = std::max (1, static_cast<int> (std::lround (0.01 * sampleRate)));
     dynamicStep = dynamicStepFor (sampleRate);
     gainTable.prepare (sampleRate);
+    for (const auto c : { Character::Clear, Character::Warm, Character::Sharp })
+        shapers[static_cast<std::size_t> (c)] = filters::makeShaper (c, sampleRate);
 
     fadeA.assign (static_cast<std::size_t> (kMaxChannels), std::vector<double> (static_cast<std::size_t> (kMaxControlBlock), 0.0));
     fadeB.assign (static_cast<std::size_t> (kMaxChannels), std::vector<double> (static_cast<std::size_t> (kMaxControlBlock), 0.0));
@@ -248,6 +251,7 @@ void BandProcessor::advanceSmoothing (const BandSettings& target, int blockSize)
     const double alpha = std::exp (-blockSize / (smoothingTimeSeconds * sampleRate));
     smoothed.shape = t.shape;
     smoothed.slope = t.slope;
+    smoothed.character = t.character;
     smoothed.frequencyHz = std::exp (approach (std::log (smoothed.frequencyHz), std::log (t.frequencyHz), alpha, 1.0e-6));
     smoothed.gainDb = approach (smoothed.gainDb, t.gainDb, alpha, 1.0e-4);
     smoothed.q = std::exp (approach (std::log (smoothed.q), std::log (t.q), alpha, 1.0e-6));
@@ -464,6 +468,35 @@ void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, 
 
     using States = std::array<filters::SectionState, filters::kMaxSections>;
 
+    // Character (CHR-2): the products of the contribution of sections [from, sections) are added to
+    // the output. Bands without a nonlinearity run the plain cascade.
+    const int from = inst.design.shapedFrom;
+    const auto& shaper = shapers[static_cast<std::size_t> (inst.design.shaper)];
+    const bool shaping = from >= 0 && shaper.enabled;
+
+    // Runs `section (s, states, x)` over the cascade of every lane, shaping when needed.
+    auto runCascade = [&] (auto&& section) {
+        if (! shaping)
+        {
+            forEachLane ([&] (int, int i, States& states, double x) noexcept {
+                for (int s = 0; s < sections; ++s)
+                    x = section (i, s, states, x);
+                return x;
+            });
+            return;
+        }
+        forEachLane ([&] (int l, int i, States& states, double x) noexcept {
+            double in = x;
+            for (int s = 0; s < sections; ++s)
+            {
+                if (s == from)
+                    in = x;
+                x = section (i, s, states, x);
+            }
+            return x + filters::shapeContribution (shaper, inst.shaperState[static_cast<std::size_t> (l)], x - in);
+        });
+    };
+
     if (source == ParamSource::Frozen)
     {
         // Steady state: coefficients prepared once for the whole block.
@@ -471,13 +504,9 @@ void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, 
         for (int s = 0; s < sections; ++s)
             prepared[static_cast<std::size_t> (s)] =
                 filters::prepareSection (inst.params[static_cast<std::size_t> (s)], digital[static_cast<std::size_t> (s)].firstOrder);
-        forEachLane ([&] (int, int, States& states, double x) noexcept {
-            for (int s = 0; s < sections; ++s)
-            {
-                const auto si = static_cast<std::size_t> (s);
-                x = filters::processPrepared (prepared[si], digital[si].firstOrder, states[si], x);
-            }
-            return x;
+        runCascade ([&] (int, int s, States& states, double x) noexcept {
+            const auto si = static_cast<std::size_t> (s);
+            return filters::processPrepared (prepared[si], digital[si].firstOrder, states[si], x);
         });
         return;
     }
@@ -491,14 +520,9 @@ void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, 
                 rampParams[static_cast<std::size_t> (i)][static_cast<std::size_t> (s)] =
                     filters::lerp (inst.params[static_cast<std::size_t> (s)], targetParams[static_cast<std::size_t> (s)], t);
         }
-        forEachLane ([&] (int, int i, States& states, double x) noexcept {
-            const auto& p = rampParams[static_cast<std::size_t> (i)];
-            for (int s = 0; s < sections; ++s)
-            {
-                const auto si = static_cast<std::size_t> (s);
-                x = filters::processSection (p[si], digital[si].firstOrder, states[si], x);
-            }
-            return x;
+        runCascade ([&] (int i, int s, States& states, double x) noexcept {
+            const auto si = static_cast<std::size_t> (s);
+            return filters::processSection (rampParams[static_cast<std::size_t> (i)][si], digital[si].firstOrder, states[si], x);
         });
         for (int s = 0; s < sections; ++s)
             inst.params[static_cast<std::size_t> (s)] = targetParams[static_cast<std::size_t> (s)];
@@ -507,17 +531,22 @@ void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, 
 
     // Dynamic: per lane and sample from the gain table.
     GainTable::Params dynamicParams = inst.params;
-    forEachLane ([&] (int l, int i, States& states, double x) noexcept {
+    auto dynamicSample = [&] (int l, int i, States& states, double x) noexcept {
         const double staticGain = blockStartGainDb + (smoothed.gainDb - blockStartGainDb) * (i + 1) / n;
         gainTable.lookup (staticGain + dynamicMix * laneGain[static_cast<std::size_t> (l)][static_cast<std::size_t> (i)], sections,
                           dynamicParams);
+        const double in = x;
         for (int s = 0; s < sections; ++s)
         {
             const auto si = static_cast<std::size_t> (s);
             x = filters::processSection (dynamicParams[si], digital[si].firstOrder, states[si], x);
         }
+        // Only shapes with gain are Dynamic: the whole band is shaped.
+        if (shaping)
+            x += filters::shapeContribution (shaper, inst.shaperState[static_cast<std::size_t> (l)], x - in);
         return x;
-    });
+    };
+    forEachLane (dynamicSample);
     inst.params = dynamicParams; // a frozen state if the instance is faded out later
 }
 

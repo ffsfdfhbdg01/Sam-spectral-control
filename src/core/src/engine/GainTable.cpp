@@ -31,8 +31,8 @@ void GainTable::prepare (double sampleRate)
 void GainTable::setShape (const filters::BandShape& s) noexcept
 {
     constexpr std::equal_to<double> same;
-    const bool changed =
-        s.shape != shape.shape || s.slope != shape.slope || ! same (s.frequencyHz, shape.frequencyHz) || ! same (s.q, shape.q);
+    const bool changed = s.shape != shape.shape || s.slope != shape.slope || s.character != shape.character
+        || ! same (s.frequencyHz, shape.frequencyHz) || ! same (s.q, shape.q);
     if (! changed)
         return;
 

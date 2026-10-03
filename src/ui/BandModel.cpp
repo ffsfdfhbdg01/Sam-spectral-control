@@ -56,7 +56,7 @@ namespace
 
 filters::BandShape BandValues::toShape() const noexcept
 {
-    return { shape, frequency, gain, q, slope };
+    return { shape, frequency, gain, q, slope, character };
 }
 
 BandSnapshot captureBandSnapshot (juce::AudioProcessorValueTreeState& state)

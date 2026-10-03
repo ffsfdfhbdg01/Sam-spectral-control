@@ -120,7 +120,7 @@ void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) cons
         s.shape.slope = choice (get (BandParam::Slope), Slope::Brickwall);
         s.mode = choice (get (BandParam::Mode), BandMode::Spectral);
         s.component = choice (get (BandParam::Target), StereoComponent::Side);
-        s.character = choice (get (BandParam::Character), Character::Sharp);
+        s.shape.character = choice (get (BandParam::Character), Character::Sharp);
 
         auto value = [&get] (BandParam p) { return static_cast<double> (get (p)->load (std::memory_order_relaxed)); };
         auto& d = s.dynamics;

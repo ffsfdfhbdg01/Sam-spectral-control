@@ -70,11 +70,17 @@ namespace
         return 2.0 * std::sin ((2.0 * m - 1.0) * kPi / (2.0 * order));
     }
 
-    /** Butterworth cascade (low-pass or high-pass). The highest-Q section takes the user's resonance. */
-    void addCut (Builder& b, double hz, double q, int order, bool highPass)
+    /**
+        Butterworth cascade (low-pass or high-pass). The highest-Q section takes the user's resonance,
+        or, with separateResonance (Warm/Sharp, CHR-2), the cascade stays Butterworth and the
+        resonance becomes a last section (s² + d·ω·s + ω²)/(s² + (d/r)·ω·s + ω²) whose contribution
+        can be shaped on its own; the product is the same analog response.
+    */
+    void addCut (Builder& b, double hz, double q, int order, bool highPass, bool separateResonance)
     {
         const double w = kTwoPi * hz;
         const double resonance = q / kButterworthQ;
+        separateResonance = separateResonance && order >= 2 && resonance > 1.0 + 1.0e-9;
 
         if (order % 2 == 1)
         {
@@ -96,7 +102,7 @@ namespace
         for (int m = 1; m <= order / 2; ++m)
         {
             double damping = butterworthDamping (order, m);
-            if (m == 1)
+            if (m == 1 && ! separateResonance)
                 damping /= resonance; // the highest-Q section carries the user's resonance
             AnalogSection a;
             a.d2 = 1.0;
@@ -112,6 +118,20 @@ namespace
                 a.n0 = w * w;
             }
             b.add (a, hz);
+        }
+
+        if (separateResonance)
+        {
+            const double damping = butterworthDamping (order, 1);
+            AnalogSection r;
+            r.n2 = 1.0;
+            r.n1 = w * damping;
+            r.n0 = w * w;
+            r.d2 = 1.0;
+            r.d1 = w * damping / resonance;
+            r.d0 = w * w;
+            b.add (r, hz);
+            b.design.shapedFrom = b.design.numSections - 1;
         }
     }
 
@@ -181,6 +201,48 @@ namespace
         a.d1 = w / (A * q);
         a.d0 = w * w;
         b.add (a, hz);
+        if (gainDb < 0.0)
+            invertSections (b.design, first);
+    }
+
+    /**
+        Sharp bell (research §9c): the band-pass transform p = (s² + ω₀²)/(s·B), B = ω₀/Q, of the
+        second-order shelf above. Same peak gain and the same half-gain bandwidth as the
+        second-order bell at that Q, but a flatter top and skirts that fall twice as fast. Every
+        prototype root maps to one root below and one above ω₀, giving two sections.
+    */
+    void addSharpBell (Builder& b, double hz, double gainDb, double q)
+    {
+        const int first = b.design.numSections;
+        const double w0 = kTwoPi * hz;
+        const double bandwidth = w0 / q;
+        const double spread = std::pow (dbToGain (std::abs (gainDb)), 0.25);
+
+        // Prototype boost (cut-off 1 rad/s): zeros at spread·e^{±j3π/4}, poles at e^{±j3π/4}/spread.
+        const std::complex<double> unit = std::polar (1.0, 0.75 * kPi);
+        auto transform = [&] (std::complex<double> r) {
+            const auto root = std::sqrt (r * r * bandwidth * bandwidth - 4.0 * w0 * w0);
+            auto low = 0.5 * (r * bandwidth + root);
+            auto high = 0.5 * (r * bandwidth - root);
+            if (std::abs (low) > std::abs (high))
+                std::swap (low, high);
+            return std::array<std::complex<double>, 2> { low, high };
+        };
+        const auto zeros = transform (spread * unit);
+        const auto poles = transform (unit / spread);
+
+        for (std::size_t i = 0; i < 2; ++i)
+        {
+            // A root and its conjugate form s² − 2·Re(s)·s + |s|².
+            AnalogSection a;
+            a.n2 = 1.0;
+            a.n1 = -2.0 * zeros[i].real();
+            a.n0 = std::norm (zeros[i]);
+            a.d2 = 1.0;
+            a.d1 = -2.0 * poles[i].real();
+            a.d0 = std::norm (poles[i]);
+            b.add (a, std::abs (poles[i]) / kTwoPi);
+        }
         if (gainDb < 0.0)
             invertSections (b.design, first);
     }
@@ -312,13 +374,19 @@ BandDesign designBand (const BandShape& s, double sampleRate)
     if (isIdentity (s))
         return b.design;
 
+    const bool shaped = s.character != Character::Clear;
     switch (s.shape)
     {
-        case Shape::Bell: addBell (b, hz, s.gainDb, q); break;
+        case Shape::Bell:
+            if (s.character == Character::Sharp)
+                addSharpBell (b, hz, s.gainDb, q);
+            else
+                addBell (b, hz, s.gainDb, s.character == Character::Warm ? proportionalQ (q, s.gainDb) : q);
+            break;
         case Shape::LowShelf: addShelf (b, hz, s.gainDb, q, std::clamp (slopeOrder (s.slope), 1, 8), false); break;
         case Shape::HighShelf: addShelf (b, hz, s.gainDb, q, std::clamp (slopeOrder (s.slope), 1, 8), true); break;
-        case Shape::LowCut: addCut (b, hz, q, slopeOrder (s.slope), true); break;
-        case Shape::HighCut: addCut (b, hz, q, slopeOrder (s.slope), false); break;
+        case Shape::LowCut: addCut (b, hz, q, slopeOrder (s.slope), true, shaped); break;
+        case Shape::HighCut: addCut (b, hz, q, slopeOrder (s.slope), false, shaped); break;
         case Shape::Notch: addNotch (b, hz, q); break;
         case Shape::BandPass: addBandPass (b, hz, q, bandPassSections (s.slope)); break;
         case Shape::TiltShelf: addTilt (b, hz, s.gainDb, q, s.slope == Slope::Db6 ? 1 : 2); break;
@@ -326,7 +394,17 @@ BandDesign designBand (const BandShape& s, double sampleRate)
         case Shape::AllPass: addAllPass (b, hz, q); break;
     }
 
+    // Shapes with gain shape the contribution of the whole band; cuts marked their resonance.
+    if (shaped && shapeHasGain (s.shape) && b.design.numSections > 0)
+        b.design.shapedFrom = 0;
+    if (b.design.shapedFrom >= 0)
+        b.design.shaper = s.character;
     return b.design;
+}
+
+double proportionalQ (double q, double gainDb) noexcept
+{
+    return q * (0.6 + 0.4 * std::min (1.0, std::abs (gainDb) / 12.0));
 }
 
 std::complex<double> BandDesign::analogResponse (double hz) const noexcept

@@ -9,6 +9,7 @@
 #include "ssc/engine/ChannelTopology.h"
 #include "ssc/engine/GainTable.h"
 #include "ssc/filters/BandDesign.h"
+#include "ssc/filters/Character.h"
 #include "ssc/filters/SvfSection.h"
 
 namespace ssc::engine
@@ -42,7 +43,6 @@ struct BandSettings
     std::uint64_t channelMask = ~std::uint64_t { 0 }; ///< selected channels (speaker panel, M5)
     bool includeLfe = false;
     BandMode mode = BandMode::Static;
-    Character character = Character::Clear;
     DynamicSettings dynamics;
 
     /** True for a band that uses the spectral engine (Spectral mode on a shape with gain). */
@@ -148,6 +148,7 @@ private:
         int topologyKey = 0;
         bool dynamic = false;
         std::array<std::array<filters::SectionState, filters::kMaxSections>, kMaxChannels> state {};
+        std::array<filters::ShaperState, kMaxChannels> shaperState {}; ///< Character nonlinearity per lane
 
         void clearState() noexcept;
         bool isIdentity() const noexcept { return design.numSections == 0 || lanes.numLanes == 0; }
@@ -181,6 +182,7 @@ private:
 
     double sampleRate = 48000.0;
     int maxBlock = 0;
+    std::array<filters::Shaper, 3> shapers {}; ///< per Character (Clear, Warm, Sharp)
     std::array<Instance, 2> instances {};
     int active = 0;
     int fadeRemaining = 0;

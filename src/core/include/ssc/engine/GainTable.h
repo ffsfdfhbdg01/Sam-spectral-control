@@ -28,7 +28,7 @@ public:
 
     void prepare (double sampleRate);
 
-    /** Sets shape, frequency, Q and slope (the gain is ignored); invalidates entries when they change. */
+    /** Sets shape, frequency, Q, slope and Character (the gain is ignored); invalidates entries when they change. */
     void setShape (const filters::BandShape& shape) noexcept;
 
     /** Parameters of the first numSections sections at a total gain. */
