@@ -9,6 +9,7 @@ add_library(ssc_core STATIC
     src/loudness/Loudness.cpp
     src/loudness/AutoGain.cpp
     src/oversampling/Oversampler.cpp
+    src/phase/PhaseCorrector.cpp
     src/filters/MatchedDesign.cpp
     src/filters/BandDesign.cpp
     src/filters/Character.cpp)
