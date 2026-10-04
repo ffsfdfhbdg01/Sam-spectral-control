@@ -1,8 +1,9 @@
 // Renders the plugin editor with live test audio and saves a PNG.
 // Usage: ssc_screenshot <output.png> [width height] [paramId=value ...] [select=<band 1-24>]
 //        [layout=stereo|5.1|7.1.4|9.1.6] [speakers=<band 1-24>:<roles hex>] [speakerpanel=<band 1-24>]
-//        [analyzer.mode|resolution|speed|tilt|range|peak|glow|freeze=<value>] [profile=<frames>]
-// profile paints the editor that many times while audio plays and prints the paint times (VIS-6).
+//        [analyzer.mode|resolution|speed|tilt|range|peak|glow|freeze|hints=<value>] [profile=<frames>]
+// profile paints the editor that many times while audio plays and prints the paint times (VIS-6);
+// seconds=<s> sets how long the test programme plays before the snapshot (default 3).
 // speakerpanel renders that band's loudspeaker panel instead of the editor.
 // Run under a display server (e.g. xvfb-run on Linux).
 
@@ -72,6 +73,7 @@ int main (int argc, char** argv)
     int selectBand = -1;
     int speakerPanelBand = -1;
     int profileFrames = 0;
+    double playSeconds = 3.0;
     for (; argIndex < argc; ++argIndex)
     {
         const juce::String assignment (argv[argIndex]);
@@ -83,6 +85,8 @@ int main (int argc, char** argv)
             continue;
         else if (paramId == "profile")
             profileFrames = juce::roundToInt (value);
+        else if (paramId == "seconds")
+            playSeconds = value;
         else if (paramId == "speakerpanel")
             speakerPanelBand = juce::roundToInt (value) - 1;
         else if (paramId.startsWith ("analyzer."))
@@ -106,6 +110,8 @@ int main (int argc, char** argv)
                 settings.glow = choice != 0;
             else if (key == "freeze")
                 settings.freeze = choice != 0;
+            else if (key == "hints")
+                settings.resonanceHints = choice != 0;
             ssc::plugin::writeAnalyzerSettings (state.state, settings);
         }
         else if (paramId == "speakers")
@@ -178,7 +184,7 @@ int main (int argc, char** argv)
         }
     });
 
-    juce::MessageManager::getInstance()->runDispatchLoopUntil (3000);
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (juce::roundToInt (1000.0 * playSeconds));
 
     if (profileFrames > 0)
     {

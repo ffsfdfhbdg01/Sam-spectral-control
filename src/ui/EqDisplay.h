@@ -30,9 +30,10 @@ namespace ssc::ui
       Cmd/Ctrl+Y redo, Cmd/Ctrl+A selects all bands, Escape clears the selection
     Analyzer (research §11c): pre/post spectra, peak hold, and a glow over the most active regions
     of the main spectrum (VIS-2); Dynamic and Spectral bands glow with their current gain change
-    (VIS-3).
+    (VIS-3); resonance hints of the output as a faint violet glow over their peaks, with a tooltip
+    (VIS-4; graphics only).
 */
-class EqDisplay final : public juce::Component, private BandModel::Listener, private juce::Timer
+class EqDisplay final : public juce::Component, public juce::SettableTooltipClient, private BandModel::Listener, private juce::Timer
 {
 public:
     EqDisplay (plugin::AnalyzerService& analyzer, BandModel& model);
@@ -123,6 +124,11 @@ private:
     void paintSpectrum (juce::Graphics&, const plugin::SpectrumFrame&, bool post, bool main) const;
     void paintPeakHold (juce::Graphics&, const plugin::SpectrumFrame&) const;
     void paintGlow (juce::Graphics&, const plugin::SpectrumFrame&);
+    void paintHints (juce::Graphics&, const plugin::SpectrumFrame&) const;
+    /** Level of the main spectrum of a frame at a frequency (dB, interpolated). */
+    float mainSpectrumDbAt (const plugin::SpectrumFrame&, float hz) const noexcept;
+    /** Tooltip of the resonance hint under a point, or empty. */
+    juce::String hintTooltipAt (juce::Point<float>) const;
     void paintBandCurves (juce::Graphics&) const;
     void paintComposite (juce::Graphics&) const;
     void paintGhost (juce::Graphics&) const;

@@ -14,7 +14,8 @@ namespace
 
     bool sameAnalysis (const AnalyzerSettings& a, const AnalyzerSettings& b) noexcept
     {
-        return a.resolution == b.resolution && a.speed == b.speed && std::equal_to<float>() (a.tiltDbPerOctave, b.tiltDbPerOctave);
+        return a.resolution == b.resolution && a.speed == b.speed && std::equal_to<float>() (a.tiltDbPerOctave, b.tiltDbPerOctave)
+            && a.hintSensitivity == b.hintSensitivity;
     }
 } // namespace
 
@@ -82,6 +83,10 @@ void AnalyzerService::configureAnalyzers (const AnalyzerSettings& settings)
     postAnalyzer.prepare (cfg);
     activity.prepare (SpectrumFrame::kMaxPoints, {});
     peakHold.prepare (SpectrumFrame::kMaxPoints, kPeakHoldSeconds, kPeakDecayDbPerSecond);
+
+    analysis::ResonanceDetector::Config hints;
+    hints.minProminenceDb = hintProminenceDb (settings.hintSensitivity);
+    resonance.prepare (sampleRate, hints);
 }
 
 void AnalyzerService::addClient()
@@ -118,26 +123,34 @@ void AnalyzerService::run()
                 activity.reset();
             if (next.peakHold && ! activeSettings.peakHold)
                 peakHold.reset();
+            if (next.resonanceHints && ! activeSettings.resonanceHints)
+                resonance.reset();
             activeSettings = next;
         }
 
         const auto& s = activeSettings;
-        auto drain = [this] (SpscRingBuffer<float>& fifo, analysis::SpectrumAnalyzer& analyzer, bool analyse) {
-            int frames = 0;
-            for (;;)
-            {
-                const auto n = fifo.read (scratch.data(), scratch.size());
-                if (n == 0)
-                    break;
-                if (analyse)
-                    frames += analyzer.push (scratch.data(), static_cast<int> (n));
-            }
-            return frames;
-        };
-        const int preFrames = drain (preFifo, preAnalyzer, s.showsPre());
-        const int postFrames = drain (postFifo, postAnalyzer, s.showsPost());
+        int preFrames = 0, postFrames = 0;
+        bool hintsUpdated = false;
+        for (;;)
+        {
+            const auto n = preFifo.read (scratch.data(), scratch.size());
+            if (n == 0)
+                break;
+            if (s.showsPre())
+                preFrames += preAnalyzer.push (scratch.data(), static_cast<int> (n));
+        }
+        for (;;)
+        {
+            const auto n = postFifo.read (scratch.data(), scratch.size());
+            if (n == 0)
+                break;
+            if (s.showsPost())
+                postFrames += postAnalyzer.push (scratch.data(), static_cast<int> (n));
+            if (s.resonanceHints)
+                hintsUpdated = resonance.push (scratch.data(), static_cast<int> (n)) || hintsUpdated;
+        }
 
-        if (preFrames + postFrames > 0)
+        if (preFrames + postFrames > 0 || hintsUpdated)
         {
             const int mainFrames = s.mode == AnalyzerMode::Pre ? preFrames : postFrames;
             publishFrame (mainFrames * postAnalyzer.getConfig().hopSize / sampleRate);
@@ -178,6 +191,13 @@ void AnalyzerService::publishFrame (double dtSeconds)
         std::copy_n (activity.activity().begin(), n, frame.activity.begin());
     if (frame.hasPeak)
         std::copy_n (peakHold.peaks().begin(), n, frame.peakDb.begin());
+
+    frame.hasHints = s.resonanceHints;
+    frame.numHints = 0;
+    if (s.resonanceHints)
+        for (const auto& hint : resonance.hints())
+            if (frame.numHints < SpectrumFrame::kMaxHints)
+                frame.hints[static_cast<std::size_t> (frame.numHints++)] = hint;
 
     frame.serial = ++serial;
     published.publish();

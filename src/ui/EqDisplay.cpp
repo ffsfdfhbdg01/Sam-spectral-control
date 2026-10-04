@@ -300,6 +300,7 @@ void EqDisplay::updateHover (juce::Point<float> p)
 void EqDisplay::mouseMove (const juce::MouseEvent& e)
 {
     updateHover (e.position);
+    setTooltip (hoveredBand < 0 && ! hoverOnCurve ? hintTooltipAt (e.position) : juce::String());
 }
 
 void EqDisplay::mouseExit (const juce::MouseEvent&)
@@ -744,6 +745,8 @@ void EqDisplay::paint (juce::Graphics& g)
                 paintSpectrum (g, frame, true, true);
             if (frame.hasPeak && analyzerSettings.peakHold)
                 paintPeakHold (g, frame);
+            if (frame.hasHints && analyzerSettings.resonanceHints)
+                paintHints (g, frame);
         }
     }
 
@@ -977,6 +980,61 @@ void EqDisplay::paintGlow (juce::Graphics& g, const plugin::SpectrumFrame& frame
 
     g.setGradientFill (gradient (0.2f));
     g.strokePath (line, juce::PathStrokeType (8.0f, juce::PathStrokeType::beveled, juce::PathStrokeType::butt));
+}
+
+float EqDisplay::mainSpectrumDbAt (const plugin::SpectrumFrame& frame, float hz) const noexcept
+{
+    const bool preMain = analyzerSettings.mode == plugin::AnalyzerMode::Pre || ! frame.hasPost;
+    const auto& level = preMain ? frame.preDb : frame.postDb;
+    const int n = frame.numPoints;
+    if (n < 2 || (preMain && ! frame.hasPre))
+        return kAnalyzerTopDb - analyzerSettings.rangeDb;
+    const float f0 = frame.hz[0];
+    const float position =
+        juce::jlimit (0.0f, static_cast<float> (n - 1),
+                      std::log (hz / f0) / std::log (frame.hz[static_cast<std::size_t> (n - 1)] / f0) * static_cast<float> (n - 1));
+    const auto i0 = static_cast<std::size_t> (position);
+    const auto i1 = std::min (i0 + 1, static_cast<std::size_t> (n - 1));
+    return level[i0] + (level[i1] - level[i0]) * (position - static_cast<float> (i0));
+}
+
+void EqDisplay::paintHints (juce::Graphics& g, const plugin::SpectrumFrame& frame) const
+{
+    // A faint violet glow over each resonance (25–40 % opacity with the confidence) and a small
+    // marker above the peak; graphics only (research §11c, VIS-4).
+    const auto h = static_cast<float> (getHeight());
+    for (int i = 0; i < frame.numHints; ++i)
+    {
+        const auto& hint = frame.hints[static_cast<std::size_t> (i)];
+        const float x = xForFrequency (hint.hz);
+        const float y = juce::jlimit (12.0f, h, yForAnalyzerDb (mainSpectrumDbAt (frame, hint.hz)));
+        const float width = juce::jmax (26.0f, 2.2f * (xForFrequency (hint.hz * 1.0293f) - xForFrequency (hint.hz / 1.0293f)));
+        const float alpha = 0.25f + 0.15f * juce::jlimit (0.0f, 1.0f, hint.confidence);
+        const auto area = juce::Rectangle<float> (width, 90.0f).withCentre ({ x, y - 12.0f });
+        juce::ColourGradient glow (colours::resonanceHint.withAlpha (alpha), x, y - 12.0f, colours::resonanceHint.withAlpha (0.0f),
+                                   x + 0.5f * width, y - 12.0f, true);
+        g.setGradientFill (glow);
+        g.fillEllipse (area);
+        g.setColour (colours::resonanceHint.withAlpha (0.8f));
+        g.drawEllipse (juce::Rectangle<float> (6.0f, 6.0f).withCentre ({ x, y - 22.0f }), 1.2f);
+    }
+}
+
+juce::String EqDisplay::hintTooltipAt (juce::Point<float> p) const
+{
+    if (! hasFrame || ! analyzerSettings.resonanceHints)
+        return {};
+    const auto& frame = analyzer.frames().read();
+    for (int i = 0; i < frame.numHints; ++i)
+    {
+        const auto& hint = frame.hints[static_cast<std::size_t> (i)];
+        const float x = xForFrequency (hint.hz);
+        const float y = yForAnalyzerDb (mainSpectrumDbAt (frame, hint.hz));
+        if (std::abs (p.x - x) < 10.0f && p.y > y - 60.0f && p.y < y + 20.0f)
+            return "Resonance " + plugin::format::frequency (hint.hz) + "  +" + juce::String (hint.prominenceDb, 1) + " dB  "
+                + juce::String (hint.seconds, 1) + " s  confidence " + juce::String (juce::roundToInt (100.0f * hint.confidence)) + " %";
+    }
+    return {};
 }
 
 juce::Path EqDisplay::curvePath (const std::vector<float>& db) const

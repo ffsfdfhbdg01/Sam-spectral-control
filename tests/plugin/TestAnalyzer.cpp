@@ -125,3 +125,80 @@ TEST_CASE ("Analyzer publishes the main spectrum with its glow and peak hold (VI
     CHECK (frame.activity[k] > 0.5f);
     CHECK (frame.activity[pointNear (frame, 100.0f)] < 0.05f);
 }
+
+TEST_CASE ("Analyzer publishes resonance hints of the output (VIS-4, VIS-5)", "[plugin][VIS-4]")
+{
+    JuceEnvironment env;
+    plugin::AnalyzerService service;
+    service.prepare (48000.0);
+    AnalyzerSettings s;
+    s.mode = AnalyzerMode::Post;
+    service.setSettings (s);
+    service.addClient();
+
+    // Pink noise through a +12 dB, Q 10 resonance at 2 kHz, fed in real-time-sized chunks.
+    const auto noise = test::pinkNoise (1 << 19, 21);
+    std::vector<double> x (noise.begin(), noise.end());
+    double x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0;
+    {
+        const double a = std::pow (10.0, 12.0 / 40.0), w0 = 2.0 * juce::MathConstants<double>::pi * 2000.0 / 48000.0;
+        const double alpha = std::sin (w0) / 20.0;
+        const double b0 = 1.0 + alpha * a, b1 = -2.0 * std::cos (w0), b2 = 1.0 - alpha * a;
+        const double a0 = 1.0 + alpha / a, a1 = b1, a2 = 1.0 - alpha / a;
+        for (auto& v : x)
+        {
+            const double y = (b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0;
+            x2 = x1;
+            x1 = v;
+            y2 = y1;
+            y1 = y;
+            v = y;
+        }
+    }
+    std::vector<float> signal (x.begin(), x.end());
+    for (std::size_t offset = 0; offset + 4096 <= 6 * 48000; offset += 4096)
+    {
+        service.pushPost (signal.data() + offset, 4096);
+        std::this_thread::sleep_for (std::chrono::milliseconds (10));
+    }
+    const auto frame = settledFrame (service);
+    service.removeClient();
+
+    REQUIRE (frame.hasHints);
+    REQUIRE (frame.numHints == 1);
+    CHECK (frame.hints[0].hz == Approx (2000.0f).epsilon (0.03f));
+}
+
+TEST_CASE ("Resonance hints never change the audio (VIS-4)", "[plugin][VIS-4]")
+{
+    JuceEnvironment env;
+    auto render = [] (bool hints) {
+        plugin::SscAudioProcessor p;
+        p.setPlayConfigDetails (2, 2, 48000.0, 512);
+        p.prepareToPlay (48000.0, 512);
+        AnalyzerSettings s;
+        s.resonanceHints = hints;
+        p.getAnalyzer().setSettings (s);
+        p.getAnalyzer().addClient(); // the analysis thread runs as with an open editor
+
+        auto* gain = p.getValueTreeState().getParameter ("b01_gain");
+        auto* used = p.getValueTreeState().getParameter ("b01_used");
+        used->setValueNotifyingHost (1.0f);
+        gain->setValueNotifyingHost (gain->convertTo0to1 (9.0f));
+
+        const auto noise = test::pinkNoise (1 << 17, 4);
+        std::vector<float> out;
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        for (int offset = 0; offset + 512 <= (1 << 17); offset += 512)
+        {
+            for (int ch = 0; ch < 2; ++ch)
+                buffer.copyFrom (ch, 0, noise.data() + offset, 512);
+            p.processBlock (buffer, midi);
+            out.insert (out.end(), buffer.getReadPointer (0), buffer.getReadPointer (0) + 512);
+        }
+        p.getAnalyzer().removeClient();
+        return out;
+    };
+    REQUIRE (render (true) == render (false));
+}

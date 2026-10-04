@@ -34,8 +34,16 @@ enum class AnalyzerSpeed : int
     VerySlow
 };
 
+/** Resonance hint sensitivity: a peak must stand 12 / 9 / 6 dB above its surroundings (VIS-5). */
+enum class HintSensitivity : int
+{
+    Low,
+    Medium,
+    High
+};
+
 /**
-    Analyzer and display settings (research §11c, VIS-1, VIS-2). They do not change the sound, so
+    Analyzer and display settings (research §11c, VIS-1, VIS-2, VIS-4). They do not change the sound, so
     they are not host parameters: they are saved with the state in the "Analyzer" child of the
     state tree and are not part of Undo.
 */
@@ -49,12 +57,15 @@ struct AnalyzerSettings
     bool peakHold = false;
     bool freeze = false;
     bool glow = true;
+    bool resonanceHints = true;
+    HintSensitivity hintSensitivity = HintSensitivity::Medium;
 
     bool operator== (const AnalyzerSettings& other) const noexcept
     {
         constexpr std::equal_to<float> same; // exact: the values come from fixed lists
         return mode == other.mode && resolution == other.resolution && speed == other.speed && same (tiltDbPerOctave, other.tiltDbPerOctave)
-            && same (rangeDb, other.rangeDb) && peakHold == other.peakHold && freeze == other.freeze && glow == other.glow;
+            && same (rangeDb, other.rangeDb) && peakHold == other.peakHold && freeze == other.freeze && glow == other.glow
+            && resonanceHints == other.resonanceHints && hintSensitivity == other.hintSensitivity;
     }
 
     bool showsPre() const noexcept { return mode == AnalyzerMode::PrePost || mode == AnalyzerMode::Pre; }
@@ -66,6 +77,7 @@ inline constexpr float kAnalyzerRanges[] = { 60.0f, 90.0f, 120.0f };
 
 int analyzerFftSize (AnalyzerResolution resolution, double sampleRate) noexcept;
 double analyzerAveragingMs (AnalyzerSpeed speed) noexcept;
+double hintProminenceDb (HintSensitivity sensitivity) noexcept;
 
 inline const juce::Identifier kAnalyzerType { "Analyzer" };
 

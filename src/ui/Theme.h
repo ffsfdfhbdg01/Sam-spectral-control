@@ -19,8 +19,9 @@ namespace colours
     inline const juce::Colour accent { 0xfff5a524 };
     inline const juce::Colour spectrumPre { 0xff3a414d };
     inline const juce::Colour spectrumPost { 0xffd9e4f2 };
-    inline const juce::Colour glowLow { 0xffff9a2e };  ///< activity glow: amber …
-    inline const juce::Colour glowHigh { 0xfffff1dc }; ///< … to warm white (VIS-2)
+    inline const juce::Colour glowLow { 0xffff9a2e };       ///< activity glow: amber …
+    inline const juce::Colour glowHigh { 0xfffff1dc };      ///< … to warm white (VIS-2)
+    inline const juce::Colour resonanceHint { 0xffc08cff }; ///< resonance hints: violet, apart from the amber glow (VIS-4)
     inline const juce::Colour curve { 0xfff1f4f8 };
     inline const juce::Colour powerOn { 0xff4cc38a };
     inline const juce::Colour powerOff { 0xff5a616c };

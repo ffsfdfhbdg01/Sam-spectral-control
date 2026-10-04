@@ -15,6 +15,8 @@ namespace
     const juce::Identifier kPeakHold { "peakHold" };
     const juce::Identifier kFreeze { "freeze" };
     const juce::Identifier kGlow { "glow" };
+    const juce::Identifier kHints { "hints" };
+    const juce::Identifier kHintSensitivity { "hintSensitivity" };
 
     template <typename Enum>
     Enum readChoice (const juce::ValueTree& tree, const juce::Identifier& id, Enum fallback, Enum last)
@@ -57,6 +59,17 @@ double analyzerAveragingMs (AnalyzerSpeed speed) noexcept
     return 250.0;
 }
 
+double hintProminenceDb (HintSensitivity sensitivity) noexcept
+{
+    switch (sensitivity)
+    {
+        case HintSensitivity::Low: return 12.0;
+        case HintSensitivity::Medium: return 9.0;
+        case HintSensitivity::High: return 6.0;
+    }
+    return 9.0;
+}
+
 AnalyzerSettings readAnalyzerSettings (const juce::ValueTree& state)
 {
     AnalyzerSettings s;
@@ -71,6 +84,8 @@ AnalyzerSettings readAnalyzerSettings (const juce::ValueTree& state)
     s.peakHold = tree.getProperty (kPeakHold, s.peakHold);
     s.freeze = tree.getProperty (kFreeze, s.freeze);
     s.glow = tree.getProperty (kGlow, s.glow);
+    s.resonanceHints = tree.getProperty (kHints, s.resonanceHints);
+    s.hintSensitivity = readChoice (tree, kHintSensitivity, s.hintSensitivity, HintSensitivity::High);
     return s;
 }
 
@@ -85,5 +100,7 @@ void writeAnalyzerSettings (juce::ValueTree& state, const AnalyzerSettings& s)
     tree.setProperty (kPeakHold, s.peakHold, nullptr);
     tree.setProperty (kFreeze, s.freeze, nullptr);
     tree.setProperty (kGlow, s.glow, nullptr);
+    tree.setProperty (kHints, s.resonanceHints, nullptr);
+    tree.setProperty (kHintSensitivity, static_cast<int> (s.hintSensitivity), nullptr);
 }
 } // namespace ssc::plugin

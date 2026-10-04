@@ -42,7 +42,7 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
     addAndMakeVisible (eqRange);
     setEqRange (static_cast<float> (sscProcessor.getValueTreeState().state.getProperty (plugin::kUiEqRange, kDefaultEqRange)));
 
-    analyzerButton.setTooltip ("Analyzer: spectra, resolution, speed, tilt, range, freeze, peak hold, glow");
+    analyzerButton.setTooltip ("Analyzer: spectra, resolution, speed, tilt, range, freeze, peak hold, glow, resonance hints");
     analyzerButton.onClick = [this] { showAnalyzerMenu(); };
     addAndMakeVisible (analyzerButton);
     applyAnalyzerSettings (plugin::readAnalyzerSettings (sscProcessor.getValueTreeState().state), false);
@@ -153,6 +153,16 @@ void SscEditor::showAnalyzerMenu()
     menu.addItem ("Freeze", true, s.freeze, change ([] (plugin::AnalyzerSettings& n) { n.freeze = ! n.freeze; }));
     menu.addItem ("Peak hold", true, s.peakHold, change ([] (plugin::AnalyzerSettings& n) { n.peakHold = ! n.peakHold; }));
     menu.addItem ("Activity glow", true, s.glow, change ([] (plugin::AnalyzerSettings& n) { n.glow = ! n.glow; }));
+    menu.addItem ("Resonance hints", true, s.resonanceHints,
+                  change ([] (plugin::AnalyzerSettings& n) { n.resonanceHints = ! n.resonanceHints; }));
+    juce::PopupMenu sensitivity;
+    const std::pair<plugin::HintSensitivity, const char*> sensitivities[] = { { plugin::HintSensitivity::Low, "Low (12 dB)" },
+                                                                              { plugin::HintSensitivity::Medium, "Medium (9 dB)" },
+                                                                              { plugin::HintSensitivity::High, "High (6 dB)" } };
+    for (const auto& [value, name] : sensitivities)
+        sensitivity.addItem (name, s.resonanceHints, s.hintSensitivity == value,
+                             change ([v = value] (plugin::AnalyzerSettings& n) { n.hintSensitivity = v; }));
+    menu.addSubMenu ("Hint sensitivity", sensitivity, s.resonanceHints);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (analyzerButton));
 }
 
