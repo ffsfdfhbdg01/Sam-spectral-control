@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "plugin/AnalyzerSettings.h"
 #include "ui/BandModel.h"
 #include "ui/BandPanel.h"
 #include "ui/ControlBar.h"
@@ -40,11 +41,16 @@ private:
     int latencyHighlightTicks = 0; ///< the status flashes for a moment when the latency changes (ADR-0011)
     void layoutBandPanel();
     void setEqRange (float rangeDb);
+    void showAnalyzerMenu();
+    /** Applies analyzer settings to the analyzer and the display; `store` also saves them in the state. */
+    void applyAnalyzerSettings (const plugin::AnalyzerSettings& settings, bool store);
 
     plugin::SscAudioProcessor& sscProcessor;
     LookAndFeel lookAndFeel;
     juce::Label status;
     juce::ComboBox eqRange;
+    juce::TextButton analyzerButton { "Analyzer" };
+    plugin::AnalyzerSettings analyzerSettings;
     juce::TooltipWindow tooltips { this, 600 };
     BandModel bandModel;
     EqDisplay display;

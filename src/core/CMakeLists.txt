@@ -1,6 +1,7 @@
 add_library(ssc_core STATIC
     src/fft/RealFft.cpp
     src/analysis/SpectrumAnalyzer.cpp
+    src/analysis/SpectrumActivity.cpp
     src/engine/Engine.cpp
     src/engine/BandProcessor.cpp
     src/engine/GainTable.cpp

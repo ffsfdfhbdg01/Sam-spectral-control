@@ -45,6 +45,7 @@ void SpectrumAnalyzer::prepare (const SpectrumAnalyzerConfig& config)
     frame.assign (static_cast<std::size_t> (n), 0.0f);
     spectrum.assign (static_cast<std::size_t> (n + 2), 0.0f);
     smoothedPower.assign (static_cast<std::size_t> (n / 2 + 1), 0.0f);
+    framePower.assign (static_cast<std::size_t> (n / 2 + 1), 0.0f);
 
     const double hopSeconds = cfg.hopSize / cfg.sampleRate;
     smoothingAlpha = cfg.smoothingMs > 0.0 ? std::exp (-hopSeconds / (cfg.smoothingMs * 0.001)) : 0.0;
@@ -59,6 +60,7 @@ void SpectrumAnalyzer::prepare (const SpectrumAnalyzerConfig& config)
 
     displayHz.resize (static_cast<std::size_t> (points));
     displayLevelDb.assign (static_cast<std::size_t> (points), kFloorDb);
+    displayInstantLevelDb.assign (static_cast<std::size_t> (points), kFloorDb);
     displayTilt.resize (static_cast<std::size_t> (points));
     displayBinLo.resize (static_cast<std::size_t> (points));
     displayBinHi.resize (static_cast<std::size_t> (points));
@@ -82,16 +84,18 @@ void SpectrumAnalyzer::reset() noexcept
 {
     std::fill (input.begin(), input.end(), 0.0f);
     std::fill (smoothedPower.begin(), smoothedPower.end(), 0.0f);
+    std::fill (framePower.begin(), framePower.end(), 0.0f);
     std::fill (displayLevelDb.begin(), displayLevelDb.end(), kFloorDb);
+    std::fill (displayInstantLevelDb.begin(), displayInstantLevelDb.end(), kFloorDb);
     writeIndex = 0;
     samplesSinceFrame = 0;
     samplesSeen = 0;
     hasFrame = false;
 }
 
-bool SpectrumAnalyzer::push (const float* samples, int numSamples) noexcept
+int SpectrumAnalyzer::push (const float* samples, int numSamples) noexcept
 {
-    bool computed = false;
+    int computed = 0;
     const int n = cfg.fftSize;
 
     for (int i = 0; i < numSamples; ++i)
@@ -106,11 +110,11 @@ bool SpectrumAnalyzer::push (const float* samples, int numSamples) noexcept
         {
             samplesSinceFrame = 0;
             computeFrame();
-            computed = true;
+            ++computed;
         }
     }
 
-    if (computed)
+    if (computed > 0)
         updateDisplay();
 
     return computed;
@@ -137,6 +141,7 @@ void SpectrumAnalyzer::computeFrame() noexcept
         const float re = spectrum[static_cast<std::size_t> (2 * k)] * amplitudeScale;
         const float im = spectrum[static_cast<std::size_t> (2 * k + 1)] * amplitudeScale;
         const float power = re * re + im * im;
+        framePower[static_cast<std::size_t> (k)] = power;
         auto& s = smoothedPower[static_cast<std::size_t> (k)];
         s = useAlpha * s + (1.0f - useAlpha) * power;
     }
@@ -144,15 +149,14 @@ void SpectrumAnalyzer::computeFrame() noexcept
     hasFrame = true;
 }
 
-void SpectrumAnalyzer::updateDisplay() noexcept
+void SpectrumAnalyzer::mapToDisplay (const std::vector<float>& p, std::vector<float>& outDb) const noexcept
 {
     const int n = cfg.fftSize;
     const int numBins = n / 2 + 1;
     const double binsPerHz = n / cfg.sampleRate;
-    const auto& p = smoothedPower;
     const auto points = static_cast<int> (displayHz.size());
 
-    // Base curve: mean power of covered bins, or interpolation where bins are sparser than points.
+    // Mean power of the covered bins, or interpolation where bins are sparser than points.
     for (int i = 0; i < points; ++i)
     {
         const auto idx = static_cast<std::size_t> (i);
@@ -178,8 +182,20 @@ void SpectrumAnalyzer::updateDisplay() noexcept
             power = std::pow (10.0f, (db0 + (db1 - db0) * frac) * 0.1f);
         }
 
-        displayLevelDb[idx] = std::max (kFloorDb, static_cast<float> (powerToDb (static_cast<double> (power))) + displayTilt[idx]);
+        outDb[idx] = std::max (kFloorDb, static_cast<float> (powerToDb (static_cast<double> (power))) + displayTilt[idx]);
     }
+}
+
+void SpectrumAnalyzer::updateDisplay() noexcept
+{
+    const int n = cfg.fftSize;
+    const int numBins = n / 2 + 1;
+    const double binsPerHz = n / cfg.sampleRate;
+    const auto& p = smoothedPower;
+    const auto points = static_cast<int> (displayHz.size());
+
+    mapToDisplay (framePower, displayInstantLevelDb);
+    mapToDisplay (smoothedPower, displayLevelDb);
 
     // Tonal peaks: refine level and position, then raise the nearest display point.
     const double fMin = displayHz.front();

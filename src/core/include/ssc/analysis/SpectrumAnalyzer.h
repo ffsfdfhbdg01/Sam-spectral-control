@@ -34,12 +34,15 @@ public:
     void prepare (const SpectrumAnalyzerConfig& config);
     void reset() noexcept;
 
-    /** Feeds samples; returns true if at least one new frame was computed. */
-    bool push (const float* samples, int numSamples) noexcept;
+    /** Feeds samples; returns the number of new frames computed (0: the display did not change). */
+    int push (const float* samples, int numSamples) noexcept;
 
     const SpectrumAnalyzerConfig& getConfig() const noexcept { return cfg; }
     const std::vector<float>& displayFrequencies() const noexcept { return displayHz; }
     const std::vector<float>& displayDb() const noexcept { return displayLevelDb; }
+
+    /** Levels of the newest frame alone (no averaging, no tonal refinement) on the display grid, with the tilt. */
+    const std::vector<float>& displayInstantDb() const noexcept { return displayInstantLevelDb; }
 
     /** Smoothed, sine-calibrated power per FFT bin (amplitude squared), bins 0 … N/2. */
     const std::vector<float>& binPower() const noexcept { return smoothedPower; }
@@ -49,11 +52,12 @@ public:
 private:
     void computeFrame() noexcept;
     void updateDisplay() noexcept;
+    void mapToDisplay (const std::vector<float>& power, std::vector<float>& outDb) const noexcept;
 
     SpectrumAnalyzerConfig cfg;
     RealFft fft;
-    std::vector<float> window, input, frame, spectrum, smoothedPower;
-    std::vector<float> displayHz, displayLevelDb, displayTilt;
+    std::vector<float> window, input, frame, spectrum, smoothedPower, framePower;
+    std::vector<float> displayHz, displayLevelDb, displayInstantLevelDb, displayTilt;
     std::vector<int> displayBinLo, displayBinHi;
     double smoothingAlpha = 0.0;
     float amplitudeScale = 1.0f;

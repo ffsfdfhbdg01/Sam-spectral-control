@@ -42,6 +42,11 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
     addAndMakeVisible (eqRange);
     setEqRange (static_cast<float> (sscProcessor.getValueTreeState().state.getProperty (plugin::kUiEqRange, kDefaultEqRange)));
 
+    analyzerButton.setTooltip ("Analyzer: spectra, resolution, speed, tilt, range, freeze, peak hold, glow");
+    analyzerButton.onClick = [this] { showAnalyzerMenu(); };
+    addAndMakeVisible (analyzerButton);
+    applyAnalyzerSettings (plugin::readAnalyzerSettings (sscProcessor.getValueTreeState().state), false);
+
     status.setJustificationType (juce::Justification::centredRight);
     status.setColour (juce::Label::textColourId, colours::textDim);
     addAndMakeVisible (status);
@@ -86,6 +91,71 @@ void SscEditor::setEqRange (float rangeDb)
     sscProcessor.getValueTreeState().state.setProperty (plugin::kUiEqRange, rangeDb, nullptr);
 }
 
+void SscEditor::applyAnalyzerSettings (const plugin::AnalyzerSettings& settings, bool store)
+{
+    analyzerSettings = settings;
+    sscProcessor.getAnalyzer().setSettings (settings);
+    display.setAnalyzerSettings (settings);
+    analyzerButton.setToggleState (settings.freeze, juce::dontSendNotification);
+    analyzerButton.setButtonText (settings.freeze ? "Frozen" : "Analyzer");
+    if (store)
+        plugin::writeAnalyzerSettings (sscProcessor.getValueTreeState().state, settings);
+}
+
+void SscEditor::showAnalyzerMenu()
+{
+    using plugin::AnalyzerMode;
+    using plugin::AnalyzerResolution;
+    using plugin::AnalyzerSpeed;
+    const auto s = analyzerSettings;
+    auto change = [this] (auto&& edit) {
+        return [this, edit] {
+            auto next = analyzerSettings;
+            edit (next);
+            applyAnalyzerSettings (next, true);
+        };
+    };
+
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Spectrum");
+    const std::pair<AnalyzerMode, const char*> modes[] = {
+        { AnalyzerMode::PrePost, "Pre + Post" }, { AnalyzerMode::Post, "Post" }, { AnalyzerMode::Pre, "Pre" }, { AnalyzerMode::Off, "Off" }
+    };
+    for (const auto& [mode, name] : modes)
+        menu.addItem (name, true, s.mode == mode, change ([m = mode] (plugin::AnalyzerSettings& n) { n.mode = m; }));
+
+    juce::PopupMenu resolution, speed, tilt, range;
+    const std::pair<AnalyzerResolution, const char*> resolutions[] = { { AnalyzerResolution::Low, "Low" },
+                                                                       { AnalyzerResolution::Medium, "Medium" },
+                                                                       { AnalyzerResolution::High, "High" },
+                                                                       { AnalyzerResolution::Max, "Max" } };
+    for (const auto& [value, name] : resolutions)
+        resolution.addItem (name, true, s.resolution == value, change ([v = value] (plugin::AnalyzerSettings& n) { n.resolution = v; }));
+    const std::pair<AnalyzerSpeed, const char*> speeds[] = { { AnalyzerSpeed::VeryFast, "Very Fast" },
+                                                             { AnalyzerSpeed::Fast, "Fast" },
+                                                             { AnalyzerSpeed::Medium, "Medium" },
+                                                             { AnalyzerSpeed::Slow, "Slow" },
+                                                             { AnalyzerSpeed::VerySlow, "Very Slow" } };
+    for (const auto& [value, name] : speeds)
+        speed.addItem (name, true, s.speed == value, change ([v = value] (plugin::AnalyzerSettings& n) { n.speed = v; }));
+    for (const float value : plugin::kAnalyzerTilts)
+        tilt.addItem (juce::String (value, 1) + " dB/oct", true, juce::approximatelyEqual (s.tiltDbPerOctave, value),
+                      change ([value] (plugin::AnalyzerSettings& n) { n.tiltDbPerOctave = value; }));
+    for (const float value : plugin::kAnalyzerRanges)
+        range.addItem (juce::String (juce::roundToInt (value)) + " dB", true, juce::approximatelyEqual (s.rangeDb, value),
+                       change ([value] (plugin::AnalyzerSettings& n) { n.rangeDb = value; }));
+    menu.addSubMenu ("Resolution", resolution);
+    menu.addSubMenu ("Speed", speed);
+    menu.addSubMenu ("Tilt", tilt);
+    menu.addSubMenu ("Range", range);
+
+    menu.addSectionHeader ("Display");
+    menu.addItem ("Freeze", true, s.freeze, change ([] (plugin::AnalyzerSettings& n) { n.freeze = ! n.freeze; }));
+    menu.addItem ("Peak hold", true, s.peakHold, change ([] (plugin::AnalyzerSettings& n) { n.peakHold = ! n.peakHold; }));
+    menu.addItem ("Activity glow", true, s.glow, change ([] (plugin::AnalyzerSettings& n) { n.glow = ! n.glow; }));
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (analyzerButton));
+}
+
 void SscEditor::layoutBandPanel()
 {
     const auto area = display.getBounds();
@@ -124,8 +194,10 @@ void SscEditor::resized()
     auto area = getLocalBounds();
     auto header = area.removeFromTop (kHeaderHeight).reduced (12, 0);
     eqRange.setBounds (header.removeFromRight (84).withSizeKeepingCentre (84, 24));
+    header.removeFromRight (8);
+    analyzerButton.setBounds (header.removeFromRight (84).withSizeKeepingCentre (84, 24));
     header.removeFromRight (12);
-    status.setBounds (header.removeFromRight (440));
+    status.setBounds (header.removeFromRight (juce::jmax (0, juce::jmin (440, header.getWidth() - 230))));
     controlBar.setBounds (area.removeFromBottom (kControlBarHeight));
     display.setBounds (area);
     layoutBandPanel();
@@ -152,6 +224,10 @@ void SscEditor::timerCallback()
     status.setColour (juce::Label::textColourId, latencyHighlightTicks > 0 ? colours::accent : colours::textDim);
     latencyHighlightTicks = std::max (0, latencyHighlightTicks - 1);
     status.setText (statusText(), juce::dontSendNotification);
+
+    // Settings restored by the host (project or preset load) reach an open editor.
+    if (const auto stored = plugin::readAnalyzerSettings (sscProcessor.getValueTreeState().state); ! (stored == analyzerSettings))
+        applyAnalyzerSettings (stored, false);
 
     display.setSampleRate (sscProcessor.getSampleRate());
     display.setResponseModel (sscProcessor.getResponseModel());

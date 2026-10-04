@@ -105,15 +105,25 @@ void EqDisplay::refreshFromAnalyzer()
             repaint();
         }
 
-    if (analyzer.frames().update())
+    // Freeze keeps the last frame on screen (VIS-1).
+    if (! analyzerSettings.freeze && analyzer.frames().update())
     {
         hasFrame = true;
         repaint();
     }
 }
 
+void EqDisplay::setAnalyzerSettings (const plugin::AnalyzerSettings& settings)
+{
+    if (settings == analyzerSettings)
+        return;
+    analyzerSettings = settings;
+    repaint();
+}
+
 void EqDisplay::resized()
 {
+    backgroundDirty = true;
     curves.setGrid (juce::jlimit (128, 1024, getWidth() / 2), kMinHz, kMaxHz);
     syncCurves();
 }
@@ -141,6 +151,7 @@ void EqDisplay::setChannelInfo (int channels, int pairs)
 void EqDisplay::setEqRange (float rangeDb)
 {
     eqRangeDb = juce::jlimit (1.0f, 60.0f, rangeDb);
+    backgroundDirty = true;
     repaint();
 }
 
@@ -196,7 +207,7 @@ float EqDisplay::eqDbForY (float y) const noexcept
 float EqDisplay::yForAnalyzerDb (float db) const noexcept
 {
     const auto h = static_cast<float> (getHeight());
-    return juce::jmap (db, kAnalyzerTopDb, kAnalyzerBottomDb, 0.0f, h);
+    return juce::jmap (db, kAnalyzerTopDb, kAnalyzerTopDb - analyzerSettings.rangeDb, 0.0f, h);
 }
 
 juce::Point<float> EqDisplay::nodePosition (int band) const
@@ -700,19 +711,39 @@ void EqDisplay::showBandMenu (int band)
 //==============================================================================
 void EqDisplay::paint (juce::Graphics& g)
 {
-    const auto bounds = getLocalBounds().toFloat();
-    g.setGradientFill (juce::ColourGradient (colours::displayTop, 0.0f, 0.0f, colours::displayBottom, 0.0f, bounds.getBottom(), false));
-    g.fillRect (bounds);
+    // Background and grid change only with the size and the EQ range: cached at the physical
+    // resolution, so that drawing them is a plain copy (VIS-6).
+    const float scale = juce::jmax (1.0f, g.getInternalContext().getPhysicalPixelScaleFactor());
+    const int pw = juce::roundToInt (static_cast<float> (getWidth()) * scale);
+    const int ph = juce::roundToInt (static_cast<float> (getHeight()) * scale);
+    if (backgroundDirty || background.getWidth() != pw || background.getHeight() != ph)
+    {
+        background = juce::Image (juce::Image::RGB, juce::jmax (1, pw), juce::jmax (1, ph), false);
+        juce::Graphics bg (background);
+        bg.addTransform (juce::AffineTransform::scale (scale));
+        const auto bounds = getLocalBounds().toFloat();
+        bg.setGradientFill (
+            juce::ColourGradient (colours::displayTop, 0.0f, 0.0f, colours::displayBottom, 0.0f, bounds.getBottom(), false));
+        bg.fillRect (bounds);
+        paintGrid (bg);
+        backgroundDirty = false;
+    }
+    g.drawImage (background, getLocalBounds().toFloat());
 
-    paintGrid (g);
-
-    if (hasFrame)
+    if (hasFrame && analyzerSettings.mode != plugin::AnalyzerMode::Off)
     {
         const auto& frame = analyzer.frames().read();
         if (frame.numPoints > 1)
         {
-            paintSpectrum (g, frame, false);
-            paintSpectrum (g, frame, true);
+            const bool preOnly = analyzerSettings.mode == plugin::AnalyzerMode::Pre;
+            if (frame.hasPre && analyzerSettings.showsPre())
+                paintSpectrum (g, frame, false, preOnly);
+            if (frame.hasActivity && analyzerSettings.glow)
+                paintGlow (g, frame);
+            if (frame.hasPost && analyzerSettings.showsPost())
+                paintSpectrum (g, frame, true, true);
+            if (frame.hasPeak && analyzerSettings.peakHold)
+                paintPeakHold (g, frame);
         }
     }
 
@@ -771,7 +802,7 @@ void EqDisplay::paintGrid (juce::Graphics& g) const
     }
 }
 
-void EqDisplay::paintSpectrum (juce::Graphics& g, const plugin::SpectrumFrame& frame, bool post) const
+void EqDisplay::paintSpectrum (juce::Graphics& g, const plugin::SpectrumFrame& frame, bool post, bool main) const
 {
     const auto h = static_cast<float> (getHeight());
     juce::Path line;
@@ -805,12 +836,13 @@ void EqDisplay::paintSpectrum (juce::Graphics& g, const plugin::SpectrumFrame& f
     fill.lineTo (line.getBounds().getX(), h);
     fill.closeSubPath();
 
-    if (post)
+    if (main)
     {
-        g.setGradientFill (juce::ColourGradient (colours::spectrumPost.withAlpha (0.16f), 0.0f, 0.0f,
-                                                 colours::spectrumPost.withAlpha (0.02f), 0.0f, h, false));
+        // The main spectrum (post, or pre when only pre is shown): outlined, with a light fill.
+        const auto colour = post ? colours::spectrumPost : colours::spectrumPre.brighter (1.2f);
+        g.setGradientFill (juce::ColourGradient (colour.withAlpha (0.16f), 0.0f, 0.0f, colour.withAlpha (0.02f), 0.0f, h, false));
         g.fillPath (fill);
-        g.setColour (colours::spectrumPost.withAlpha (0.55f));
+        g.setColour (colour.withAlpha (0.55f));
         g.strokePath (line, juce::PathStrokeType (1.1f));
     }
     else
@@ -818,6 +850,133 @@ void EqDisplay::paintSpectrum (juce::Graphics& g, const plugin::SpectrumFrame& f
         g.setColour (colours::spectrumPre.withAlpha (0.55f));
         g.fillPath (fill);
     }
+}
+
+void EqDisplay::paintPeakHold (juce::Graphics& g, const plugin::SpectrumFrame& frame) const
+{
+    const auto h = static_cast<float> (getHeight());
+    juce::Path line;
+    bool started = false;
+    for (int i = 0; i < frame.numPoints; ++i)
+    {
+        const auto idx = static_cast<std::size_t> (i);
+        const float hz = frame.hz[idx];
+        if (hz < kMinHz || hz > kMaxHz)
+            continue;
+        const juce::Point<float> p { xForFrequency (hz), juce::jlimit (0.0f, h, yForAnalyzerDb (frame.peakDb[idx])) };
+        if (! started)
+            line.startNewSubPath (p);
+        else
+            line.lineTo (p);
+        started = true;
+    }
+    g.setColour (colours::spectrumPost.withAlpha (0.35f));
+    g.strokePath (line, juce::PathStrokeType (1.0f));
+}
+
+void EqDisplay::paintGlow (juce::Graphics& g, const plugin::SpectrumFrame& frame)
+{
+    // Bloom (research §11c, VIS-2): the band under the main spectrum line glows with the activity
+    // of each region (blurred along frequency), strongest at the line and fading over ≈ 70 px, with
+    // a halo around the line. Amber at low activity, warm white at the top. Drawn as a few
+    // gradient-filled layers, so the cost does not grow with the window area.
+    const auto w = static_cast<float> (getWidth());
+    const auto h = static_cast<float> (getHeight());
+    const bool preMain = analyzerSettings.mode == plugin::AnalyzerMode::Pre;
+    const auto& level = preMain ? frame.preDb : frame.postDb;
+    const int n = frame.numPoints;
+    const float f0 = frame.hz[0];
+    const float logSpan = std::log (frame.hz[static_cast<std::size_t> (n - 1)] / f0);
+    auto at = [&] (const std::array<float, plugin::SpectrumFrame::kMaxPoints>& values, float x) {
+        const float hz = frequencyForX (x);
+        const float position = juce::jlimit (0.0f, static_cast<float> (n - 1), std::log (hz / f0) / logSpan * static_cast<float> (n - 1));
+        const auto i0 = static_cast<std::size_t> (position);
+        const auto i1 = std::min (i0 + 1, static_cast<std::size_t> (n - 1));
+        return values[i0] + (values[i1] - values[i0]) * (position - static_cast<float> (i0));
+    };
+
+    // Only where the analyzer has data (up to Nyquist).
+    const float xStart = juce::jlimit (0.0f, w, xForFrequency (frame.hz[0]));
+    const float xEnd = juce::jlimit (0.0f, w, xForFrequency (frame.hz[static_cast<std::size_t> (n - 1)]));
+    if (xEnd - xStart < 2.0f)
+        return;
+
+    // Colour stops every ≈ 16 px, blurred along frequency.
+    const int numStops = juce::jmax (2, static_cast<int> ((xEnd - xStart) / 16.0f) + 1);
+    const float stopStep = (xEnd - xStart) / static_cast<float> (numStops - 1);
+    glowScratch.assign (static_cast<std::size_t> (numStops), 0.0f);
+    glowActivity.assign (static_cast<std::size_t> (numStops), 0.0f);
+    for (int s = 0; s < numStops; ++s)
+        glowScratch[static_cast<std::size_t> (s)] = at (frame.activity, xStart + static_cast<float> (s) * stopStep);
+    float largest = 0.0f;
+    for (int s = 0; s < numStops; ++s)
+    {
+        float sum = 0.0f, weights = 0.0f;
+        for (int k = -2; k <= 2; ++k)
+        {
+            const float weight = std::exp (-0.5f * static_cast<float> (k * k));
+            sum += weight * glowScratch[static_cast<std::size_t> (juce::jlimit (0, numStops - 1, s + k))];
+            weights += weight;
+        }
+        largest = juce::jmax (largest, glowActivity[static_cast<std::size_t> (s)] = sum / weights);
+    }
+    if (largest < 0.01f)
+        return;
+
+    auto gradient = [&] (float alphaScale) {
+        auto colourAt = [&] (int s) {
+            const float a = glowActivity[static_cast<std::size_t> (s)];
+            return colours::glowLow.interpolatedWith (colours::glowHigh, a * a).withAlpha (juce::jlimit (0.0f, 1.0f, a * alphaScale));
+        };
+        juce::ColourGradient grad (colourAt (0), xStart, 0.0f, colourAt (numStops - 1), xEnd, 0.0f, false);
+        for (int s = 1; s < numStops - 1; ++s)
+            grad.addColour (static_cast<double> (s) / static_cast<double> (numStops - 1), colourAt (s));
+        return grad;
+    };
+
+    // The spectrum line every ≈ 6 px.
+    const int numPoints = juce::jmax (2, static_cast<int> ((xEnd - xStart) / 6.0f) + 1);
+    const float step = (xEnd - xStart) / static_cast<float> (numPoints - 1);
+    glowLineY.assign (static_cast<std::size_t> (numPoints), 0.0f);
+    juce::Path line;
+    for (int i = 0; i < numPoints; ++i)
+    {
+        const float x = xStart + static_cast<float> (i) * step;
+        const float y = juce::jlimit (0.0f, h, yForAnalyzerDb (at (level, x)));
+        glowLineY[static_cast<std::size_t> (i)] = y;
+        if (i == 0)
+            line.startNewSubPath (x, y);
+        else
+            line.lineTo (x, y);
+    }
+
+    constexpr int kLayers = 5;
+    constexpr float kDepth = 70.0f;
+    constexpr float kMaxAlpha = 0.5f;
+    for (int layer = 0; layer < kLayers; ++layer)
+    {
+        const float top = kDepth * static_cast<float> (layer) / kLayers;
+        const float bottom = kDepth * static_cast<float> (layer + 1) / kLayers;
+        juce::Path band;
+        for (int i = 0; i < numPoints; ++i)
+        {
+            const juce::Point<float> p { xStart + static_cast<float> (i) * step,
+                                         juce::jmin (h, glowLineY[static_cast<std::size_t> (i)] + top) };
+            if (i == 0)
+                band.startNewSubPath (p);
+            else
+                band.lineTo (p);
+        }
+        for (int i = numPoints - 1; i >= 0; --i)
+            band.lineTo (xStart + static_cast<float> (i) * step, juce::jmin (h, glowLineY[static_cast<std::size_t> (i)] + bottom));
+        band.closeSubPath();
+        const float fade = std::exp (-2.5f * (static_cast<float> (layer) + 0.5f) / kLayers);
+        g.setGradientFill (gradient (kMaxAlpha * fade));
+        g.fillPath (band);
+    }
+
+    g.setGradientFill (gradient (0.2f));
+    g.strokePath (line, juce::PathStrokeType (8.0f, juce::PathStrokeType::beveled, juce::PathStrokeType::butt));
 }
 
 juce::Path EqDisplay::curvePath (const std::vector<float>& db) const
@@ -868,7 +1027,6 @@ void EqDisplay::paintBandCurves (juce::Graphics& g) const
         // Dynamic bands: the region between the static and the current curve (DYN-11).
         if (curves.hasDynamic (b))
         {
-            const auto dynamicPath = curvePath (curves.dynamicDb (b));
             juce::Path region;
             const auto& staticDb = curves.bandDb (b);
             const auto& dynamicDb = curves.dynamicDb (b);
@@ -887,10 +1045,54 @@ void EqDisplay::paintBandCurves (juce::Graphics& g) const
                 region.lineTo (xForFrequency (curves.frequency (i)),
                                juce::jlimit (-20.0f, h + 20.0f, yForEqDb (dynamicDb[static_cast<std::size_t> (i)])));
             region.closeSubPath();
-            g.setColour (colour.withAlpha (0.35f));
-            g.fillPath (region);
+
+            // Glow (VIS-3): the fill is as bright as the change at each frequency; the current
+            // curve gets a halo that grows with the largest change.
+            float largest = 0.0f;
+            for (int i = 0; i < n; ++i)
+                largest = juce::jmax (largest, std::abs (dynamicDb[static_cast<std::size_t> (i)] - staticDb[static_cast<std::size_t> (i)]));
+            if (n > 1)
+            {
+                constexpr int stops = 32;
+                auto alphaAt = [&] (int i) {
+                    const auto idx = static_cast<std::size_t> (i);
+                    return 0.08f + 0.5f * juce::jmin (1.0f, std::abs (dynamicDb[idx] - staticDb[idx]) / 12.0f);
+                };
+                const float x0 = xForFrequency (curves.frequency (0));
+                const float x1 = xForFrequency (curves.frequency (n - 1));
+                juce::ColourGradient gradient (colour.withAlpha (alphaAt (0)), x0, 0.0f, colour.withAlpha (alphaAt (n - 1)), x1, 0.0f,
+                                               false);
+                for (int s = 1; s < stops; ++s)
+                {
+                    const int i = s * (n - 1) / stops;
+                    gradient.addColour ((xForFrequency (curves.frequency (i)) - x0) / juce::jmax (1.0f, x1 - x0),
+                                        colour.withAlpha (alphaAt (i)));
+                }
+                g.setGradientFill (gradient);
+                g.fillPath (region);
+            }
+            // The halo follows the current curve only where the band changes the gain.
+            juce::Path halo;
+            bool inSegment = false;
+            for (int i = 0; i < n; ++i)
+            {
+                const auto idx = static_cast<std::size_t> (i);
+                const bool changing = std::abs (dynamicDb[idx] - staticDb[idx]) >= 0.1f;
+                const juce::Point<float> p { xForFrequency (curves.frequency (i)),
+                                             juce::jlimit (-20.0f, h + 20.0f, yForEqDb (dynamicDb[idx])) };
+                if (changing && ! inSegment)
+                    halo.startNewSubPath (p);
+                else if (changing)
+                    halo.lineTo (p);
+                inSegment = changing;
+            }
+            const float intensity = juce::jlimit (0.2f, 1.0f, largest / 6.0f);
+            g.setColour (colour.withAlpha (0.07f * intensity));
+            g.strokePath (halo, juce::PathStrokeType (10.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.setColour (colour.withAlpha (0.14f * intensity));
+            g.strokePath (halo, juce::PathStrokeType (5.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
             g.setColour (colour.withAlpha (0.95f));
-            g.strokePath (dynamicPath, juce::PathStrokeType (1.4f));
+            g.strokePath (halo, juce::PathStrokeType (1.4f));
         }
     }
 }

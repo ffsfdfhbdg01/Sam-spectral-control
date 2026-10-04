@@ -7,6 +7,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "plugin/AnalyzerService.h"
+#include "plugin/AnalyzerSettings.h"
 #include "ssc/spectral/SpectralEngine.h"
 #include "ui/BandLogic.h"
 #include "ui/BandModel.h"
@@ -27,7 +28,9 @@ namespace ssc::ui
     - right click on a node opens the band menu
     - keys: Delete/Backspace deletes the selection, Cmd/Ctrl+Z undo, Cmd/Ctrl+Shift+Z or
       Cmd/Ctrl+Y redo, Cmd/Ctrl+A selects all bands, Escape clears the selection
-    Glow of active regions and resonance hints follow in M7.
+    Analyzer (research §11c): pre/post spectra, peak hold, and a glow over the most active regions
+    of the main spectrum (VIS-2); Dynamic and Spectral bands glow with their current gain change
+    (VIS-3).
 */
 class EqDisplay final : public juce::Component, private BandModel::Listener, private juce::Timer
 {
@@ -61,6 +64,9 @@ public:
     std::function<const spectral::SpectralEngine::MaskView*()> spectralViewProvider;
     void setChannelInfo (int numChannels, int numPairs);
 
+    /** Analyzer display settings (mode, range, freeze, peak hold, glow). */
+    void setAnalyzerSettings (const plugin::AnalyzerSettings& settings);
+
     /** Visible EQ range: ±range dB (3, 6, 12, 18 or 30). */
     void setEqRange (float rangeDb);
     float getEqRange() const noexcept { return eqRangeDb; }
@@ -68,7 +74,6 @@ public:
     static constexpr float kMinHz = 10.0f;
     static constexpr float kMaxHz = 30000.0f;
     static constexpr float kAnalyzerTopDb = 6.0f;
-    static constexpr float kAnalyzerBottomDb = -96.0f;
     static constexpr float kNodeRadius = 7.0f;
 
     float xForFrequency (float hz) const noexcept;
@@ -115,7 +120,9 @@ private:
     std::vector<int> menuTargets (int band) const;
 
     void paintGrid (juce::Graphics&) const;
-    void paintSpectrum (juce::Graphics&, const plugin::SpectrumFrame&, bool post) const;
+    void paintSpectrum (juce::Graphics&, const plugin::SpectrumFrame&, bool post, bool main) const;
+    void paintPeakHold (juce::Graphics&, const plugin::SpectrumFrame&) const;
+    void paintGlow (juce::Graphics&, const plugin::SpectrumFrame&);
     void paintBandCurves (juce::Graphics&) const;
     void paintComposite (juce::Graphics&) const;
     void paintGhost (juce::Graphics&) const;
@@ -129,6 +136,11 @@ private:
     ResponseCurves curves;
     bool hasFrame = false;
     juce::VBlankAttachment vblank;
+
+    plugin::AnalyzerSettings analyzerSettings;
+    juce::Image background; ///< gradient and grid (see paint())
+    bool backgroundDirty = true;
+    std::vector<float> glowActivity, glowScratch, glowLineY; ///< scratch of paintGlow()
 
     float eqRangeDb = 18.0f;
     int numChannels = 2;
