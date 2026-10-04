@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <thread>
@@ -156,7 +157,8 @@ TEST_CASE ("Analyzer publishes resonance hints of the output (VIS-4, VIS-5)", "[
             v = y;
         }
     }
-    std::vector<float> signal (x.begin(), x.end());
+    std::vector<float> signal (x.size());
+    std::transform (x.begin(), x.end(), signal.begin(), [] (double v) { return static_cast<float> (v); });
     for (std::size_t offset = 0; offset + 4096 <= 6 * 48000; offset += 4096)
     {
         service.pushPost (signal.data() + offset, 4096);
@@ -253,4 +255,41 @@ TEST_CASE ("Band readouts follow parameter changes within 100 ms (PR-2)", "[plug
     std::sort (delays.begin(), delays.end());
     std::printf ("[PR-2] readout delay after a change: median %.1f ms, max %.1f ms\n", delays[2], delays.back());
     CHECK (delays[2] <= 100.0);
+}
+
+TEST_CASE ("Analyzer thread stops promptly while audio arrives faster than real time", "[plugin][ARC-4]")
+{
+    JuceEnvironment env;
+    plugin::AnalyzerService service;
+    service.prepare (48000.0);
+    AnalyzerSettings s;
+    s.resolution = AnalyzerResolution::Max; // the heaviest analysis, with resonance hints
+    service.setSettings (s);
+
+    // An offline render or a validator: the producer never waits.
+    std::atomic<bool> producing { true };
+    std::thread producer ([&] {
+        const auto noise = test::pinkNoise (1 << 16, 3);
+        std::size_t offset = 0;
+        while (producing)
+        {
+            service.pushPre (noise.data() + offset, 1024);
+            service.pushPost (noise.data() + offset, 1024);
+            offset = (offset + 1024) % (noise.size() - 1024);
+        }
+    });
+
+    double worst = 0.0;
+    for (int round = 0; round < 5; ++round)
+    {
+        service.addClient();
+        std::this_thread::sleep_for (std::chrono::milliseconds (150));
+        const auto start = std::chrono::steady_clock::now();
+        service.removeClient(); // stopThread: must not time out (JUCE would kill the thread)
+        worst = std::max (worst, std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - start).count());
+    }
+    producing = false;
+    producer.join();
+    std::printf ("[ARC-4] analyzer stop with a flooding producer: worst %.1f ms\n", worst);
+    CHECK (worst < 1000.0);
 }

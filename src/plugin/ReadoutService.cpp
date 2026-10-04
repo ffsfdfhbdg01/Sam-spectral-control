@@ -24,6 +24,8 @@ ReadoutService::ReadoutService (SettingsSource settingsSource)
     : juce::Thread ("Sam Spectral Control readouts"),
       source (std::move (settingsSource))
 {
+    // A measurement may follow a long impulse response: it must yield to a stop request.
+    computer.setAbortCheck ([this] { return threadShouldExit(); });
 }
 
 ReadoutService::~ReadoutService()
@@ -86,6 +88,8 @@ void ReadoutService::run()
             if (! changed (b, bands[i], gains[i]))
                 continue;
             current.bands[i] = bands[i].used ? computer.compute (bands[i], params, gains[i]) : analysis::BandReadout {};
+            if (threadShouldExit())
+                return; // interrupted: nothing half-measured is published
             lastBands[i] = bands[i];
             lastGains[i] = gains[i];
             updated = true;

@@ -128,22 +128,28 @@ void AnalyzerService::run()
             activeSettings = next;
         }
 
+        // At most one FIFO's worth per pass, so that a producer faster than real time (offline
+        // render, validators) cannot keep the thread from seeing a stop request; the FIFOs drop
+        // their oldest data when they overflow.
         const auto& s = activeSettings;
         int preFrames = 0, postFrames = 0;
         bool hintsUpdated = false;
-        for (;;)
+        const auto limit = preFifo.capacity();
+        for (std::size_t done = 0; done < limit && ! threadShouldExit();)
         {
             const auto n = preFifo.read (scratch.data(), scratch.size());
             if (n == 0)
                 break;
+            done += n;
             if (s.showsPre())
                 preFrames += preAnalyzer.push (scratch.data(), static_cast<int> (n));
         }
-        for (;;)
+        for (std::size_t done = 0; done < limit && ! threadShouldExit();)
         {
             const auto n = postFifo.read (scratch.data(), scratch.size());
             if (n == 0)
                 break;
+            done += n;
             if (s.showsPost())
                 postFrames += postAnalyzer.push (scratch.data(), static_cast<int> (n));
             if (s.resonanceHints)

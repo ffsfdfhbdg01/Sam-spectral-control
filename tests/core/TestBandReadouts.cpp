@@ -151,3 +151,18 @@ TEST_CASE ("Ring times of synthetic responses", "[readouts][PR-3]")
     CHECK (both.pre == Approx (both.post).epsilon (0.02));
     CHECK (both.post == Approx (100.0 * std::log (1000.0)).epsilon (0.03));
 }
+
+TEST_CASE ("A readout measurement stops promptly when asked to (PR-2)", "[readouts][PR-2]")
+{
+    analysis::BandReadouts readouts;
+    readouts.prepare (kFs);
+    int polls = 0;
+    readouts.setAbortCheck ([&polls] { return ++polls > 3; });
+    // 20 Hz, Q 40: a response of several seconds, interrupted after a few blocks.
+    const auto r = readouts.compute (bandOf (Shape::Bell, 20.0, 12.0, 40.0), paramsFor (PhaseMode::NaturalPhase, Quality::Max), 0.0);
+    CHECK_FALSE (r.valid);
+    CHECK (polls <= 6);
+
+    readouts.setAbortCheck ({});
+    CHECK (readouts.compute (bandOf (Shape::Bell, 1000.0, 6.0, 1.0), paramsFor (PhaseMode::MinimumPhase), 0.0).valid);
+}

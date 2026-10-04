@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -43,6 +44,10 @@ class BandReadouts
 public:
     void prepare (double sampleRate);
 
+    /** Polled between blocks of a measurement: true stops it (compute() then returns an invalid
+        readout), so a background thread can be stopped promptly. */
+    void setAbortCheck (std::function<bool()> check) { abortCheck = std::move (check); }
+
     /** dynamicGainDb: the band's current gain change (Dynamic bands). */
     BandReadout compute (const engine::BandSettings& band, const engine::GlobalParams& params, double dynamicGainDb);
 
@@ -61,7 +66,10 @@ public:
 private:
     void runImpulse (const engine::BandSettings& band, const engine::GlobalParams& params);
 
+    bool aborted() const { return abortCheck && abortCheck(); }
+
     double fs = 48000.0;
+    std::function<bool()> abortCheck;
     std::unique_ptr<engine::Engine> engine;
     std::vector<double> response;
     RealFft fft;

@@ -28,7 +28,10 @@ std::vector<float> noiseWith (double seconds, const std::vector<test::Resonance>
         x[i] = 0.5 * noise[i % noise.size()];
     for (const auto& r : resonances)
         test::applyPeaking (x, kFs, r);
-    return { x.begin(), x.end() };
+    std::vector<float> out (length);
+    for (std::size_t i = 0; i < length; ++i)
+        out[i] = static_cast<float> (x[i]);
+    return out;
 }
 } // namespace
 

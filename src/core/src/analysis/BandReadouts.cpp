@@ -127,6 +127,8 @@ void BandReadouts::runImpulse (const engine::BandSettings& band, const engine::G
     double* channel[] = { block.data() };
     for (int done = 0; done < static_cast<int> (kPreRollSeconds * fs); done += kBlock)
     {
+        if (aborted())
+            return;
         std::fill (block.begin(), block.end(), 0.0);
         engine->process (channel, 1, kBlock, p, bands);
     }
@@ -140,6 +142,8 @@ void BandReadouts::runImpulse (const engine::BandSettings& band, const engine::G
     bool first = true;
     while (response.size() < maxLength)
     {
+        if (aborted())
+            return;
         std::fill (block.begin(), block.end(), 0.0);
         if (first)
             block[0] = kImpulse;
@@ -163,6 +167,8 @@ BandReadouts::Measurement BandReadouts::measure (const engine::BandSettings& ban
 {
     runImpulse (band, params);
     Measurement m;
+    if (aborted())
+        return m;
 
     // Ringing.
     const auto rings = ringTimes (response, 60.0, static_cast<std::size_t> (latency));
@@ -269,6 +275,8 @@ BandReadout BandReadouts::compute (const engine::BandSettings& band, const engin
     if (dynamic)
         current.shape.gainDb += dynamicGainDb;
     const auto now = measure (current, params);
+    if (aborted())
+        return {};
     r.meanPhaseDeg = now.meanPhaseDeg;
     r.groupDelayMs = now.groupDelayMs;
     r.preRingMs = now.preRingMs;
@@ -282,6 +290,8 @@ BandReadout BandReadouts::compute (const engine::BandSettings& band, const engin
         auto full = band;
         full.shape.gainDb += d.mix * computer (d.direction == Direction::Above ? 300.0 : -300.0);
         const auto worst = measure (full, params);
+        if (aborted())
+            return {};
         r.rangePreRingMs = worst.preRingMs;
         r.rangePostRingMs = worst.postRingMs;
     }
