@@ -42,3 +42,13 @@
 | GLB-3 | 100 operacji Undo/Redo przywraca dokładnie stan wyjściowy | test jednostkowy |
 | GLB-4 | Automatyzacja wszystkich parametrów (rampy, skoki) bez trzasków: residuum względem referencji z interpolacją per próbka ≤ −60 dB | test jednostkowy |
 | GLB-5 | Odczyt CPU i latencji zgodny z pomiarem (±1 punkt procentowy; ±0 próbek) | test |
+
+## e) Realizacja presetów i A/B w M8 (GLB-3)
+
+- **Zawartość presetu**: wszystkie parametry poza Bypass (po stabilnym ID, w jednostkach naturalnych) i wybór głośników pasm. Ustawienia analizatora, rozmiar okna, slot A/B i Bypass zostają bez zmian. Preset ma atrybut `version` i przechodzi tę samą migrację co zapisany stan (`migrateState`); brakujące parametry przyjmują wartości domyślne, nieznane ID są pomijane, preset z nowszej wersji jest odrzucany.
+- **Wczytanie** to jeden krok Undo (`loadPreset`); każda zmiana parametru jako pełny gest hosta (automatyzacja w trybie touch/latch zapisuje zmianę presetu). Nazwa ostatnio wczytanego lub zapisanego presetu jest częścią stanu (`presetName`).
+- **Presety fabryczne** (16, kompilowane w kod z opisów pasm — bez plików zasobów): Default; Vocal (Clarity, De-ess dynamiczny, Resonance Tamer spektralny); Drums (Kick, Snare); Instruments (Acoustic Guitar — dynamiczne tłumienie dudnienia); Mix (łagodny tilt w Natural Phase, Side Air / Mono Bass na składowej Side); Mastering (Analog N Warmth, Analog P Low-End Trick — podbicie i tłumienie półki na tej samej częstotliwości, Resonance Control spektralny); Post (Dialogue — tylko głośnik centralny); Repair (usuwanie przydźwięku 50/60 Hz, pięć wycięć).
+- **Presety użytkownika**: pliki XML `*.sscpreset` w `Dokumenty/Sam Spectral Control/Presets`; menu: lista, Save As…, Delete, Show Preset Folder.
+- **A/B**: slot pokazany i preset drugiego slotu w dziecku `Compare` stanu (zapisywane z sesją); pierwsze przełączenie zaczyna drugi slot jako kopię; przełączenie i kopiowanie (A→B / B→A) to kroki Undo (przełączenie jest swoją odwrotnością).
+- **Testy** `[GLB-3]`: pełny zapis/odczyt presetu (Bypass nietknięty, głośniki z kopią dla wątku audio), wartości domyślne dla brakujących parametrów, odrzucenie nowszej wersji i drzew nie-presetów; wczytanie = jeden krok Undo/Redo; każdy preset fabryczny wczytuje się i przetwarza audio (wyjście skończone), Default przywraca wszystkie wartości domyślne; biblioteka użytkownika (zapis, lista, odczyt, odrzucenie uszkodzonego pliku); A/B (kopia przy pierwszym przełączeniu, Undo przełączenia, zapis w sesji, kopiowanie z Undo).
+- Programy VST3 (`getNumPrograms`) pozostają jednym programem: host ma własne presety (`.vstpreset` zapisuje cały stan wtyczki), a przeglądarka presetów jest w interfejsie wtyczki.

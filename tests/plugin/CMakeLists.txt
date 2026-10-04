@@ -6,6 +6,7 @@ target_sources(ssc_plugin_tests PRIVATE
     TestSpeakers.cpp
     TestAnalyzer.cpp
     TestMeters.cpp
+    TestPresets.cpp
     ${SSC_PLUGIN_SOURCES})
 
 target_include_directories(ssc_plugin_tests PRIVATE

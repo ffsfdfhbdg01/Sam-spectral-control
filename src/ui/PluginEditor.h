@@ -7,6 +7,7 @@
 #include "ui/BandPanel.h"
 #include "ui/ControlBar.h"
 #include "ui/EqDisplay.h"
+#include "ui/PresetBar.h"
 #include "ui/Theme.h"
 
 namespace ssc::plugin
@@ -53,6 +54,7 @@ private:
     plugin::AnalyzerSettings analyzerSettings;
     juce::TooltipWindow tooltips { this, 600 };
     BandModel bandModel;
+    PresetBar presetBar;
     EqDisplay display;
     BandPanel bandPanel;
     ControlBar controlBar;

@@ -18,10 +18,12 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
     : AudioProcessorEditor (p),
       sscProcessor (p),
       bandModel (p.getValueTreeState(), p.getUndoManager()),
+      presetBar (p.getValueTreeState(), p.getUndoManager()),
       display (p.getAnalyzer(), bandModel),
       bandPanel (bandModel),
       controlBar (p.getValueTreeState())
 {
+    addAndMakeVisible (presetBar);
     addAndMakeVisible (display);
     addChildComponent (bandPanel);
     addAndMakeVisible (controlBar);
@@ -245,7 +247,12 @@ void SscEditor::resized()
     header.removeFromRight (8);
     analyzerButton.setBounds (header.removeFromRight (84).withSizeKeepingCentre (84, 24));
     header.removeFromRight (12);
-    status.setBounds (header.removeFromRight (juce::jmax (0, juce::jmin (440, header.getWidth() - 230))));
+    // Name and version on the left (painted), then presets and A/B; the status takes the rest.
+    header.removeFromLeft (240);
+    presetBar.setBounds (header.removeFromLeft (juce::jmin (300, header.getWidth() / 2))
+                             .withSizeKeepingCentre (juce::jmin (300, header.getWidth() / 2), 24));
+    header.removeFromLeft (12);
+    status.setBounds (header);
     controlBar.setBounds (area.removeFromBottom (kControlBarHeight));
     display.setBounds (area);
     layoutBandPanel();
