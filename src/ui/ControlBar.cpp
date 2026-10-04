@@ -43,6 +43,25 @@ void PowerButton::mouseUp (const juce::MouseEvent& e)
         attachment.setValueAsCompleteGesture (bypassed ? 0.0f : 1.0f);
 }
 
+MenuArrowButton::MenuArrowButton()
+    : juce::Button ("Menu")
+{
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+}
+
+void MenuArrowButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
+{
+    const auto bounds = getLocalBounds().toFloat().reduced (1.0f);
+    const auto base = findColour (juce::TextButton::buttonColourId);
+    g.setColour (down ? base.brighter (0.2f) : (highlighted ? base.brighter (0.1f) : base));
+    g.fillRoundedRectangle (bounds, 4.0f);
+    const auto c = bounds.getCentre();
+    juce::Path arrow;
+    arrow.addTriangle (c.x - 4.0f, c.y - 2.0f, c.x + 4.0f, c.y - 2.0f, c.x, c.y + 3.0f);
+    g.setColour (colours::text);
+    g.fillPath (arrow);
+}
+
 ControlBar::ControlBar (juce::AudioProcessorValueTreeState& s)
     : state (s),
       power (*s.getParameter (plugin::id::bypass))
@@ -56,8 +75,9 @@ ControlBar::ControlBar (juce::AudioProcessorValueTreeState& s)
     setupCombo (renderOversampling, "Offline", plugin::id::renderOversampling);
     renderOversampling.box.setTooltip ("Oversampling of an offline render (export, bounce). Same: as in real time.\n"
                                        "Real time and render keep the same latency: the shorter one is padded.");
-    setupCombo (autoGainWeighting, "Weighting", plugin::id::autoGainWeighting);
-    setupCombo (autoGainSpeed, "Speed", plugin::id::autoGainSpeed);
+    autoGainMenu.setTooltip ("Auto Gain: loudness weighting and speed");
+    autoGainMenu.onClick = [this] { showAutoGainMenu(); };
+    addAndMakeVisible (autoGainMenu);
 
     addAndMakeVisible (autoGainButton);
     autoGainAttachment =
@@ -65,6 +85,13 @@ ControlBar::ControlBar (juce::AudioProcessorValueTreeState& s)
 
     setupKnob (mix, "Mix", plugin::id::mix);
     setupKnob (output, "Output", plugin::id::outputGain);
+
+    deltaButton.setClickingTogglesState (true);
+    deltaButton.setColour (juce::TextButton::buttonOnColourId, colours::accent.withAlpha (0.85f));
+    deltaButton.setColour (juce::TextButton::textColourOnId, colours::background);
+    deltaButton.setTooltip ("Delta: hear only what the plug-in changes (input minus output). Monitoring only, not saved in presets.");
+    addAndMakeVisible (deltaButton);
+    deltaAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, plugin::id::delta, deltaButton);
 
     addAndMakeVisible (meters);
     meters.onOversamplingHint = [this] (int factor, float aliasingDb) { setOversamplingHint (factor, aliasingDb); };
@@ -104,9 +131,27 @@ void ControlBar::setupKnob (LabelledKnob& k, const juce::String& title, const ju
 void ControlBar::updateEnablement()
 {
     analogModel.box.setEnabled (phaseMode.box.getSelectedItemIndex() == static_cast<int> (PhaseMode::AnalogFeel));
-    const bool autoGainOn = autoGainButton.getToggleState();
-    autoGainWeighting.box.setEnabled (autoGainOn);
-    autoGainSpeed.box.setEnabled (autoGainOn);
+    autoGainMenu.setAlpha (autoGainButton.getToggleState() ? 1.0f : 0.6f);
+}
+
+void ControlBar::showAutoGainMenu()
+{
+    juce::PopupMenu menu;
+    auto addChoices = [this, &menu] (const juce::String& title, const char* paramId) {
+        auto* param = dynamic_cast<juce::AudioParameterChoice*> (state.getParameter (paramId));
+        if (param == nullptr)
+            return;
+        menu.addSectionHeader (title);
+        for (int i = 0; i < param->choices.size(); ++i)
+            menu.addItem (param->choices[i], true, param->getIndex() == i, [param, i] {
+                param->beginChangeGesture();
+                param->setValueNotifyingHost (param->convertTo0to1 (static_cast<float> (i)));
+                param->endChangeGesture();
+            });
+    };
+    addChoices ("Weighting", plugin::id::autoGainWeighting);
+    addChoices ("Speed", plugin::id::autoGainSpeed);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (autoGainMenu));
 }
 
 void ControlBar::updateModelTooltip()
@@ -169,11 +214,13 @@ void ControlBar::resized()
     placeKnob (output);
     area.removeFromRight (gap);
 
-    // The meters (MTR-4): small, between the settings and Mix/Output.
+    // Delta next to Mix and Output; the meters (MTR-4): small, between the settings and Delta.
+    deltaButton.setBounds (area.removeFromRight (54).withTrimmedTop (14).withHeight (24));
+    area.removeFromRight (gap);
     meters.setBounds (area.removeFromRight (juce::jmin (150, area.getWidth() / 5)));
     area.removeFromRight (gap);
 
-    constexpr int widths[] = { 130, 96, 84, 96, 72, 92, 90, 96 };
+    constexpr int widths[] = { 130, 96, 84, 96, 76, 112 };
     int total = 0;
     for (int w : widths)
         total += w + gap;
@@ -196,10 +243,11 @@ void ControlBar::resized()
     {
         auto column = area.removeFromLeft (nextWidth());
         column.removeFromTop (14);
-        autoGainButton.setBounds (column.removeFromTop (24));
+        auto row = column.removeFromTop (24);
+        autoGainMenu.setBounds (row.removeFromRight (22));
+        row.removeFromRight (2);
+        autoGainButton.setBounds (row);
         area.removeFromLeft (gap);
     }
-    placeCombo (autoGainWeighting);
-    placeCombo (autoGainSpeed);
 }
 } // namespace ssc::ui

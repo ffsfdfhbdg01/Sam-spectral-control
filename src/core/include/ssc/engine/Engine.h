@@ -37,6 +37,7 @@ struct GlobalParams
     double outputGainDb = 0.0;
     double mix = 1.0; ///< 0 … 1
     bool bypass = false;
+    bool delta = false; ///< hear what the plugin changes: (dry − mixed output) × output gain (GLB-2)
     Quality quality = Quality::Normal;
     int soloBand = -1;           ///< band auditioned on its own (−1 = none); see auditionShapeFor()
     double maxLookaheadMs = 0.0; ///< delay of the main path; Dynamic bands look ahead up to this (DYN-8)
@@ -100,8 +101,8 @@ constexpr int controlBlockFor (Quality q) noexcept
     input → Max Lookahead delay → [upsample] → bands (IIR, dynamics, Character) → [downsample]
           → [Natural Phase corrector] → spectral engine → Auto Gain → Solo
     out = (mix * processed + (1 - mix) * dry) * outputGain, crossfaded with the latency-aligned
-    dry signal when bypassed. Channels that no band processes bypass oversampling exactly (CH-6).
-    Latency = lookahead + oversampling + corrector + spectral frame.
+    dry signal when bypassed; Delta replaces it with (dry − mix * processed − (1 − mix) * dry) * outputGain. Channels that no band processes
+   bypass oversampling exactly (CH-6). Latency = lookahead + oversampling + corrector + spectral frame.
 
     prepare() allocates for every oversampling factor, phase mode and Quality, so process()
     stays real-time safe when they change.
@@ -212,7 +213,7 @@ private:
     int controlBlock = 16;
     MultiChannelDelay<double> dryDelay;
 
-    LinearSmoother<double> outputGain, mix, bypass;
+    LinearSmoother<double> outputGain, mix, bypass, delta;
     std::atomic<std::uint32_t> nonFiniteEvents { 0 };
 
     // Spectral engine: runs while at least one band is in Spectral mode (ADR-0011).

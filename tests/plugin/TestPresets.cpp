@@ -49,13 +49,13 @@ void configure (plugin::SscAudioProcessor& p)
     plugin::writeSpeakers (p.getValueTreeState().state, 0, centre, nullptr);
 }
 
-/** Every parameter (but Bypass) and the speakers, in plain values. */
+/** Every parameter (but Bypass and Delta) and the speakers, in plain values. */
 std::map<juce::String, float> snapshot (plugin::SscAudioProcessor& p)
 {
     std::map<juce::String, float> values;
     for (auto* param : p.getParameters())
         if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (param);
-            ranged != nullptr && ranged->getParameterID() != plugin::id::bypass)
+            ranged != nullptr && ranged->getParameterID() != plugin::id::bypass && ranged->getParameterID() != plugin::id::delta)
             values[ranged->getParameterID()] = ranged->convertFrom0to1 (ranged->getValue());
     return values;
 }
@@ -71,20 +71,23 @@ bool sameValues (const std::map<juce::String, float>& a, const std::map<juce::St
 }
 } // namespace
 
-TEST_CASE ("A preset holds every parameter but Bypass and the speakers (GLB-3)", "[plugin][GLB-3]")
+TEST_CASE ("A preset holds every parameter but Bypass and Delta, and the speakers (GLB-3)", "[plugin][GLB-3]")
 {
     JuceEnvironment env;
     plugin::SscAudioProcessor a;
     configure (a);
     setParam (a, plugin::id::bypass, 1.0f);
+    setParam (a, plugin::id::delta, 1.0f);
     const auto preset = plugin::capturePreset (a.getValueTreeState(), "Test", "Tests");
     CHECK (plugin::presetName (preset) == "Test");
     CHECK (preset.getChildWithProperty ("id", plugin::id::bypass).isValid() == false);
+    CHECK (preset.getChildWithProperty ("id", plugin::id::delta).isValid() == false);
 
     plugin::SscAudioProcessor b;
     REQUIRE (plugin::applyPreset (b.getValueTreeState(), preset));
     CHECK (sameValues (snapshot (a), snapshot (b)));
-    CHECK (getParam (b, plugin::id::bypass) == 0.0f); // Bypass stays as it was
+    CHECK (getParam (b, plugin::id::bypass) == 0.0f); // Bypass and Delta stay as they were
+    CHECK (getParam (b, plugin::id::delta) == 0.0f);
     CHECK (plugin::readSpeakers (b.getValueTreeState().state, 0).roles == engine::speakerBit (engine::SpeakerRole::Centre));
     CHECK (b.getSpeakers (0).roles == engine::speakerBit (engine::SpeakerRole::Centre)); // the audio thread's copy follows
 

@@ -36,11 +36,18 @@ namespace
         return true;
     }
 
+    /** Monitoring states stay as they are when a preset loads or A/B switches. */
+    bool isMonitoring (const juce::String& paramId)
+    {
+        return paramId == id::bypass || paramId == id::delta;
+    }
+
     template <typename Fn>
     void forEachSoundParameter (juce::AudioProcessorValueTreeState& state, Fn&& fn)
     {
         for (auto* p : state.processor.getParameters())
-            if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p); ranged != nullptr && ranged->getParameterID() != id::bypass)
+            if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p);
+                ranged != nullptr && ! isMonitoring (ranged->getParameterID()))
                 fn (*ranged);
     }
 

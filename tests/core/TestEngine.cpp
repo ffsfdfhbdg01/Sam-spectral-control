@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cmath>
+#include <utility>
 #include <vector>
 
 #include "TestSignals.h"
@@ -120,4 +121,55 @@ TEST_CASE ("Bypass crossfades without discontinuities and keeps latency (GLB-1)"
     const double maxSineStep = 0.8 * ssc::kTwoPi * 1000.0 / 48000.0;
     for (std::size_t i = 1; i < buffer.left.size(); ++i)
         REQUIRE (std::abs (buffer.left[i] - buffer.left[i - 1]) <= maxSineStep * 1.05);
+}
+
+TEST_CASE ("Delta: the input minus the output, crossfaded; dry + delta reconstructs the output (GLB-2)", "[engine][GLB-2]")
+{
+    using namespace ssc;
+    using namespace ssc::engine;
+    BandSettingsArray bands {};
+    bands[0].used = bands[0].active = true;
+    bands[0].shape = { Shape::Bell, 1200.0, -6.0, 1.0, Slope::Db12 };
+    bands[1].used = bands[1].active = true;
+    bands[1].shape = { Shape::HighShelf, 6000.0, 4.0, 0.7, Slope::Db12 };
+    GlobalParams params;
+    params.phaseMode = PhaseMode::NaturalPhase;
+    params.mix = 0.8;
+    params.outputGainDb = -2.0;
+
+    const auto noise = ssc::test::pinkNoise (1 << 14);
+    auto render = [&] (bool delta) {
+        PreparedEngine engine (512);
+        auto p = params;
+        p.delta = delta;
+        std::vector<double> left (noise.begin(), noise.end()), right (left.size(), 0.0);
+        for (std::size_t offset = 0; offset < left.size(); offset += 512)
+        {
+            double* block[] = { left.data() + offset, right.data() + offset };
+            engine.process (block, 2, 512, p, bands);
+        }
+        return std::make_pair (left, engine.getLatencySamples());
+    };
+    const auto [output, latency] = render (false);
+    const auto [delta, deltaLatency] = render (true);
+    REQUIRE (latency == deltaLatency);
+    REQUIRE (latency > 0);
+
+    // After the ramps (20 ms): delta = (dry − output / g) · g, so dry · g − delta = output.
+    const double g = std::pow (10.0, -2.0 / 20.0);
+    double worst = 0.0, energy = 0.0;
+    for (std::size_t i = 2048; i < output.size(); ++i)
+    {
+        const double dry = noise[i - static_cast<std::size_t> (latency)];
+        worst = std::max (worst, std::abs (dry * g - delta[i] - output[i]));
+        energy += delta[i] * delta[i];
+    }
+    CHECK (worst < 1e-12);
+    CHECK (energy > 1.0); // the bands change the signal: the delta is not silence
+
+    // Without a change (no bands), the delta is silence.
+    bands = {};
+    const auto [silent, unused] = render (true);
+    for (std::size_t i = 2048; i < silent.size(); ++i)
+        REQUIRE (std::abs (silent[i]) < 1e-12);
 }

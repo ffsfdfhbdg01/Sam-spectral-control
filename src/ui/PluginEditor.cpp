@@ -82,7 +82,7 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
     setLookAndFeel (&lookAndFeel);
 
     setResizable (true, true);
-    setResizeLimits (760, 460, 2600, 1600);
+    setResizeLimits (860, 480, 2600, 1600);
     setSize (width, height);
 
     sscProcessor.getAnalyzer().addClient();
@@ -234,9 +234,12 @@ void SscEditor::paint (juce::Graphics& g)
     g.setFont (uiFont (16.0f, true));
     g.drawText (plugin::kPluginName, header, juce::Justification::centredLeft);
 
-    g.setColour (colours::textDim);
-    g.setFont (uiFont (12.0f));
-    g.drawText ("v" SSC_VERSION_STRING, header.withTrimmedLeft (190), juce::Justification::centredLeft);
+    if (getWidth() >= kWideWidth)
+    {
+        g.setColour (colours::textDim);
+        g.setFont (uiFont (12.0f));
+        g.drawText ("v" SSC_VERSION_STRING, header.withTrimmedLeft (190), juce::Justification::centredLeft);
+    }
 }
 
 void SscEditor::resized()
@@ -247,10 +250,11 @@ void SscEditor::resized()
     header.removeFromRight (8);
     analyzerButton.setBounds (header.removeFromRight (84).withSizeKeepingCentre (84, 24));
     header.removeFromRight (12);
-    // Name and version on the left (painted), then presets and A/B; the status takes the rest.
-    header.removeFromLeft (240);
-    presetBar.setBounds (header.removeFromLeft (juce::jmin (300, header.getWidth() / 2))
-                             .withSizeKeepingCentre (juce::jmin (300, header.getWidth() / 2), 24));
+    // Name and version on the left (painted; the version only in wide windows), then presets, A/B
+    // and Undo/Redo, which come before the status text.
+    header.removeFromLeft (getWidth() >= kWideWidth ? 240 : 180);
+    const int presetWidth = juce::jmin (380, juce::jmax (header.getWidth() / 2, juce::jmin (270, header.getWidth() - 120)));
+    presetBar.setBounds (header.removeFromLeft (presetWidth).withSizeKeepingCentre (presetWidth, 24));
     header.removeFromLeft (12);
     status.setBounds (header);
     controlBar.setBounds (area.removeFromBottom (kControlBarHeight));

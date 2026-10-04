@@ -196,6 +196,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     }
     // Offline render (OS-4): "Same" or its own oversampling; latency stays that of the larger one.
     global->addChild (choiceParam (id::renderOversampling, "Offline Oversampling", labels::renderOversampling(), 0, false));
+    // Delta (GLB-2): monitoring only; not part of presets or A/B.
+    global->addChild (boolParam (id::delta, "Delta", false));
     layout.add (std::move (global));
 
     for (int band = 0; band < kNumBands; ++band)
@@ -364,6 +366,7 @@ void ParameterPointers::attach (juce::AudioProcessorValueTreeState& state)
     autoGainSpeed = get (id::autoGainSpeed);
     maxLookahead = get (id::maxLookahead);
     renderOversampling = get (id::renderOversampling);
+    delta = get (id::delta);
 
     for (int band = 0; band < kNumBands; ++band)
         for (int p = 0; p < kNumBandParams; ++p)

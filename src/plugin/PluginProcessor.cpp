@@ -139,6 +139,7 @@ engine::GlobalParams SscAudioProcessor::readGlobalParams (bool forceBypass) cons
     p.outputGainDb = params.outputGain->load (std::memory_order_relaxed);
     p.mix = params.mix->load (std::memory_order_relaxed) * 0.01;
     p.bypass = forceBypass || isOn (params.bypass);
+    p.delta = isOn (params.delta);
     p.quality = choice (params.quality, Quality::Max);
     p.soloBand = soloBand.load (std::memory_order_relaxed);
     p.maxLookaheadMs = params.maxLookahead->load (std::memory_order_relaxed);

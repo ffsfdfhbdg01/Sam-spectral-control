@@ -9,9 +9,9 @@ namespace ssc::plugin
 /**
     Presets and A/B (research §14c, GLB-3).
 
-    A preset holds the sound: every parameter except Bypass (by its stable ID, in plain units) and
-    the loudspeaker selections. Analyzer and window settings, the A/B slot and Bypass stay as they
-    are. Presets carry the state version and go through the same migration as saved sessions.
+    A preset holds the sound: every parameter except Bypass and Delta (by its stable ID, in plain
+    units) and the loudspeaker selections. Analyzer and window settings, the A/B slot, Bypass and
+    Delta stay as they are. Presets carry the state version and go through the same migration as saved sessions.
     Parameters missing from a preset take their defaults; unknown IDs are ignored.
 */
 inline const juce::Identifier kPresetType { "SamSpectralControlPreset" };
@@ -21,7 +21,7 @@ inline const juce::Identifier kCompareType { "Compare" };   ///< A/B: the slot s
 /** The current sound settings as a preset tree. */
 juce::ValueTree capturePreset (juce::AudioProcessorValueTreeState& state, const juce::String& name = {}, const juce::String& category = {});
 
-/** Sets every parameter (but Bypass) and the speakers from a preset, each change as a host gesture.
+/** Sets every parameter (but Bypass and Delta) and the speakers from a preset, each change as a host gesture.
     Returns false (and changes nothing) for a tree that is not a preset or comes from a newer version. */
 bool applyPreset (juce::AudioProcessorValueTreeState& state, const juce::ValueTree& preset);
 

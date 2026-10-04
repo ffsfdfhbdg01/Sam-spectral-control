@@ -81,7 +81,7 @@ TEST_CASE ("Parameter layout has stable IDs and the expected size", "[plugin][PL
     SscAudioProcessor p;
     auto& state = p.getValueTreeState();
 
-    REQUIRE (p.getParameters().size() == 12 + ssc::kNumBands * ssc::plugin::kNumBandParams);
+    REQUIRE (p.getParameters().size() == 13 + ssc::kNumBands * ssc::plugin::kNumBandParams);
     REQUIRE (ssc::plugin::bandParamId (0, ssc::plugin::BandParam::Frequency) == "b01_freq");
     REQUIRE (ssc::plugin::bandParamId (23, ssc::plugin::BandParam::Link) == "b24_link");
     REQUIRE (state.getParameter ("b12_threshold") != nullptr);

@@ -112,6 +112,8 @@ void Engine::prepare (const EngineConfig& config)
     outputGain.prepare (cfg.sampleRate, kRampSeconds);
     mix.prepare (cfg.sampleRate, kRampSeconds);
     bypass.prepare (cfg.sampleRate, kRampSeconds);
+    delta.prepare (cfg.sampleRate, kRampSeconds);
+    delta.setCurrentAndTarget (0.0);
     outputGain.setCurrentAndTarget (1.0);
     mix.setCurrentAndTarget (1.0);
     bypass.setCurrentAndTarget (0.0);
@@ -507,6 +509,7 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
     outputGain.setTarget (dbToGain (params.outputGainDb));
     mix.setTarget (std::clamp (params.mix, 0.0, 1.0));
     bypass.setTarget (params.bypass ? 1.0 : 0.0);
+    delta.setTarget (params.delta ? 1.0 : 0.0);
 
     Sample* chunkPointers[kMaxChannels];
     for (int offset = 0; offset < numSamples; offset += chunkSize)
@@ -733,8 +736,8 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         nonFiniteEvents.fetch_add (1, std::memory_order_relaxed);
     }
 
-    const bool identity = ! outputGain.isSmoothing() && ! mix.isSmoothing() && ! bypass.isSmoothing() && outputGain.getCurrent() == 1.0
-        && mix.getCurrent() == 1.0 && bypass.getCurrent() == 0.0;
+    const bool identity = ! outputGain.isSmoothing() && ! mix.isSmoothing() && ! bypass.isSmoothing() && ! delta.isSmoothing()
+        && outputGain.getCurrent() == 1.0 && mix.getCurrent() == 1.0 && bypass.getCurrent() == 0.0 && delta.getCurrent() == 0.0;
     if (identity)
     {
         for (int ch = 0; ch < numChannels; ++ch)
@@ -757,6 +760,7 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         }
         outputGain.skip (numSamples);
         mix.skip (numSamples);
+        delta.skip (numSamples);
         return;
     }
 
@@ -765,13 +769,16 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         const double g = outputGain.next();
         const double m = mix.next();
         const double b = bypass.next();
+        const double dl = delta.next();
 
         for (int ch = 0; ch < numChannels; ++ch)
         {
             const auto c = static_cast<std::size_t> (ch);
             const double d = dry[c][i];
-            const double processed = (wet[c][i] * m + d * (1.0 - m)) * g;
-            channels[ch][i] = static_cast<Sample> (processed * (1.0 - b) + d * b);
+            const double mixed = wet[c][i] * m + d * (1.0 - m);
+            // Delta (GLB-2): what the plugin changes, crossfaded in and out.
+            const double heard = (mixed + ((d - mixed) - mixed) * dl) * g;
+            channels[ch][i] = static_cast<Sample> (heard * (1.0 - b) + d * b);
         }
     }
 }

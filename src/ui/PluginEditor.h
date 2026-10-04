@@ -33,6 +33,7 @@ public:
 
     static constexpr int kDefaultWidth = 1100;
     static constexpr int kDefaultHeight = 660;
+    static constexpr int kWideWidth = 1000; ///< from this width the header shows the version
 
 private:
     void timerCallback() override;

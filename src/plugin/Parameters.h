@@ -24,6 +24,7 @@ namespace id
     inline constexpr const char* autoGainSpeed = "auto_gain_speed";
     inline constexpr const char* maxLookahead = "max_lookahead";
     inline constexpr const char* renderOversampling = "render_oversampling";
+    inline constexpr const char* delta = "delta";
 } // namespace id
 
 enum class BandParam
@@ -111,6 +112,7 @@ struct ParameterPointers
     std::atomic<float>* autoGainSpeed = nullptr;
     std::atomic<float>* maxLookahead = nullptr;
     std::atomic<float>* renderOversampling = nullptr;
+    std::atomic<float>* delta = nullptr;
     std::array<std::array<std::atomic<float>*, kNumBandParams>, kNumBands> bands {};
 
     void attach (juce::AudioProcessorValueTreeState& state);

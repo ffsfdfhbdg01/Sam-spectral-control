@@ -6,6 +6,39 @@
 
 namespace ssc::ui
 {
+UndoArrowButton::UndoArrowButton (bool isRedo)
+    : juce::Button (isRedo ? "Redo" : "Undo"),
+      redo (isRedo)
+{
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+}
+
+void UndoArrowButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
+{
+    auto bounds = getLocalBounds().toFloat().reduced (1.0f);
+    const auto base = findColour (juce::TextButton::buttonColourId);
+    g.setColour (down ? base.brighter (0.2f) : (highlighted && isEnabled() ? base.brighter (0.1f) : base));
+    g.fillRoundedRectangle (bounds, 4.0f);
+
+    // A curved arrow: an arc over the top, the head at its left end (redo: mirrored).
+    const auto c = bounds.getCentre();
+    const float r = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.26f;
+    juce::Path arc;
+    arc.addCentredArc (c.x, c.y + r * 0.35f, r, r, 0.0f, -juce::MathConstants<float>::halfPi, juce::MathConstants<float>::halfPi, true);
+    juce::Path head;
+    const juce::Point<float> tip (c.x - r - r * 0.05f, c.y + r * 0.35f + r * 0.55f);
+    head.addTriangle (tip, { tip.x - r * 0.55f, tip.y - r * 0.75f }, { tip.x + r * 0.6f, tip.y - r * 0.6f });
+    if (redo)
+    {
+        const auto mirror = juce::AffineTransform::scale (-1.0f, 1.0f, c.x, c.y);
+        arc.applyTransform (mirror);
+        head.applyTransform (mirror);
+    }
+    g.setColour (isEnabled() ? colours::text : colours::textDim.withAlpha (0.45f));
+    g.strokePath (arc, juce::PathStrokeType (1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.fillPath (head);
+}
+
 PresetBar::PresetBar (juce::AudioProcessorValueTreeState& s, juce::UndoManager& undo)
     : state (s),
       undoManager (undo)
@@ -39,8 +72,25 @@ PresetBar::PresetBar (juce::AudioProcessorValueTreeState& s, juce::UndoManager& 
     };
     addAndMakeVisible (copy);
 
+    undoButton.onClick = [this] {
+        undoManager.undo();
+        refresh();
+    };
+    redoButton.onClick = [this] {
+        undoManager.redo();
+        refresh();
+    };
+    addAndMakeVisible (undoButton);
+    addAndMakeVisible (redoButton);
+    undoManager.addChangeListener (this);
+
     refresh();
     startTimerHz (4);
+}
+
+PresetBar::~PresetBar()
+{
+    undoManager.removeChangeListener (this);
 }
 
 void PresetBar::refresh()
@@ -53,11 +103,27 @@ void PresetBar::refresh()
     const auto arrow = juce::String::fromUTF8 ("\xe2\x86\x92");
     copy.setButtonText (slot == 0 ? "A" + arrow + "B" : "B" + arrow + "A");
     copy.setTooltip (slot == 0 ? "Copy A to B" : "Copy B to A");
+
+#if JUCE_MAC
+    const juce::String shortcut ("Cmd");
+#else
+    const juce::String shortcut ("Ctrl");
+#endif
+    undoButton.setEnabled (undoManager.canUndo());
+    redoButton.setEnabled (undoManager.canRedo());
+    undoButton.setTooltip (undoManager.canUndo() ? "Undo " + undoManager.getUndoDescription() + " (" + shortcut + "+Z)"
+                                                 : "Nothing to undo");
+    redoButton.setTooltip (undoManager.canRedo() ? "Redo " + undoManager.getRedoDescription() + " (" + shortcut + "+Shift+Z)"
+                                                 : "Nothing to redo");
 }
 
 void PresetBar::resized()
 {
     auto area = getLocalBounds();
+    redoButton.setBounds (area.removeFromRight (26));
+    area.removeFromRight (2);
+    undoButton.setBounds (area.removeFromRight (26));
+    area.removeFromRight (8);
     copy.setBounds (area.removeFromRight (40));
     area.removeFromRight (4);
     slotB.setBounds (area.removeFromRight (26));

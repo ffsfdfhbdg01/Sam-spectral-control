@@ -23,9 +23,17 @@ private:
     bool bypassed = false;
 };
 
+/** Small button with a downward arrow that opens a menu (the Auto Gain settings). */
+class MenuArrowButton final : public juce::Button
+{
+public:
+    MenuArrowButton();
+    void paintButton (juce::Graphics&, bool highlighted, bool down) override;
+};
+
 /**
-    Bottom bar with global settings: power, phase mode, analog model, quality, oversampling,
-    auto gain, the THD+N and aliasing meters, mix and output.
+    Bottom bar with global settings: power, phase mode, analog model, quality, oversampling (real
+    time and offline render), auto gain, the THD+N and aliasing meters, Delta, mix and output.
 */
 class ControlBar final : public juce::Component
 {
@@ -60,14 +68,18 @@ private:
     void setupKnob (LabelledKnob&, const juce::String& title, const juce::String& paramId);
     void updateEnablement();
     void updateModelTooltip();
+    void showAutoGainMenu();
 
     juce::AudioProcessorValueTreeState& state;
 
     PowerButton power;
-    LabelledCombo phaseMode, analogModel, quality, oversampling, renderOversampling, autoGainWeighting, autoGainSpeed;
+    LabelledCombo phaseMode, analogModel, quality, oversampling, renderOversampling;
     juce::ToggleButton autoGainButton { "Auto Gain" };
+    MenuArrowButton autoGainMenu; ///< weighting and speed of the global Auto Gain
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> autoGainAttachment;
     LabelledKnob mix, output;
+    juce::TextButton deltaButton { "Delta" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> deltaAttachment;
     MeterView meters;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ControlBar)
