@@ -64,8 +64,10 @@ ControlBar::ControlBar (juce::AudioProcessorValueTreeState& s)
     setupKnob (output, "Output", plugin::id::outputGain);
 
     phaseMode.box.onChange = [this] { updateEnablement(); };
+    analogModel.box.onChange = [this] { updateModelTooltip(); };
     autoGainButton.onStateChange = [this] { updateEnablement(); };
     updateEnablement();
+    updateModelTooltip();
 }
 
 void ControlBar::setupCombo (LabelledCombo& c, const juce::String& title, const juce::String& paramId)
@@ -99,6 +101,17 @@ void ControlBar::updateEnablement()
     const bool autoGainOn = autoGainButton.getToggleState();
     autoGainWeighting.box.setEnabled (autoGainOn);
     autoGainSpeed.box.setEnabled (autoGainOn);
+}
+
+void ControlBar::updateModelTooltip()
+{
+    // Descriptions without trademarks (ADR-0009).
+    static constexpr const char* descriptions[] = { "Analog N: Class-A transformer console EQ",
+                                                    "Analog P: Passive LC program EQ with tube make-up",
+                                                    "Analog S: 1980s console EQ with proportional Q" };
+    const int index = juce::jlimit (0, 2, analogModel.box.getSelectedItemIndex());
+    analogModel.box.setTooltip (juce::String (descriptions[index])
+                                + "\nBand Character: Clear = curves only, Warm = soft saturation, Sharp = hard saturation");
 }
 
 void ControlBar::paint (juce::Graphics& g)

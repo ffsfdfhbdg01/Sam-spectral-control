@@ -208,8 +208,8 @@ void BandProcessor::setSampleRate (double newSampleRate) noexcept
     fadeLength = std::max (1, static_cast<int> (std::lround (0.01 * sampleRate)));
     dynamicStep = dynamicStepFor (sampleRate);
     gainTable.setSampleRate (sampleRate);
-    for (const auto c : { Character::Clear, Character::Warm, Character::Sharp })
-        shapers[static_cast<std::size_t> (c)] = filters::makeShaper (c, sampleRate);
+    for (int k = 0; k < filters::kNumShaperKinds; ++k)
+        shapers[static_cast<std::size_t> (k)] = filters::makeShaper (static_cast<filters::ShaperKind> (k), sampleRate);
     reset();
 }
 
@@ -262,6 +262,7 @@ void BandProcessor::advanceSmoothing (const BandSettings& target, int blockSize)
     smoothed.shape = t.shape;
     smoothed.slope = t.slope;
     smoothed.character = t.character;
+    smoothed.analog = t.analog;
     smoothed.frequencyHz = std::exp (approach (std::log (smoothed.frequencyHz), std::log (t.frequencyHz), alpha, 1.0e-6));
     smoothed.gainDb = approach (smoothed.gainDb, t.gainDb, alpha, 1.0e-4);
     smoothed.q = std::exp (approach (std::log (smoothed.q), std::log (t.q), alpha, 1.0e-6));

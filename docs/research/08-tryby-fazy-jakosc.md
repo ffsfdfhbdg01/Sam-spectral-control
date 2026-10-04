@@ -90,7 +90,7 @@ Każdy model składa się z trzech warstw:
 - Baza korekcji per kanał, a M/S, gdy na parze jest pasmo Mid lub Side; obie realizowane jako FIR 2×2 na historiach kanałów (y_L = P∗x_L + Q∗x_R, P = (C_M + C_S)/2, Q = (C_M − C_S)/2), więc zmiana bazy to zwykły crossfade. Pasmo działające tylko na jednym kanale pary w bazie M/S nie jest korygowane (udokumentowane przybliżenie).
 - Odpowiedzi pasm są buforowane i przeliczane tylko po zmianie (pasma Dynamic: przy zmianie wzmocnienia ≥ 0,05 dB); korektor aktualizuje się na stałej siatce próbek (≈ 21 ms, 1024 próbki przy 48 kHz) i przechodzi na nowy filtr crossfadem 5 ms — wynik nie zależy od rozmiaru bloku hosta (NFR-3). Kanały bez pasm są dokładnym opóźnieniem D.
 - **Brickwall w Natural Phase**: liniowofazowy FIR tylko tam, gdzie jest bardziej stromy niż IIR 96 dB/oct — od fc ≥ 7·fs/(2D + 1) (≈ 1,3 kHz w Max, 5,2 kHz w Normal przy 48 kHz). Niżej pasmo pozostaje minimalnofazowym IIR 96 dB/oct (z korekcją jak inne pasma): FIR o długości 2D + 1 nie da stromego cięcia w basie bez dużo większej latencji.
-- **Analog Feel** używa korektora w High i Max (tabela wyżej); krzywe i nieliniowości modeli — M6.
+- **Analog Feel** używa korektora w High i Max (tabela wyżej); krzywe i nieliniowości modeli — M6 (niżej).
 
 **Zmierzone (PH-1, testy `[PH-1]`; 20 Hz – 0,9·Nyquist, 48 kHz)** — największy błąd względem prototypu analogowego na zestawie: bell 1 kHz +12 dB, bell 10 kHz −9 dB Q 2, bell 16 kHz +6 dB Q 3, high shelf 8 kHz +12 dB, low shelf 100 Hz, high cut 15 kHz, low cut 30 Hz 24 dB/oct, miks 5 pasm:
 
@@ -103,15 +103,52 @@ Każdy model składa się z trzech warstw:
 
 Dodatkowo: przez cały silnik (bell 12 kHz + półka, Normal, 1× i 2×) ≤ 0,1 dB i ≤ 5° (z oversamplingiem do krawędzi pasma przepustowego filtrów OS, 0,432·fs); baza M/S (półka na Mid) — błąd ≤ −40 dB względem odpowiedzi jednostkowej; brickwall 3 kHz (Max) symetryczny co do 1e-6, ≤ −60 dB oktawę niżej, płaski ±0,01 dB w paśmie; latencja = D; bez pasm — dokładne opóźnienie.
 
-**PH-2 — CPU i latencja** (`ssc_benchmark 3 modes`; stereo, 8 pasm Bell Static, 48 kHz, bufor 128; ten sam przebieg pomiarowy):
+**PH-2 — CPU i latencja** (`ssc_benchmark 3 modes`; stereo, 8 pasm Bell Static, 48 kHz, bufor 128; pomiar powtórzony w M6 z modelami Analog Feel, jedna sesja, minimum z 3 przebiegów):
 
 | Tryb fazy | Eco | Normal | High | Max |
 |---|---|---|---|---|
-| Minimum Phase | 0,74 % · 0 smp | 0,67 % · 0 smp | 0,67 % · 0 smp | 0,71 % · 0 smp |
-| Natural Phase | 0,80 % · 16 smp | 0,86 % · 32 smp | 1,15 % · 64 smp | 1,46 % · 128 smp |
-| Analog Feel (bez modeli — M6) | 0,70 % · 0 smp | 0,76 % · 0 smp | 1,03 % · 64 smp | 1,45 % · 128 smp |
+| Minimum Phase | 0,68 % · 0 smp | 0,68 % · 0 smp | 0,67 % · 0 smp | 0,75 % · 0 smp |
+| Natural Phase | 0,80 % · 16 smp | 0,91 % · 32 smp | 1,06 % · 64 smp | 1,52 % · 128 smp |
+| Analog Feel N, Clear (krzywe modelu) | 0,69 % · 0 smp | 0,68 % · 0 smp | 2,12 % · 125 smp | 4,44 % · 224 smp |
+| Analog Feel N, Warm (krzywe + nasycenie) | 0,99 % · 0 smp | 1,04 % · 0 smp | 2,82 % · 125 smp | 6,15 % · 224 smp |
 
-Błąd odpowiedzi maleje monotonicznie z Quality (tabela PH-1). W Minimum Phase Quality zmienia tylko okres aktualizacji współczynników (32/16/8/4 próbki) — koszt prawie stały.
+Błąd odpowiedzi maleje monotonicznie z Quality (tabela PH-1). W Minimum Phase Quality zmienia tylko okres aktualizacji współczynników (32/16/8/4 próbki) — koszt prawie stały. Analog Feel w High/Max: korektor fazy (D = 64/128) plus wewnętrzny oversampling 2×/4× z filtrami FIR (M6) — stąd latencja 125 i 224 próbek i koszt pasm × 2/× 4.
+
+### Realizacja w M6 i wyniki pomiarów (Analog Feel N / P / S)
+
+**Gdzie działa model** (`filters::analogCurve`, `filters::ShaperKind`, `engine::Engine`; ADR-0009 „Aktualizacja (M6)”):
+- Analog Feel to globalny tryb fazy z globalnym wyborem modelu (parametr *Analog Model*; w UI „Analog N / P / S” z opisami bez znaków towarowych w podpowiedzi). Silnik tworzy kopię ustawień pasm „tak jak słychać” (`BandShape::analog` = model). Ta sama kopia trafia do łańcucha IIR, korektora fazy, krzywych Auto Gain i krzywych w UI — rysunek, kompensacja głośności i dźwięk są zgodne.
+- **Warstwa 1 — krzywe**: reguły parametryczne nakładane na kształt pasma przed projektem dopasowanym; pasma pozostają w pełni parametryczne.
+  - **N**: Q bell łagodnie proporcjonalne (0,75·Q przy 0 dB → Q przy |G| ≥ 15 dB); bell powyżej 5 kHz „ściągany” ku 0 dB (do −25 % wzmocnienia przy 20 kHz — pojemności własne cewek); półki z Q ≥ 1, czyli mały „bump” w przeciwną stronę przy fc (półka +6 dB przy 100 Hz: szczyt +6,4 dB, −0,4 dB przy 200 Hz).
+  - **P**: boost półek jako rezonansowa półka LC (Q ≥ 1,4 w Low, ≥ 1,2 w High; półka +6 dB przy 100 Hz: +7,4 dB przy 64 Hz i −1,4 dB przy 156 Hz); tłumienie jako szersza półka bez rezonansu (Q 0,5 — krytycznie tłumiona, praktycznie jak kaskada półek RC 1. rzędu), w basie przy 0,7·fc (bez przerzutu; −3 dB w 0,7·fc przy −6 dB); bell z Q·0,8 (szerokie szczyty pasywne). Tłumienie ma ten sam rząd co boost, więc pasmo Dynamic zachowuje topologię przy przejściu przez 0 dB. Boost i cut w tej samej częstotliwości (dwa pasma) dają znany efekt EQP-1A: +6/−6 dB przy 100 Hz → +4,3 dB przy 71 Hz i dołek −2,5 dB przy 145 Hz.
+  - **S**: Q bell proporcjonalne do |gain| (styl serii G): 0,4·Q przy 0 dB → Q przy |G| ≥ 15 dB. Przełącznik bell/shelf „stylu E” to po prostu wybór kształtu pasma.
+- **Warstwa 2 — faza**: Eco/Normal — dopasowany IIR (faza minimalna, 0 latencji); High/Max — korektor z Natural Phase (D = 64/128 przy 48 kHz) do fazy prototypu analogowego krzywej modelu.
+- **Warstwa 3 — nieliniowości**: ta sama struktura co Character (research/09): do wyjścia dodawane są tylko produkty N(u) wkładu pasma, więc odpowiedź liniowa to dokładnie krzywa modelu, pasmo 0 dB nic nie dodaje, a kanały poza pasmami pozostają nietknięte (CH-2, CH-6). W Analog Feel Character wybiera wariant (CHR-4): Clear — tylko krzywe, Warm — wariant miękki, Sharp — twardy.
+  - **N**: wielomian z H2 (asymetria Class A) i H3; przed nieliniowością podbicie basu x = u + k·LP₁₂₀ Hz(u) (k = 1 / 1,5), więc nasycenie rośnie w basie jak w rdzeniu transformatora; produkty przez filtr DC i dolnoprzepustowy 18 kHz.
+  - **P**: dominująca H2 (trioda) i miękka kompresja (ujemny człon u³) przy wysokich poziomach; produkty przez filtr DC i dolnoprzepustowy 15 kHz (transformator wyjściowy).
+  - **S**: symetryczny wielomian z członem u⁵ — czysto przy poziomie nominalnym, nieparzyste harmoniczne (H3, H5) rosnące stromo w pobliżu „szyn” op-ampa.
+  - **Wewnętrzny oversampling**: w High co najmniej 2×, w Max co najmniej 4× (filtry FIR liniowofazowe, łącznie najwyżej 400 kHz; wyższe ustawienie globalne wygrywa). Pasma i kanały bez pasm omijają go bit-exact jak w M4.
+
+**Kalibracja (CHR-4, testy `[CHR-4]`)** — −18 dBFS = +4 dBu, 0 dBFS = +22 dBu; sinus 1 kHz w środku bella +6 dB, Q 1, 48 kHz, bez oversamplingu:
+
+| Model, Character | THD przy −18 dBFS | THD przy 0 dBFS | Harmoniczne przy −18 / 0 dBFS |
+|---|---|---|---|
+| N Warm | −65,4 dB | −42,0 dB | H2 −65,6 / −47,4 dB, H3 −79,6 / −43,4 dB |
+| N Sharp | −59,5 dB | −34,2 dB | H2 −59,8 / −41,4 dB, H3 −71,5 / −35,1 dB |
+| P Warm | −56,2 dB | −37,8 dB | H2 −56,2 / −38,1 dB, H3 −84,8 / −48,7 dB |
+| P Sharp | −50,2 dB | −31,3 dB | H2 −50,2 / −31,9 dB, H3 −76,3 / −40,1 dB |
+| S Warm | −106,7 dB | −49,5 dB | H3 −106,7 / −49,7 dB, H5 −136,5 / −64,4 dB, bez parzystych |
+| S Sharp | −97,1 dB | −39,9 dB | H3 −97,1 / −40,0 dB, H5 −126,9 / −54,8 dB |
+| N, P, S Clear | < −120 dB | < −120 dB | — |
+
+- N Warm przy −6 dBFS: THD −40,7 dB przy 100 Hz wobec −51,4 dB przy 1 kHz — nasycenie rośnie w basie.
+- Charakter jakościowo zgodny z §c: N — H2 przy poziomie nominalnym, H3 przy wysokim; P — H2 dominuje przy każdym poziomie; S — tylko nieparzyste, bardzo czysto przy +4 dBu. Wartości bezwzględne są punktem startowym `[niezweryfikowane]` — porównanie z pomiarami urządzeń i odsłuch — M8. Test pilnuje okna ±3 dB wokół tych wartości.
+
+**Odstępstwa od planu (§c i tabela Quality)** — szczegóły i uzasadnienie w ADR-0009 „Aktualizacja (M6)”:
+- Zamiast modeli z pamięcią (state-space/WDF), Newtona–Raphsona i Jiles–Atherton w High/Max: wielomianowe nieliniowości bez pamięci z ADAA 1. rzędu we wszystkich Quality; „pamięć” transformatora N przybliża podbicie basu przed nieliniowością. Quality w Analog Feel zmienia fazę (korektor w High/Max), wewnętrzny oversampling (2×/4×) i okres aktualizacji współczynników.
+- Walidacja krzywych względem modeli referencyjnych (np. WDF EQP-1A) z tolerancją ±0,5 dB — nie wykonana; testy `[PH-1]` sprawdzają reguły modeli (bump, Q, wzmocnienie, efekt boost + cut) oraz to, że każdy model zachowuje topologię pasma przy zmianie znaku wzmocnienia (pasmo Dynamic P ściśnięte poniżej 0 dB brzmi jak statyczny projekt przy tym samym wzmocnieniu, ±0,1 dB). Do M8.
+- N: HPF 18 dB/oct nie jest wymuszany — nachylenie cięć pozostaje wyborem użytkownika.
+- Parametr „P-Atten” (P1) — nie zrealizowany; efekt boost + cut uzyskuje się dwoma pasmami P.
 
 ## d) Kryteria akceptacji
 

@@ -12,7 +12,8 @@ Korektor parametryczny z pasmami statycznymi, dynamicznymi i spektralno-dynamicz
 | M3 | Pasma Dynamic (lookahead, linkowanie) i Spectral (STFT, siatka ERB, próg względny), Auto Gain globalny i pasm (ISO 226) | ✅ |
 | M4 | Natural Phase (korektor FIR amplitudy i fazy), Quality, oversampling 2×/4×/8× (IIR/FIR), Character Warm/Sharp z ADAA, brickwall liniowofazowy | ✅ |
 | M5 | Surround/Atmos: wybór głośników per pasmo (zapisywany po rolach Dolby, przenośny między układami), panel głośników, null testy 7.1.4 | ✅ |
-| M6–M8 | Modele analogowe (Analog Feel N/P/S), wizualizacje, odczyty i mierniki, wydanie | ⏳ |
+| M6 | Analog Feel N/P/S: krzywe modeli, nieliniowości per pasmo (Character wybiera wariant), kalibracja −18 dBFS = +4 dBu, wewnętrzny oversampling w High/Max | ✅ |
+| M7–M8 | Wizualizacje (poświata, podpowiedzi rezonansów), odczyty fazy i ringingu, mierniki THD/aliasingu, wydanie (instalatory) | ⏳ |
 
 Szczegółowy stan każdego wymagania: [docs/traceability.md](docs/traceability.md).
 

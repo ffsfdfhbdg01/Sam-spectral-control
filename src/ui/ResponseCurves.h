@@ -31,6 +31,7 @@ public:
         bool analog = false;       ///< Natural Phase correction: the analog prototypes are heard
         bool firBrickwall = false; ///< Natural Phase: brickwall cuts above the FIR limit are linear-phase FIRs
         Quality quality = Quality::Normal;
+        std::optional<AnalogModel> analogModel {}; ///< Analog Feel: the model's curves
 
         bool operator== (const Model&) const = default;
     };

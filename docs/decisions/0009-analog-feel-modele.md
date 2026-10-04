@@ -19,6 +19,21 @@
 - Modele są „charakterem” dla w pełni parametrycznych pasm, a nie emulacjami 1:1 urządzeń z ich przełączanymi częstotliwościami.
 - P1: parametry specyficzne dla modelu (np. „P-Atten” w półce Low dla „Pultec trick”).
 
+## Aktualizacja (M6, 2026-10-04)
+
+Realizacja i zmiany względem punktów 1–5 (szczegóły i pomiary: research/08 „Realizacja w M6”, research/09 „Realizacja w M6”):
+
+1. **Krzywe** — reguły parametryczne `filters::analogCurve` (N: łagodnie proporcjonalne Q, „ściąganie” wysokich belli ku 0 dB, bump półek; P: rezonansowa półka LC przy boost, szersza półka bez rezonansu przy cut (ten sam rząd — pasmo Dynamic zachowuje topologię przy przejściu przez 0 dB), szerokie belle; S: Q proporcjonalne do |gain|). Model jest globalny (parametr *Analog Model*) i dotyczy wszystkich pasm; ta sama krzywa trafia do audio, korektora, Auto Gain i UI.
+2. **Nieliniowości — zmiana**: zamiast modeli z pamięcią (state-space/WDF), Newtona–Raphsona i Jiles–Atherton w High/Max zastosowano wielomianowe nieliniowości bez pamięci w strukturze Character (dodawane tylko produkty wkładu pasma, ADAA 1. rzędu we wszystkich Quality), z podbiciem basu przed nieliniowością w N (nasycenie rośnie w basie). Uzasadnienie:
+   - struktura „produkty wkładu pasma” gwarantuje, że odpowiedź liniowa jest dokładnie krzywą modelu przy każdym poziomie, pasmo 0 dB nic nie dodaje, a kanały poza pasmami są nietknięte (CH-6) — modele fizyczne całych obwodów (histereza J–A, sieć pasywna jako WDF) zmieniają też odpowiedź liniową z poziomem i nie rozkładają się na pasma parametrycznego EQ;
+   - koszt i determinizm: brak iteracji Newtona–Raphsona w wątku audio (stały czas na próbkę), wynik niezależny od bloku hosta (NFR-3);
+   - zachowanie jakościowe z punktu 3 research/08 §c jest spełnione pomiarowo (H2/H3 zależnie od modelu, wzrost w basie dla N, czystość S przy +4 dBu).
+   Modele z pamięcią mogą wrócić jako opcja (P1), jeśli odsłuch w M8 wykaże potrzebę.
+3. **Quality w Analog Feel**: Eco/Normal — krzywe + nieliniowości, faza minimalna, 0 latencji; High — + korektor fazy (D = 64) i wewnętrzny oversampling co najmniej 2×; Max — + korektor (D = 128) i co najmniej 4× (filtry FIR, łącznie ≤ 400 kHz). ADAA 2. rzędu pominięte z powodu opisanego w research/09 (mały zysk wobec oversamplingu).
+4. **Kalibracja** (−18 dBFS = +4 dBu) — zrealizowana; wartości THD wariantów miękkich/twardych w research/08, pilnowane testem `[CHR-4]` (±3 dB).
+5. **Walidacja** względem modeli referencyjnych (WDF EQP-1A, dane N i S) z tolerancją ±0,5 dB — **otwarta, przeniesiona na M8**; obecne testy `[PH-1]` sprawdzają reguły modeli. Kod repozytorium `ABSounds/EQP1A-WDF` nie został użyty.
+6. Nazewnictwo bez zmian: „Analog N / P / S”, opisy z punktu 6 w podpowiedzi przełącznika modelu. „P-Atten” (P1) — nie zrealizowany; efekt boost + cut uzyskuje się dwoma pasmami P.
+
 ## Rozważane alternatywy
 - **Emulacje 1:1 urządzeń** (stałe częstotliwości) — sprzeczne z koncepcją parametrycznego EQ; odrzucone.
 - **Globalne etapy nieliniowe (transformatory na całej wtyczce)** — łamią CH-6; odrzucone.

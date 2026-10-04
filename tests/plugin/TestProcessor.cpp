@@ -335,9 +335,27 @@ TEST_CASE ("Phase mode and oversampling set the reported latency (OS-3, PH-1)", 
     for (std::size_t i = static_cast<std::size_t> (withOversampling); i < right.size(); ++i)
         REQUIRE (right[i] == source[i - static_cast<std::size_t> (withOversampling)]);
 
+    // Analog Feel: Normal is a zero-latency IIR; Max adds the corrector and runs the models at
+    // least 4x oversampled (ADR-0009). The display draws the selected model's curves.
+    setPlain (p, ssc::plugin::id::phaseMode, static_cast<float> (ssc::PhaseMode::AnalogFeel));
+    setPlain (p, ssc::plugin::id::analogModel, static_cast<float> (ssc::AnalogModel::P));
+    setPlain (p, ssc::plugin::id::oversampling, static_cast<float> (ssc::Oversampling::Off));
+    p.prepareToPlay (48000.0, 512);
+    REQUIRE (p.getOversamplingFactor() == 1);
+    REQUIRE_FALSE (p.isPhaseCorrected());
+    REQUIRE (p.getLatencySamples() == 0);
+    REQUIRE (p.getResponseModel().analogModel == ssc::AnalogModel::P);
+
+    setPlain (p, ssc::plugin::id::quality, static_cast<float> (ssc::Quality::Max));
+    p.prepareToPlay (48000.0, 512);
+    REQUIRE (p.getOversamplingFactor() == 4);
+    REQUIRE (p.isPhaseCorrected());
+    REQUIRE (p.getLatencySamples() > 128); // corrector D = 128 plus the 4x FIR
+
     // Back to Minimum Phase without oversampling: no latency.
     setPlain (p, ssc::plugin::id::phaseMode, static_cast<float> (ssc::PhaseMode::MinimumPhase));
     setPlain (p, ssc::plugin::id::oversampling, static_cast<float> (ssc::Oversampling::Off));
     p.processBlock (buffer, midi);
     REQUIRE (p.isPhaseCorrected() == false);
+    REQUIRE_FALSE (p.getResponseModel().analogModel.has_value());
 }

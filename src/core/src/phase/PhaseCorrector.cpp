@@ -43,8 +43,8 @@ namespace
     bool sameShape (const filters::BandShape& a, const filters::BandShape& b) noexcept
     {
         constexpr std::equal_to<double> same;
-        return a.shape == b.shape && a.slope == b.slope && a.character == b.character && same (a.frequencyHz, b.frequencyHz)
-            && same (a.q, b.q) && std::abs (a.gainDb - b.gainDb) < 0.05;
+        return a.shape == b.shape && a.slope == b.slope && a.character == b.character && a.analog == b.analog
+            && same (a.frequencyHz, b.frequencyHz) && same (a.q, b.q) && std::abs (a.gainDb - b.gainDb) < 0.05;
     }
 
     /** Keeps a numerator/denominator pair of long products in range without changing their ratio. */

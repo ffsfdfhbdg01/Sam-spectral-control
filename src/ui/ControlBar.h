@@ -51,6 +51,7 @@ private:
     void setupCombo (LabelledCombo&, const juce::String& title, const juce::String& paramId);
     void setupKnob (LabelledKnob&, const juce::String& title, const juce::String& paramId);
     void updateEnablement();
+    void updateModelTooltip();
 
     juce::AudioProcessorValueTreeState& state;
 

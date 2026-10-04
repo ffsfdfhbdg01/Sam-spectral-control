@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -39,7 +40,8 @@ struct GlobalParams
     AutoGainWeighting autoGainWeighting = AutoGainWeighting::Fletcher;
     AutoGainSpeed autoGainSpeed = AutoGainSpeed::Stable;
     PhaseMode phaseMode = PhaseMode::MinimumPhase;
-    Oversampling oversampling = Oversampling::Off; ///< of the band chain; limited by maxOversamplingFor()
+    AnalogModel analogModel = AnalogModel::N;      ///< curves and nonlinearity in Analog Feel (ADR-0009)
+    Oversampling oversampling = Oversampling::Off; ///< of the band chain; see effectiveOversampling()
 };
 
 /** Largest oversampling factor at a sample rate: the internal rate stays at or below 400 kHz. */
@@ -49,6 +51,18 @@ constexpr int maxOversamplingFor (double sampleRate) noexcept
     while (factor < 8 && sampleRate * factor * 2 <= 400000.0)
         factor *= 2;
     return factor;
+}
+
+/**
+    Oversampling factor of the band chain: the setting, raised in Analog Feel to 2× at High and 4×
+    at Max for its nonlinear models (research §8c), and capped by maxOversamplingFor().
+*/
+constexpr int effectiveOversampling (Oversampling setting, PhaseMode mode, Quality quality, double sampleRate) noexcept
+{
+    int factor = oversamplingFactor (setting);
+    if (mode == PhaseMode::AnalogFeel)
+        factor = std::max (factor, quality == Quality::Max ? 4 : (quality == Quality::High ? 2 : 1));
+    return std::min (factor, maxOversamplingFor (sampleRate));
 }
 
 /** Natural Phase correction runs in Natural Phase, and in Analog Feel at High and Max (research §8c). */
@@ -216,8 +230,11 @@ private:
     std::unique_ptr<phase::CorrectorBands> correctorBands = std::make_unique<phase::CorrectorBands>();
     bool correctionActive = false;
     std::int64_t samplePosition = 0;
-    std::unique_ptr<BandSettingsArray> chainBands = std::make_unique<BandSettingsArray>(); ///< bands of the IIR chain
-    bool useChainCopy = false;                   ///< chainBands differs from the parameters (Natural Phase brickwalls)
+    // Bands as heard (Analog Feel: with the model) and the IIR chain (without Natural Phase brickwalls).
+    std::unique_ptr<BandSettingsArray> heardBands = std::make_unique<BandSettingsArray>();
+    std::unique_ptr<BandSettingsArray> chainBands = std::make_unique<BandSettingsArray>();
+    bool useHeardCopy = false;
+    bool useChainCopy = false;
     std::array<bool, kNumBands> firBrickwall {}; ///< Natural Phase brickwall cuts, realised by the corrector
 };
 } // namespace ssc::engine

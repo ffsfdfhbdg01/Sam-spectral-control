@@ -368,29 +368,32 @@ bool isIdentity (const BandShape& s) noexcept
 BandDesign designBand (const BandShape& s, double sampleRate)
 {
     Builder b { {}, sampleRate };
-    const double hz = std::clamp (s.frequencyHz, 1.0, 0.5 * sampleRate * 1.5);
-    const double q = std::clamp (s.q, 0.01, 100.0);
-
     if (isIdentity (s))
         return b.design;
 
-    const bool shaped = s.character != Character::Clear;
-    switch (s.shape)
+    // Analog Feel: the model's curves (the Character only picks the nonlinearity, CHR-4).
+    const auto kind = shaperKindFor (s.character, s.analog);
+    const bool shaped = kind != ShaperKind::None;
+    const auto c = s.analog.has_value() ? analogCurve (s, *s.analog) : s;
+    const double hz = std::clamp (c.frequencyHz, 1.0, 0.5 * sampleRate * 1.5);
+    const double q = std::clamp (c.q, 0.01, 100.0);
+
+    switch (c.shape)
     {
         case Shape::Bell:
-            if (s.character == Character::Sharp)
-                addSharpBell (b, hz, s.gainDb, q);
+            if (! s.analog.has_value() && s.character == Character::Sharp)
+                addSharpBell (b, hz, c.gainDb, q);
             else
-                addBell (b, hz, s.gainDb, s.character == Character::Warm ? proportionalQ (q, s.gainDb) : q);
+                addBell (b, hz, c.gainDb, ! s.analog.has_value() && s.character == Character::Warm ? proportionalQ (q, c.gainDb) : q);
             break;
-        case Shape::LowShelf: addShelf (b, hz, s.gainDb, q, std::clamp (slopeOrder (s.slope), 1, 8), false); break;
-        case Shape::HighShelf: addShelf (b, hz, s.gainDb, q, std::clamp (slopeOrder (s.slope), 1, 8), true); break;
-        case Shape::LowCut: addCut (b, hz, q, slopeOrder (s.slope), true, shaped); break;
-        case Shape::HighCut: addCut (b, hz, q, slopeOrder (s.slope), false, shaped); break;
+        case Shape::LowShelf: addShelf (b, hz, c.gainDb, q, std::clamp (slopeOrder (c.slope), 1, 8), false); break;
+        case Shape::HighShelf: addShelf (b, hz, c.gainDb, q, std::clamp (slopeOrder (c.slope), 1, 8), true); break;
+        case Shape::LowCut: addCut (b, hz, q, slopeOrder (c.slope), true, shaped); break;
+        case Shape::HighCut: addCut (b, hz, q, slopeOrder (c.slope), false, shaped); break;
         case Shape::Notch: addNotch (b, hz, q); break;
-        case Shape::BandPass: addBandPass (b, hz, q, bandPassSections (s.slope)); break;
-        case Shape::TiltShelf: addTilt (b, hz, s.gainDb, q, s.slope == Slope::Db6 ? 1 : 2); break;
-        case Shape::FlatTilt: addFlatTilt (b, hz, s.gainDb); break;
+        case Shape::BandPass: addBandPass (b, hz, q, bandPassSections (c.slope)); break;
+        case Shape::TiltShelf: addTilt (b, hz, c.gainDb, q, c.slope == Slope::Db6 ? 1 : 2); break;
+        case Shape::FlatTilt: addFlatTilt (b, hz, c.gainDb); break;
         case Shape::AllPass: addAllPass (b, hz, q); break;
     }
 
@@ -398,8 +401,62 @@ BandDesign designBand (const BandShape& s, double sampleRate)
     if (shaped && shapeHasGain (s.shape) && b.design.numSections > 0)
         b.design.shapedFrom = 0;
     if (b.design.shapedFrom >= 0)
-        b.design.shaper = s.character;
+        b.design.shaper = kind;
     return b.design;
+}
+
+BandShape analogCurve (const BandShape& shape, AnalogModel model) noexcept
+{
+    // Parametric "character" curves inspired by classic designs (research §8c, ADR-0009); every
+    // band stays fully parametric. Validation against reference measurements: research/08.
+    auto c = shape;
+    const double magnitude = std::abs (shape.gainDb);
+    const bool boost = shape.gainDb > 0.0;
+    switch (model)
+    {
+        case AnalogModel::N: // class-A transformer console
+            if (c.shape == Shape::Bell)
+            {
+                c.q = shape.q * (0.75 + 0.25 * std::min (1.0, magnitude / 15.0)); // gently proportional Q
+                // Inductor self-capacitance pulls high mid bands towards unity: up to −25 % at 20 kHz.
+                const double pull = std::clamp (std::log2 (shape.frequencyHz / 5000.0) / 2.0, 0.0, 1.0);
+                c.gainDb = shape.gainDb * (1.0 - 0.25 * pull);
+            }
+            else if (c.shape == Shape::LowShelf || c.shape == Shape::HighShelf)
+            {
+                c.q = std::max (shape.q, 1.0); // a small bump at the corner
+            }
+            break;
+
+        case AnalogModel::P: // passive LC network with a tube make-up stage
+            if (c.shape == Shape::LowShelf || c.shape == Shape::HighShelf)
+            {
+                if (boost)
+                {
+                    c.q = std::max (shape.q, c.shape == Shape::LowShelf ? 1.4 : 1.2); // resonant LC boost
+                }
+                else
+                {
+                    // The attenuator is a wider shelf without resonance (critically damped: like
+                    // cascaded first-order RC shelves), lower down for the bass. It keeps the order
+                    // of the boost, so a Dynamic band keeps its topology through 0 dB.
+                    c.q = 0.5;
+                    if (c.shape == Shape::LowShelf)
+                        c.frequencyHz = shape.frequencyHz * 0.7;
+                }
+            }
+            else if (c.shape == Shape::Bell)
+            {
+                c.q = shape.q * 0.8; // broad passive peaks
+            }
+            break;
+
+        case AnalogModel::S: // 1980s console with proportional Q
+            if (c.shape == Shape::Bell)
+                c.q = shape.q * (0.4 + 0.6 * std::min (1.0, magnitude / 15.0));
+            break;
+    }
+    return c;
 }
 
 double proportionalQ (double q, double gainDb) noexcept

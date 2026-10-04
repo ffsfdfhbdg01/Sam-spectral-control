@@ -80,7 +80,9 @@ void ResponseCurves::bandResponse (const filters::BandShape& shape, const float*
     }
 
     const double rate = fs * model.oversampling;
-    const auto design = filters::designBand (shape, rate);
+    auto heard = shape;
+    heard.analog = model.analogModel;
+    const auto design = filters::designBand (heard, rate);
     for (int i = 0; i < count; ++i)
         outDb[i] = toDb (model.analog ? design.analogResponse (frequencies[i]) : design.digitalResponse (frequencies[i], rate));
 }

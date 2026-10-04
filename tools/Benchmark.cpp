@@ -121,23 +121,30 @@ Result run (const Case& c, double seconds)
 /** PH-2: stereo, 8 Static bells at 48 kHz for every phase mode × Quality, and every oversampling factor. */
 void modesTable (double seconds)
 {
-    const char* qualities[] = { "Eco", "Normal", "High", "Max" };
-    std::printf ("| Phase mode | Eco | Normal | High | Max |\n|---|---|---|---|---|\n");
-    for (const auto mode : { PhaseMode::MinimumPhase, PhaseMode::NaturalPhase, PhaseMode::AnalogFeel })
+    struct Row
     {
-        std::printf ("| %s |",
-                     mode == PhaseMode::MinimumPhase ? "Minimum Phase"
-                                                     : (mode == PhaseMode::NaturalPhase ? "Natural Phase" : "Analog Feel"));
+        const char* name;
+        PhaseMode mode;
+        Character character;
+    };
+    const Row rows[] = { { "Minimum Phase", PhaseMode::MinimumPhase, Character::Clear },
+                         { "Natural Phase", PhaseMode::NaturalPhase, Character::Clear },
+                         { "Analog Feel N, Clear (curves)", PhaseMode::AnalogFeel, Character::Clear },
+                         { "Analog Feel N, Warm (curves + saturation)", PhaseMode::AnalogFeel, Character::Warm } };
+    std::printf ("| Phase mode | Eco | Normal | High | Max |\n|---|---|---|---|---|\n");
+    for (const auto& row : rows)
+    {
+        std::printf ("| %s |", row.name);
         for (int q = 0; q < 4; ++q)
         {
             Case c { "", 48000.0, 2, stereo(), BandMode::Static, 8, static_cast<Quality> (q) };
-            c.phaseMode = mode;
+            c.phaseMode = row.mode;
+            c.character = row.character;
             const auto r = run (c, seconds);
             std::printf (" %.2f %% · %d smp |", r.cpuPercent, r.latencySamples);
         }
         std::printf ("\n");
     }
-    (void)qualities;
 
     std::printf ("\n| Oversampling (Normal) | Minimum Phase (IIR) | Natural Phase (FIR) |\n|---|---|---|\n");
     for (const auto os : { Oversampling::Off, Oversampling::X2, Oversampling::X4, Oversampling::X8 })

@@ -185,7 +185,7 @@ private:
 
     double sampleRate = 48000.0;
     int maxBlock = 0;
-    std::array<filters::Shaper, 3> shapers {}; ///< per Character (Clear, Warm, Sharp)
+    std::array<filters::Shaper, filters::kNumShaperKinds> shapers {}; ///< per ShaperKind
     std::array<Instance, 2> instances {};
     int active = 0;
     int fadeRemaining = 0;

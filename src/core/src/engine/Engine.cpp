@@ -298,29 +298,39 @@ void Engine::configure (const GlobalParams& params, const BandSettingsArray& ban
         spectralEngine->reset();
     spectralEnabled = wantSpectral;
 
+    // Analog Feel: every band takes the model's curves and nonlinearity (ADR-0009).
+    useHeardCopy = params.phaseMode == PhaseMode::AnalogFeel;
+    if (useHeardCopy)
+    {
+        *heardBands = bands;
+        for (auto& band : *heardBands)
+            band.shape.analog = params.analogModel;
+    }
+    const BandSettingsArray& heard = useHeardCopy ? *heardBands : bands;
+
     // Natural Phase brickwall cuts are linear-phase parts of the corrector where its FIR is steeper
     // than the 96 dB/oct IIR; below that frequency the IIR (phase-corrected) is kept.
     const bool wantCorrection = usesPhaseCorrection (params.phaseMode, params.quality);
     const double firBrickwallHz = phase::minimumFirBrickwallHz (params.quality, cfg.sampleRate);
     useChainCopy = false;
-    for (std::size_t b = 0; b < bands.size(); ++b)
+    for (std::size_t b = 0; b < heard.size(); ++b)
     {
-        firBrickwall[b] = wantCorrection && params.phaseMode == PhaseMode::NaturalPhase && isBrickwallCut (bands[b])
-            && bands[b].shape.frequencyHz >= firBrickwallHz;
+        firBrickwall[b] = wantCorrection && params.phaseMode == PhaseMode::NaturalPhase && isBrickwallCut (heard[b])
+            && heard[b].shape.frequencyHz >= firBrickwallHz;
         useChainCopy = useChainCopy || firBrickwall[b];
     }
     if (useChainCopy)
     {
-        *chainBands = bands;
-        for (std::size_t b = 0; b < bands.size(); ++b)
+        *chainBands = heard;
+        for (std::size_t b = 0; b < heard.size(); ++b)
             if (firBrickwall[b])
                 (*chainBands)[b].active = false;
     }
-    updateCoverage (useChainCopy ? *chainBands : bands);
+    updateCoverage (useChainCopy ? *chainBands : heard);
 
     // Oversampling of the band chain (ADR-0008): polyphase IIR half-bands in Minimum Phase,
     // linear-phase FIR half-bands in Natural Phase and Analog Feel.
-    const int factor = std::min (oversamplingFactor (params.oversampling), maxFactor);
+    const int factor = effectiveOversampling (params.oversampling, params.phaseMode, params.quality, cfg.sampleRate);
     const auto type =
         params.phaseMode == PhaseMode::MinimumPhase ? oversampling::FilterType::PolyphaseIir : oversampling::FilterType::LinearPhaseFir;
     if (factor != osFactor || (factor > 1 && (type != osType || params.quality != osQuality)))
@@ -357,11 +367,12 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
         lastSoloShape = auditionShapeFor (bands[static_cast<std::size_t> (params.soloBand)].shape);
 
     configure (params, bands);
-    const BandSettingsArray& chain = useChainCopy ? *chainBands : bands; // bands of the IIR chain
+    const BandSettingsArray& heard = useHeardCopy ? *heardBands : bands; // as heard (Analog Feel model)
+    const BandSettingsArray& chain = useChainCopy ? *chainBands : heard; // the IIR chain
 
     autoGainSettings = { params.autoGain, params.autoGainWeighting, params.autoGainSpeed };
     if (params.autoGain)
-        updateAutoGainCurves (bands);
+        updateAutoGainCurves (heard);
 
     outputGain.setTarget (dbToGain (params.outputGainDb));
     mix.setTarget (std::clamp (params.mix, 0.0, 1.0));
@@ -373,7 +384,7 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
         const int n = std::min (chunkSize, numSamples - offset);
         for (int ch = 0; ch < numChannels; ++ch)
             chunkPointers[ch] = channels[ch] + offset;
-        processChunk (chunkPointers, numChannels, n, chain, bands);
+        processChunk (chunkPointers, numChannels, n, chain, heard);
     }
 }
 

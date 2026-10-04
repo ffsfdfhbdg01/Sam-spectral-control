@@ -3,8 +3,10 @@
 #include <array>
 #include <complex>
 #include <functional>
+#include <optional>
 
 #include "ssc/engine/Types.h"
+#include "ssc/filters/Character.h"
 #include "ssc/filters/Sections.h"
 
 namespace ssc::filters
@@ -20,13 +22,14 @@ struct BandShape
     double q = 1.0;
     Slope slope = Slope::Db12;
     Character character = Character::Clear; ///< curve variant and nonlinearity (research §9)
+    std::optional<AnalogModel> analog {};   ///< Analog Feel model: its curves and nonlinearity (ADR-0009)
 
     /** Exact comparison (used to detect parameter changes, not as a numerical tolerance test). */
     bool operator== (const BandShape& other) const noexcept
     {
         constexpr std::equal_to<double> same;
         return shape == other.shape && same (frequencyHz, other.frequencyHz) && same (gainDb, other.gainDb) && same (q, other.q)
-            && slope == other.slope && character == other.character;
+            && slope == other.slope && character == other.character && analog == other.analog;
     }
 };
 
@@ -38,10 +41,10 @@ struct BandDesign
     std::array<SvfParams, kMaxSections> svf {};
     int numSections = 0;
 
-    /** Nonlinear Character (CHR-2): the contribution of sections [shapedFrom, numSections) is shaped
-        by `shaper` (Warm or Sharp); −1 when the band is linear. */
+    /** Nonlinearity (CHR-2, CHR-4): the contribution of sections [shapedFrom, numSections) is shaped
+        by `shaper`; −1 when the band is linear. */
     int shapedFrom = -1;
-    Character shaper = Character::Clear;
+    ShaperKind shaper = ShaperKind::None;
 
     /** Topology key: changes when the number or order of sections or the nonlinearity changes. */
     int topology() const noexcept
@@ -49,7 +52,7 @@ struct BandDesign
         int key = numSections;
         for (int i = 0; i < numSections; ++i)
             key = key * 2 + (digital[static_cast<std::size_t> (i)].firstOrder ? 1 : 0);
-        return (key * 16 + shapedFrom + 1) * 4 + static_cast<int> (shaper);
+        return (key * 16 + shapedFrom + 1) * kNumShaperKinds + static_cast<int> (shaper);
     }
 
     std::complex<double> analogResponse (double hz) const noexcept;
@@ -63,12 +66,17 @@ int slopeOrder (Slope slope) noexcept;
     Designs the analog prototype and the matched digital cascade for a band, including the curve
     of its Character (research §9c): Warm bells have proportional Q, Sharp bells are of fourth
     order; Warm/Sharp mark the sections whose contribution is shaped (shapes with gain: the whole
-    band; resonant cuts: a separate resonance section; other shapes: none).
+    band; resonant cuts: a separate resonance section; other shapes: none). With an Analog Feel
+    model the model's curves replace the Character curves and the Character picks the model's
+    nonlinearity (research §8c, ADR-0009, CHR-4).
 */
 BandDesign designBand (const BandShape& shape, double sampleRate);
 
 /** Q of a Warm bell: 0.6·Q at 0 dB, rising to Q at ±12 dB (proportional Q). */
 double proportionalQ (double q, double gainDb) noexcept;
+
+/** The shape after the curve rules of an Analog Feel model (frequency, gain, Q, slope as designed). */
+BandShape analogCurve (const BandShape& shape, AnalogModel model) noexcept;
 
 /** True if the band, as configured, has no effect (e.g. a bell with 0 dB gain). */
 bool isIdentity (const BandShape& shape) noexcept;

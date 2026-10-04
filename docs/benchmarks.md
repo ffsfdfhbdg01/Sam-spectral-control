@@ -24,7 +24,7 @@ Pomiar M4 (jedna sesja, minimum z 3 przebiegów po 5 s):
 
 Pomiar M3 (wcześniejsza, szybsza sesja tego samego hosta): stereo 8 Static 0,65 %, 8 Spectral 2,70 %, 7.1.4 8 Spectral 14,4 %, 9.1.6 192 kHz Max 60,3 %.
 
-Tryby fazy × Quality i oversampling (PH-2): `ssc_benchmark 3 modes` — tabele w research/08 i research/10 („Realizacja w M4”).
+Tryby fazy × Quality i oversampling (PH-2): `ssc_benchmark 3 modes` — tabele w research/08 (pomiar M6, z wierszami Analog Feel) i research/10 („Realizacja w M4”).
 
 ## Ocena względem NFR-1
 
@@ -47,3 +47,6 @@ Tryby fazy × Quality i oversampling (PH-2): `ssc_benchmark 3 modes` — tabele 
 - Character: Warm +30…35 %, Sharp +45 % kosztu pasm Clear (Sharp: druga sekcja krzywej 4. rzędu); patrz odstępstwo CHR w research/09.
 - Kandydaci do optymalizacji w M8: SIMD na liniach stereo/surround w pasmach, splot FFT dla długich korektorów (Max przy 96/192 kHz).
 
+## Koszt trybów M6 (Analog Feel)
+- Wspólna implementacja nieliniowości (9 rodzajów `ShaperKind`) ma koszt M4: porównanie naprzemienne M5/M6 w jednej sesji (minimum z 6 przebiegów) — 8 pasm Clear 0,68/0,68 %, Warm 0,88/0,90 %, Sharp 0,99/1,02 %. Współczynniki całki w ADAA są liczone raz przy przygotowaniu (bez dzielenia w próbce), a człon u⁵ tylko w modelu S.
+- Analog Feel N, 8 pasm stereo: Eco/Normal 0,68 % (same krzywe), 1,0 % z nasyceniem Warm; High 2,1 / 2,8 % (korektor D = 64 i wewnętrzne 2× FIR, 125 próbek latencji); Max 4,4 / 6,2 % (D = 128 i 4×, 224 próbki). Tabela: research/08.

@@ -143,7 +143,7 @@ TEST_CASE ("Character curves: Warm bell has proportional Q, cuts keep their resp
         for (const double hz : { 100.0, 700.0, 1000.0, 3000.0 })
             CHECK (dbOf (a.digitalResponse (hz, kFs)) == Approx (dbOf (b.digitalResponse (hz, kFs))).margin (1e-9));
         CHECK (a.shapedFrom == 0);
-        CHECK (a.shaper == Character::Warm);
+        CHECK (a.shaper == filters::ShaperKind::Warm);
     }
     CHECK (filters::proportionalQ (1.0, 0.0) == Approx (0.6));
     CHECK (filters::proportionalQ (1.0, 12.0) == Approx (1.0));
@@ -269,7 +269,7 @@ TEST_CASE ("Character at 0 dB adds nothing; distortion grows with the band's con
 TEST_CASE ("Character shaper: ADAA lowers aliasing and stays finite when clipping", "[character]")
 {
     // A heavily clipped 5 kHz sine: aliased harmonics with and without ADAA.
-    const auto shaper = filters::makeShaper (Character::Sharp, kFs);
+    const auto shaper = filters::makeShaper (filters::ShaperKind::Sharp, kFs);
     const int length = 9600;
     const double f0 = 5000.0;
     std::vector<double> naive (static_cast<std::size_t> (length)), adaa (static_cast<std::size_t> (length));
@@ -297,10 +297,10 @@ TEST_CASE ("Character shaper: ADAA lowers aliasing and stays finite when clippin
     std::printf ("[CHR] aliasing of a clipped 5 kHz sine: naive %.1f dB, ADAA %.1f dB\n", naiveDb, adaaDb);
     CHECK (adaaDb < naiveDb - 3.0);
 
-    // Clip levels are continuous and S is monotonic.
-    for (const auto c : { Character::Warm, Character::Sharp })
+    // Clip levels are continuous and S is monotonic, for every kind.
+    for (int k = 1; k < filters::kNumShaperKinds; ++k)
     {
-        const auto s = filters::makeShaper (c, kFs);
+        const auto s = filters::makeShaper (static_cast<filters::ShaperKind> (k), kFs);
         double previous = -1e9;
         for (double u = -60.0; u <= 60.0; u += 0.01)
         {

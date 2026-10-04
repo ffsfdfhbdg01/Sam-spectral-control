@@ -66,6 +66,13 @@
 - Aliasing przy 1× (−66,5 dB) nie osiąga celu −80 dB: H3 tonu 10 kHz (30 kHz) odbija się na 18 kHz, a ADAA 1. rzędu tłumi go tylko o ~6 dB. Przy 2× i więcej cel jest spełniony z dużym zapasem (≈ −160 dB); UI ma podpowiadać oversampling (OS-5, M7).
 - Narzut CPU Warm/Sharp (cel ≤ 30 % kosztu pasma Clear): zmierzone 8 pasm Warm 0,69 % vs Clear 0,51 % (+35 %), Sharp 0,74 % (+45 %, w tym druga sekcja krzywej 4. rzędu). Możliwa dalsza optymalizacja (SIMD na liniach stereo) — M8.
 
+### Realizacja w M6 (CHR-4)
+
+- W Analog Feel Character wybiera nieliniowość modelu (`filters::shaperKindFor`): **Clear** — tylko krzywe i faza modelu, bez nieliniowości; **Warm** — wariant miękki modelu (N/P/S Soft); **Sharp** — wariant twardy (6–10 dB więcej zniekształceń). Krzywe Warm (Q proporcjonalne) i Sharp (bell 4. rzędu) z trybów Minimum/Natural Phase nie są wtedy używane — krzywą wyznacza model.
+- Wszystkie warianty mają tę samą strukturę co Warm/Sharp (produkty N(u) = S(u) − u, ADAA 1. rzędu, opcjonalnie filtr DC i dolnoprzepustowy na produktach); doszły człon u⁵ (model S) i podbicie basu przed nieliniowością (model N). Struktura `Shaper` jest wspólna — 9 rodzajów (`ShaperKind`): None, Warm, Sharp, N/P/S Soft i Hard.
+- Pomiary (testy `[CHR-4]`): Analog Feel + Clear < −120 dB THD (N i P, sinus 0 dBFS); kalibracja wariantów i rozkład harmonicznych — tabela w research/08 („Realizacja w M6”).
+- Koszt: wspólna implementacja ma koszt M4 (porównanie naprzemienne M5/M6: 8 pasm Warm 0,88/0,90 %, Sharp 0,99/1,02 %, Clear 0,68/0,68 %); 8 pasm Analog Feel N Warm w Eco/Normal ≈ 1,0 % wobec 0,68 % Clear (dodatkowy filtr podbicia basu).
+
 ## d) Kryteria akceptacji
 
 | ID | Kryterium | Metoda |
