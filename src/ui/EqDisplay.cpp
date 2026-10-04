@@ -719,7 +719,7 @@ void EqDisplay::paint (juce::Graphics& g)
     const int ph = juce::roundToInt (static_cast<float> (getHeight()) * scale);
     if (backgroundDirty || background.getWidth() != pw || background.getHeight() != ph)
     {
-        background = juce::Image (juce::Image::RGB, juce::jmax (1, pw), juce::jmax (1, ph), false);
+        background = juce::Image (juce::Image::ARGB, juce::jmax (1, pw), juce::jmax (1, ph), false); // the target's format: a plain copy
         juce::Graphics bg (background);
         bg.addTransform (juce::AffineTransform::scale (scale));
         const auto bounds = getLocalBounds().toFloat();
@@ -729,7 +729,11 @@ void EqDisplay::paint (juce::Graphics& g)
         paintGrid (bg);
         backgroundDirty = false;
     }
-    g.drawImage (background, getLocalBounds().toFloat());
+    // One cached pixel per physical pixel: drawn without resampling.
+    if (juce::approximatelyEqual (scale, 1.0f))
+        g.drawImageAt (background, 0, 0);
+    else
+        g.drawImageTransformed (background, juce::AffineTransform::scale (1.0f / scale));
 
     if (hasFrame && analyzerSettings.mode != plugin::AnalyzerMode::Off)
     {
@@ -937,49 +941,46 @@ void EqDisplay::paintGlow (juce::Graphics& g, const plugin::SpectrumFrame& frame
         return grad;
     };
 
-    // The spectrum line every ≈ 6 px.
-    const int numPoints = juce::jmax (2, static_cast<int> ((xEnd - xStart) / 6.0f) + 1);
+    // The spectrum line every ≈ 10 px: the glow is blurred, the crisp line is drawn by paintSpectrum().
+    const int numPoints = juce::jmax (2, static_cast<int> ((xEnd - xStart) / 10.0f) + 1);
     const float step = (xEnd - xStart) / static_cast<float> (numPoints - 1);
     glowLineY.assign (static_cast<std::size_t> (numPoints), 0.0f);
-    juce::Path line;
     for (int i = 0; i < numPoints; ++i)
-    {
-        const float x = xStart + static_cast<float> (i) * step;
-        const float y = juce::jlimit (0.0f, h, yForAnalyzerDb (at (level, x)));
-        glowLineY[static_cast<std::size_t> (i)] = y;
-        if (i == 0)
-            line.startNewSubPath (x, y);
-        else
-            line.lineTo (x, y);
-    }
+        glowLineY[static_cast<std::size_t> (i)] =
+            juce::jlimit (0.0f, h, yForAnalyzerDb (at (level, xStart + static_cast<float> (i) * step)));
+
+    // A band between the line shifted by `top` and by `bottom` (pixels downwards).
+    auto band = [&] (float top, float bottom) {
+        juce::Path path;
+        path.preallocateSpace (6 * numPoints + 8);
+        for (int i = 0; i < numPoints; ++i)
+        {
+            const juce::Point<float> p { xStart + static_cast<float> (i) * step,
+                                         juce::jmin (h, glowLineY[static_cast<std::size_t> (i)] + top) };
+            if (i == 0)
+                path.startNewSubPath (p);
+            else
+                path.lineTo (p);
+        }
+        for (int i = numPoints - 1; i >= 0; --i)
+            path.lineTo (xStart + static_cast<float> (i) * step, juce::jmin (h, glowLineY[static_cast<std::size_t> (i)] + bottom));
+        path.closeSubPath();
+        return path;
+    };
 
     constexpr int kLayers = 5;
     constexpr float kDepth = 70.0f;
     constexpr float kMaxAlpha = 0.5f;
     for (int layer = 0; layer < kLayers; ++layer)
     {
-        const float top = kDepth * static_cast<float> (layer) / kLayers;
-        const float bottom = kDepth * static_cast<float> (layer + 1) / kLayers;
-        juce::Path band;
-        for (int i = 0; i < numPoints; ++i)
-        {
-            const juce::Point<float> p { xStart + static_cast<float> (i) * step,
-                                         juce::jmin (h, glowLineY[static_cast<std::size_t> (i)] + top) };
-            if (i == 0)
-                band.startNewSubPath (p);
-            else
-                band.lineTo (p);
-        }
-        for (int i = numPoints - 1; i >= 0; --i)
-            band.lineTo (xStart + static_cast<float> (i) * step, juce::jmin (h, glowLineY[static_cast<std::size_t> (i)] + bottom));
-        band.closeSubPath();
         const float fade = std::exp (-2.5f * (static_cast<float> (layer) + 0.5f) / kLayers);
         g.setGradientFill (gradient (kMaxAlpha * fade));
-        g.fillPath (band);
+        g.fillPath (band (kDepth * static_cast<float> (layer) / kLayers, kDepth * static_cast<float> (layer + 1) / kLayers));
     }
 
+    // Halo: a band of 8 px around the line (filled: cheaper than stroking the line).
     g.setGradientFill (gradient (0.2f));
-    g.strokePath (line, juce::PathStrokeType (8.0f, juce::PathStrokeType::beveled, juce::PathStrokeType::butt));
+    g.fillPath (band (-4.0f, 4.0f));
 }
 
 float EqDisplay::mainSpectrumDbAt (const plugin::SpectrumFrame& frame, float hz) const noexcept

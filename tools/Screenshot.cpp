@@ -11,6 +11,7 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <typeinfo>
 #include <vector>
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -211,6 +212,25 @@ int main (int argc, char** argv)
         std::printf ("paint %dx%d: mean %.2f ms, median %.2f ms, p95 %.2f ms, max %.2f ms (%d frames)\n", editor->getWidth(),
                      editor->getHeight(), sum / static_cast<double> (ms.size()), ms[ms.size() / 2], ms[ms.size() * 95 / 100], ms.back(),
                      profileFrames);
+
+        // Median paint time of each visible child of the editor.
+        for (auto* child : editor->getChildren())
+        {
+            if (! child->isVisible() || child->getWidth() <= 0 || child->getHeight() <= 0)
+                continue;
+            std::vector<double> times;
+            for (int f = 0; f < std::min (profileFrames, 60); ++f)
+            {
+                juce::Graphics g (canvas);
+                g.setOrigin (child->getPosition());
+                const auto start = std::chrono::steady_clock::now();
+                child->paintEntireComponent (g, true);
+                times.push_back (std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - start).count());
+            }
+            std::sort (times.begin(), times.end());
+            std::printf ("  %-24s %4dx%-4d median %.2f ms\n", typeid (*child).name(), child->getWidth(), child->getHeight(),
+                         times[times.size() / 2]);
+        }
     }
 
     running = false;

@@ -41,3 +41,22 @@
 | PR-1 | Natural Phase: pre-ring ≤ D | test jednostkowy |
 | PR-1 | Opóźnienie grupowe w fc vs wzór analityczny ±2 % | test jednostkowy |
 | PR-2 | Odczyt aktualny ≤ 100 ms po zmianie parametru; zero alokacji i obliczeń odczytów w wątku audio | test + przegląd kodu |
+
+## e) Realizacja w M7 i wyniki
+
+- **Pomiar** (`analysis::BandReadouts`): pasmo samo przechodzi przez `Engine` z trybem fazy, Quality, oversamplingiem i modelem Analog Feel wtyczki (ten sam kod DSP co audio): cicha rozbiegówka (wygładzanie i korektor się ustalają), potem mały impuls (nieliniowe Character pozostają liniowe), śledzony do zaniku −90 dB (≤ 5 s).
+- **Opóźnienie grupowe** w fc: τ = Re{DFT(n·h) / DFT(h)} minus latencja silnika. **Faza nadmiarowa**: faza z usuniętą latencją, rozwijana od częstotliwości, gdzie pasmo działa najmniej; średnia ważona |gain| tam, gdzie |gain| ≥ 0,5 dB.
+- **Ringing** przy −60 dB piku z obwiedni (maksima |h| interpolowane w dB). **Zmiana względem §c**: pre-ring liczony do czasu zerowego układu (latencji silnika — tam pojawiłby się nieprzetworzony impuls), nie do piku: przyczynowe odpowiedzi narastające do późniejszego piku (pasmo przepustowe 4. rzędu, stroma Low Pass) dawały wcześniej niezerowy pre-ring, choć przed impulsem nic nie ma. Post-ring od piku.
+- Dynamic: przy bieżącym wzmocnieniu i przy pełnym Range; Spectral: maska STFT zerofazowa, pre-echo = połowa ramki.
+- **Wątek** (`ReadoutService`, tylko przy otwartym edytorze): co 50 ms odczytuje ustawienia, przelicza zmienione pasma (Dynamic: zmiana wzmocnienia ≥ 0,5 dB), publikuje przez triple buffer. Pomiar sprawdza żądanie zatrzymania między blokami (`setAbortCheck`): odpowiedź do 5 s przez pełny silnik (Natural Phase Max, 8×) nie opóźnia zatrzymania wątku; przerwany pomiar nie jest publikowany.
+- **UI**: linia odczytów w panelu pasma (Δφ śr., opóźnienie grupowe, pre/post-ring, wartości dla pełnego Range), wyróżniona przy post-ring > 50 ms lub pre-ring > 5 ms; łączna latencja w nagłówku w ms i próbkach (PR-4).
+
+| Kryterium | Wynik |
+|---|---|
+| PR-3: rezonator, post-ring = 2,2·Q/f₀ ±5 % | 22,06 / 55,00 / 14,68 ms wobec 22,00 / 55,00 / 14,67 ms (≤ 0,3 %) |
+| PR-1: Minimum Phase bez pre-ringu | Bell, cięcia, pasmo przepustowe 4. rzędu, stroma High Cut: 0 |
+| PR-1: Natural Phase pre-ring ≤ D | spełnione dla Normal i Max, latencja = D |
+| PR-1: opóźnienie grupowe w fc vs projekt ±2 % | ≤ 0,6 % |
+| PR-2: odczyt ≤ 100 ms po zmianie | mediana 52 ms |
+
+**Niezrealizowane w M7**: ostrzeżenia na podstawie progów słyszalności opóźnienia grupowego (Blauert–Laws) — wyróżniane są tylko długie pre/post-ringi; nakładka fazy i opóźnienia grupowego całego EQ (PR-4, P1).

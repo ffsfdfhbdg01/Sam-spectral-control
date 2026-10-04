@@ -74,3 +74,46 @@
 | VIS-4 | Podpowiedzi włączone/wyłączone → wyjście audio identyczne | null test |
 | VIS-6 | 60 fps (p95 czasu klatki ≤ 16,7 ms) przy oknie 1920×1080 na maszynach referencyjnych; wątek UI ≤ 10 % rdzenia | profilowanie |
 | VIS-6 | Brak blokad w wątku audio przy buforze 32 próbek i aktywnym analizatorze | test obciążeniowy |
+
+## e) Realizacja w M7 i wyniki
+
+### Analizator (VIS-1)
+- Menu „Analyzer” w nagłówku: Pre + Post / Post / Pre / Off; rozdzielczość Low–Max (2048–16 384 punktów przy 48 kHz, skalowana z fs); szybkość 50–2000 ms; tilt 0–6 dB/okt.; zakres 60/90/120 dB; freeze; peak hold (2 s, potem −6 dB/s). Ustawienia w dziecku „Analyzer” stanu wtyczki — nie są parametrami hosta i nie trafiają do Undo. Analizatory, których nie widać, nie liczą.
+- Wątek analizy przetwarza najwyżej jedną pojemność FIFO na przebieg i sprawdza żądanie zatrzymania: producent szybszy niż czas rzeczywisty (render offline, walidatory) nie blokuje zatrzymania wątku (regresja wykryta w CI: pluginval na Linuksie; test `[ARC-4]`).
+
+### Glow aktywności (VIS-2) i pasma dynamiczne (VIS-3)
+- `analysis::SpectrumActivity` na siatce wyświetlania: poziom uśredniony (300 ms) względem średniej słyszalnych punktów plus dodatni flux (onsety, 150 ms), wygaszanie poniżej −90 dB; liczone w wątku analizy z pojedynczych ramek.
+- **Zmiana względem §c**: zamiast bitmapy z rozmyciem (26 ms na klatkę przy 1920×1080 w rendererze programowym) — pięć warstw wypełnionych gradientem pod linią widma (głębokość 70 px) i pasmo halo ±4 px; bursztyn → ciepła biel; ograniczone do zakresu analizatora. Koszt nie rośnie z polem okna (≈ 3 ms przy 1080p).
+- Pasma Dynamic i Spectral: obszar zmiany wzmocnienia świeci tym jaśniej, im większa zmiana w danej częstotliwości; bieżąca krzywa ma halo rosnące z największą zmianą — tylko tam, gdzie pasmo zmienia wzmocnienie.
+
+### Podpowiedzi rezonansów (VIS-4, VIS-5)
+- Detektor (`analysis::ResonanceDetector`, `ResonanceHints`, wątek analizy, widmo post): 8192 punkty (skalowane z fs), uśrednianie 75 ms, co 1024 próbki; YIN (`PitchTracker`). Stabilne prążki (kształt okna: ≥ 12 dB spadku w ±4 binach) są pomijane, zostaje szerokopasmowa część programu. Podłoga: minimum na bin z 2,5 s (minimum statistics); obwiednia: mediana z ⅓ oktawy. Kandydaci: wystawanie ≥ czułość (12/9/6 dB), szerokość −3 dB od min(55 Hz; 0,3 ERB) do 0,8 ERB, najwyżej 18 dB poniżej średniego poziomu swojej ⅓ oktawy (inaczej zamaskowane). Śledzenie ±1/24 okt.; wynik = wystawanie + trwałość + stabilność − harmoniczność (tylko przy wyraźnym f0) + czułość ucha (ISO 226); histereza: pokaż po 300 ms powyżej 1,8, ukryj po 1 s poniżej 0,9.
+- Prezentacja: fioletowa poświata 25–40 % (z pewnością) i znacznik nad pikiem; tooltip: częstotliwość, wystawanie, czas, pewność. Menu: włącz/wyłącz, czułość Low/Medium/High.
+- **Ewaluacja — zmiana względem §c**: zamiast nagrań CC0 syntetyczny materiał „muzyczny” ze znanymi rezonansami (`tools/ssc_resonance_eval`): 2 × 48 klipów po 12 s, kryterium ≥ +9 dB i Q ≥ 8.
+
+| Zakres | Recall | Precision | Fałszywe podpowiedzi (materiał czysty) |
+|---|---|---|---|
+| > 400 Hz (materiał tonalny / pełny miks) | 0,82 / 0,83 | 0,78 / 0,89 | 0,6 / min |
+| < 400 Hz | < 0,1 | — | — |
+
+**Odstępstwo VIS-5**: powyżej 400 Hz kryteria spełnione poza precision 0,78 na materiale tonalnym (cel 0,8); poniżej 400 Hz wąskie rezonanse wyglądają przy tej rozdzielczości jak prążki nut (próbowano 16 384/32 768 punktów i uśrednianych podłóg) — recall < 0,1. Do ewaluacji na nagraniach w M8.
+- VIS-4: test migotania (rezonans oscylujący wokół progu: bez migotania), null test (podpowiedzi wł./wył. → wyjście identyczne co do bitu).
+
+### Rendering i wydajność (VIS-6)
+- Tło i siatka buforowane w rozdzielczości fizycznej (format docelowy ARGB, kopiowane bez skalowania); analiza wyłącznie w wątkach tła, UI rysuje gotowe dane z triple bufferów.
+- Profil (`ssc_screenshot … profile=300`: czas rysowania całego edytora przy grającym audio, analizator Pre + Post, glow, peak hold, podpowiedzi, mierniki), renderer programowy JUCE w kontenerze CI (Xeon 2,1 GHz, współdzielony), mediana z trzech przebiegów:
+
+| Okno | Mediana | p95 |
+|---|---|---|
+| 1100×660 (domyślne) | 6,2 ms | 9,2 ms |
+| 1920×1080 | 12,2 ms | 17,1 ms |
+| 1920×1080, bez glow | 9,3 ms | 14,3 ms |
+
+- Przy 1100×660 60 fps ma zapas; przy 1920×1080 w rendererze programowym p95 przekracza 16,7 ms o ≈ 3 % (przed uproszczeniem geometrii poświaty w M7e: 18,6 ms). Kryterium „wątek UI ≤ 10 % rdzenia” nie jest spełnione w rendererze programowym (≈ 37 % rdzenia przy domyślnym oknie i 60 fps); renderery natywne JUCE z akceleracją GPU (Direct2D na Windows, CoreGraphics na macOS) trzeba zmierzyć na maszynach referencyjnych (M8). Rozważana optymalizacja: adaptacyjna liczba klatek (30 fps, gdy rysowanie przekracza budżet).
+
+### Mierniki (§13)
+- Dolny pasek: THD+N (dB i %) i aliasing (dB), kolor ostrzegawczy powyżej progów, rozbicie na pasma w tooltipie; podpowiedź oversamplingu (OS-5) na etykiecie „Oversampling”.
+
+### Niezrealizowane w M7
+- VIS-8 (P2): spektrogram i widok Delta.
+- Paleta dla daltonistów (P1) — tokeny kolorów są w jednym miejscu (`Theme.h`), wariant w M8.
