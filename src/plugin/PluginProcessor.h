@@ -7,6 +7,7 @@
 
 #include "plugin/AnalyzerService.h"
 #include "plugin/Parameters.h"
+#include "plugin/ReadoutService.h"
 #include "ssc/engine/Engine.h"
 #include "ui/ResponseCurves.h"
 
@@ -84,6 +85,9 @@ public:
     /** Loudspeaker selection of a band (CH-4), as the audio thread uses it; any thread. */
     engine::SpeakerSelection getSpeakers (int band) const noexcept;
 
+    /** Band readouts (phase, group delay, ringing; research §12c), computed in the background. */
+    ReadoutService& getReadouts() noexcept { return readoutService; }
+
     /** Newest gain view of the Spectral bands, or nullptr if nothing new (one UI reader). */
     const spectral::SpectralEngine::MaskView* pollSpectralView() noexcept { return engine.pollSpectralView(); }
 
@@ -118,6 +122,16 @@ private:
     AnalyzerService analyzer;
     std::vector<float> tapScratch;
     juce::AudioProcessLoadMeasurer loadMeasurer;
+
+    // Last member: its thread reads the parameters above and stops first.
+    ReadoutService readoutService { [this] (engine::GlobalParams& p, engine::BandSettingsArray& b, std::array<float, kNumBands>& gains,
+                                            double& sampleRate) {
+        p = readGlobalParams (false);
+        readBandSettings (b);
+        for (int i = 0; i < kNumBands; ++i)
+            gains[static_cast<std::size_t> (i)] = getBandDynamicGainDb (i);
+        sampleRate = getSampleRate();
+    } };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SscAudioProcessor)
 };

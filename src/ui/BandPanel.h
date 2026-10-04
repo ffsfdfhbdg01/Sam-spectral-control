@@ -6,6 +6,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "ssc/analysis/BandReadouts.h"
 #include "ssc/engine/ChannelTopology.h"
 #include "ui/BandModel.h"
 
@@ -14,10 +15,12 @@ namespace ssc::ui
 /**
     Floating panel with every parameter of the focused band (BAND-7). Dynamic parameters appear
     when the band mode is Dynamic or Spectral. All edits go through BandModel, so each knob drag,
-    typed value or menu choice is one undo step. Readouts of section 12 (phase, ringing) are
-    added in M7.
+    typed value or menu choice is one undo step. The bottom line shows the band's readouts
+    (research §12c, PR-1): mean excess phase, group delay at fc, pre-/post-ring at −60 dB (and at
+    the full range for Dynamic bands, the STFT pre-echo for Spectral bands), highlighted when the
+    ringing is likely audible (post > 50 ms, pre > 5 ms).
 */
-class BandPanel final : public juce::Component, private BandModel::Listener
+class BandPanel final : public juce::Component, private BandModel::Listener, private juce::Timer
 {
 public:
     explicit BandPanel (BandModel& model);
@@ -36,6 +39,13 @@ public:
     void setTopology (const engine::ChannelTopology& topology);
 
     int getBand() const noexcept { return band; }
+
+    /** Source of the readouts of a band (polled 10 times a second). */
+    std::function<analysis::BandReadout (int band)> readoutProvider;
+
+    /** Readout line for a band ("" while it is being computed). */
+    static juce::String readoutText (const analysis::BandReadout& readout);
+    static bool readoutWarns (const analysis::BandReadout& readout) noexcept;
 
 private:
     struct Knob
@@ -58,6 +68,7 @@ private:
 
     void bandsChanged() override;
     void selectionChanged() override;
+    void timerCallback() override;
 
     Knob& addKnob (plugin::BandParam, const juce::String& title, bool dynamic);
     Choice& addChoice (plugin::BandParam, const juce::String& title, bool dynamic);
@@ -77,6 +88,7 @@ private:
     bool lastDynamics = false;
 
     juce::Label title;
+    juce::Label readoutLabel;
     juce::TextButton onButton { "On" }, soloButton { "Solo" }, autoGainButton { "Auto Gain" }, deleteButton { "Delete" },
         speakersButton { "Speakers" };
     std::vector<std::unique_ptr<Knob>> knobs;

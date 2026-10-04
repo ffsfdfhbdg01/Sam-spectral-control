@@ -1,6 +1,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <thread>
@@ -201,4 +202,55 @@ TEST_CASE ("Resonance hints never change the audio (VIS-4)", "[plugin][VIS-4]")
         return out;
     };
     REQUIRE (render (true) == render (false));
+}
+
+TEST_CASE ("Band readouts follow parameter changes within 100 ms (PR-2)", "[plugin][PR-2]")
+{
+    JuceEnvironment env;
+    plugin::SscAudioProcessor p;
+    p.setPlayConfigDetails (2, 2, 48000.0, 512);
+    p.prepareToPlay (48000.0, 512);
+    auto* used = p.getValueTreeState().getParameter ("b01_used");
+    auto* gain = p.getValueTreeState().getParameter ("b01_gain");
+    used->setValueNotifyingHost (1.0f);
+    gain->setValueNotifyingHost (gain->convertTo0to1 (6.0f));
+
+    auto& readouts = p.getReadouts();
+    readouts.addClient();
+    auto waitFor = [&readouts] (auto&& condition) {
+        const auto start = std::chrono::steady_clock::now();
+        while (std::chrono::steady_clock::now() - start < std::chrono::seconds (5))
+        {
+            auto& buffer = readouts.readouts();
+            buffer.update();
+            if (condition (buffer.read().bands[0]))
+                return std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - start).count();
+            std::this_thread::sleep_for (std::chrono::milliseconds (1));
+        }
+        return 1.0e9;
+    };
+    REQUIRE (waitFor ([] (const analysis::BandReadout& r) { return r.valid; }) < 5000.0);
+
+    std::vector<double> delays;
+    float previous = 0.0f;
+    {
+        auto& buffer = readouts.readouts();
+        buffer.update();
+        previous = buffer.read().bands[0].meanPhaseDeg;
+    }
+    for (const float db : { 12.0f, 3.0f, 9.0f, -6.0f, 15.0f })
+    {
+        gain->setValueNotifyingHost (gain->convertTo0to1 (db));
+        const float before = previous;
+        delays.push_back (waitFor ([before, &previous] (const analysis::BandReadout& r) {
+            if (std::abs (r.meanPhaseDeg - before) < 1.0e-3f)
+                return false;
+            previous = r.meanPhaseDeg;
+            return true;
+        }));
+    }
+    readouts.removeClient();
+    std::sort (delays.begin(), delays.end());
+    std::printf ("[PR-2] readout delay after a change: median %.1f ms, max %.1f ms\n", delays[2], delays.back());
+    CHECK (delays[2] <= 100.0);
 }

@@ -21,6 +21,7 @@ namespace
     constexpr int kChoiceHeight = 22;
     constexpr int kGap = 6;
     constexpr int kSpeakersWidth = 122;
+    constexpr int kReadoutHeight = 16;
 
     const juce::StringArray& itemsFor (BandParam p)
     {
@@ -51,6 +52,11 @@ namespace
 BandPanel::BandPanel (BandModel& m)
     : model (m)
 {
+    readoutLabel.setFont (uiFont (11.0f));
+    readoutLabel.setColour (juce::Label::textColourId, colours::textDim);
+    addAndMakeVisible (readoutLabel);
+    startTimerHz (10);
+
     title.setFont (uiFont (13.0f, true));
     title.setColour (juce::Label::textColourId, colours::text);
     addAndMakeVisible (title);
@@ -400,13 +406,16 @@ juce::Point<int> BandPanel::getPreferredSize() const
     const int row2 = 3 * kKnobWidth + kGap + kChoiceWidth + kGap + kSpeakersWidth;
     const int row3 = 9 * kKnobWidth + kGap + kChoiceWidth;
     const int width = 2 * kPadding + juce::jmax (row1, row2, showsDynamics() ? row3 : 0);
-    const int height = 2 * kPadding + kHeaderHeight + kGap + kKnobRowHeight + (showsDynamics() ? kGap + kKnobRowHeight : 0);
+    const int height =
+        2 * kPadding + kHeaderHeight + kGap + kKnobRowHeight + (showsDynamics() ? kGap + kKnobRowHeight : 0) + kGap + kReadoutHeight;
     return { width, height };
 }
 
 void BandPanel::resized()
 {
     auto area = getLocalBounds().reduced (kPadding);
+    readoutLabel.setBounds (area.removeFromBottom (kReadoutHeight).withTrimmedLeft (14));
+    area.removeFromBottom (kGap);
 
     auto header = area.removeFromTop (kHeaderHeight);
     title.setBounds (header.removeFromLeft (74).withTrimmedLeft (14));
@@ -484,6 +493,42 @@ void BandPanel::resized()
             column.removeFromTop (spacing);
         }
     }
+}
+
+juce::String BandPanel::readoutText (const analysis::BandReadout& r)
+{
+    if (! r.valid)
+        return juce::String::fromUTF8 ("\xe2\x80\xa6");
+    auto ms = [] (float v) { return (v < 10.0f ? juce::String (v, 1) : juce::String (juce::roundToInt (v))) + " ms"; };
+    const auto phi = juce::String::fromUTF8 ("\xce\x94\xcf\x86 ");
+    if (r.stftPreEchoMs >= 0.0f)
+        return phi + "0" + juce::String::fromUTF8 ("\xc2\xb0") + "   STFT pre-echo " + juce::String::fromUTF8 ("\xc2\xb1")
+            + ms (r.stftPreEchoMs);
+    auto text = phi + juce::String (juce::roundToInt (r.meanPhaseDeg)) + juce::String::fromUTF8 ("\xc2\xb0") + "   "
+        + juce::String::fromUTF8 ("\xcf\x84g ") + juce::String (r.groupDelayMs, 2) + " ms   Pre " + ms (r.preRingMs) + "   Post "
+        + ms (r.postRingMs);
+    if (r.rangePostRingMs >= 0.0f)
+        text << "   (range: pre " << ms (r.rangePreRingMs) << ", post " << ms (r.rangePostRingMs) << ")";
+    return text;
+}
+
+bool BandPanel::readoutWarns (const analysis::BandReadout& r) noexcept
+{
+    // Pre-echo is heard more easily than a tail of the same length (research §12c).
+    const float post = juce::jmax (r.postRingMs, r.rangePostRingMs);
+    const float pre = juce::jmax (r.preRingMs, r.rangePreRingMs);
+    return r.valid && (post > 50.0f || pre > 5.0f);
+}
+
+void BandPanel::timerCallback()
+{
+    if (band < 0 || ! readoutProvider)
+        return;
+    const auto r = readoutProvider (band);
+    readoutLabel.setText (readoutText (r), juce::dontSendNotification);
+    readoutLabel.setColour (juce::Label::textColourId, readoutWarns (r) ? colours::accent : colours::textDim);
+    readoutLabel.setTooltip (readoutWarns (r) ? "Long ringing: may be audible (post-ring > 50 ms or pre-ring > 5 ms at -60 dB)"
+                                              : "Mean excess phase, group delay at the band frequency, ringing at -60 dB");
 }
 
 void BandPanel::paint (juce::Graphics& g)

@@ -5,6 +5,7 @@ set(SSC_PLUGIN_SOURCES
     plugin/SpeakerState.cpp
     plugin/AnalyzerService.cpp
     plugin/AnalyzerSettings.cpp
+    plugin/ReadoutService.cpp
     plugin/PluginProcessor.cpp
     ui/Theme.cpp
     ui/BandLogic.cpp

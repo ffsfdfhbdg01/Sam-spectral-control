@@ -30,6 +30,11 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
     display.dynamicGainProvider = [this] (int band) { return sscProcessor.getBandDynamicGainDb (band); };
     display.spectralViewProvider = [this] { return sscProcessor.pollSpectralView(); };
     bandPanel.onPreferredSizeChanged = [this] { layoutBandPanel(); };
+    bandPanel.readoutProvider = [this] (int band) {
+        auto& readouts = sscProcessor.getReadouts().readouts();
+        readouts.update();
+        return readouts.read().bands[static_cast<std::size_t> (juce::jlimit (0, kNumBands - 1, band))];
+    };
 
     for (int i = 0; i < static_cast<int> (std::size (kEqRanges)); ++i)
         eqRange.addItem (juce::String::fromUTF8 ("\xc2\xb1") + juce::String (juce::roundToInt (kEqRanges[i])) + " dB", i + 1);
@@ -63,6 +68,7 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
     setSize (width, height);
 
     sscProcessor.getAnalyzer().addClient();
+    sscProcessor.getReadouts().addClient();
     startTimerHz (4);
 }
 
@@ -71,6 +77,7 @@ SscEditor::~SscEditor()
     // Solo is a monitoring aid tied to the open editor.
     sscProcessor.setSoloBand (-1);
     sscProcessor.getAnalyzer().removeClient();
+    sscProcessor.getReadouts().removeClient();
     setLookAndFeel (nullptr);
 }
 
@@ -262,7 +269,9 @@ juce::String SscEditor::statusText() const
     const int factor = sscProcessor.getOversamplingFactor();
     if (factor > 1)
         text << "OS " << factor << "x  |  ";
-    text << "Latency " << juce::String (latencyMs, 1) << " ms  |  CPU " << juce::String (sscProcessor.getCpuLoad() * 100.0, 1) << "%";
+    // Total latency in ms and samples (PR-4).
+    text << "Latency " << juce::String (latencyMs, 1) << " ms (" << latency << " smp)  |  CPU "
+         << juce::String (sscProcessor.getCpuLoad() * 100.0, 1) << "%";
     return text;
 }
 } // namespace ssc::ui
