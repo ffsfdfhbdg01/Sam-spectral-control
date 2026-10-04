@@ -1,5 +1,7 @@
 #include "ui/BandModel.h"
 
+#include "plugin/SpeakerState.h"
+
 #include <utility>
 
 #include "ui/BandLogic.h"
@@ -59,29 +61,46 @@ filters::BandShape BandValues::toShape() const noexcept
     return { shape, frequency, gain, q, slope, character };
 }
 
+bool BandSnapshot::operator== (const BandSnapshot& other) const noexcept
+{
+    for (std::size_t b = 0; b < params.size(); ++b)
+        for (std::size_t p = 0; p < params[b].size(); ++p)
+            if (! juce::exactlyEqual (params[b][p], other.params[b][p]))
+                return false;
+    return speakers == other.speakers;
+}
+
 BandSnapshot captureBandSnapshot (juce::AudioProcessorValueTreeState& state)
 {
     BandSnapshot s {};
     for (int b = 0; b < kNumBands; ++b)
+    {
         for (int p = 0; p < kNumBandParams; ++p)
-            s[static_cast<std::size_t> (b)][static_cast<std::size_t> (p)] =
+            s.params[static_cast<std::size_t> (b)][static_cast<std::size_t> (p)] =
                 state.getParameter (plugin::bandParamId (b, static_cast<BandParam> (p)))->getValue();
+        s.speakers[static_cast<std::size_t> (b)] = plugin::readSpeakers (state.state, b);
+    }
     return s;
 }
 
 void applyBandSnapshot (juce::AudioProcessorValueTreeState& state, const BandSnapshot& snapshot)
 {
     for (int b = 0; b < kNumBands; ++b)
+    {
         for (int p = 0; p < kNumBandParams; ++p)
         {
             auto* param = state.getParameter (plugin::bandParamId (b, static_cast<BandParam> (p)));
-            const float target = snapshot[static_cast<std::size_t> (b)][static_cast<std::size_t> (p)];
+            const float target = snapshot.params[static_cast<std::size_t> (b)][static_cast<std::size_t> (p)];
             if (juce::exactlyEqual (param->getValue(), target))
                 continue;
             param->beginChangeGesture();
             param->setValueNotifyingHost (target);
             param->endChangeGesture();
         }
+        const auto& speakers = snapshot.speakers[static_cast<std::size_t> (b)];
+        if (! (plugin::readSpeakers (state.state, b) == speakers))
+            plugin::writeSpeakers (state.state, b, speakers, nullptr);
+    }
 }
 
 BandModel::BandModel (juce::AudioProcessorValueTreeState& s, juce::UndoManager& um)
@@ -123,6 +142,7 @@ BandValues BandModel::read (int band) const noexcept
     v.target = toEnum (get (BandParam::Target), StereoComponent::Side);
     v.character = toEnum (get (BandParam::Character), Character::Sharp);
     v.autoGain = get (BandParam::AutoGain) >= 0.5f;
+    v.speakers = plugin::readSpeakers (state.state, band);
     return v;
 }
 
@@ -297,7 +317,7 @@ void BandModel::endEdit()
     }
 
     const auto after = captureBandSnapshot (state);
-    if (after != editStart)
+    if (! (after == editStart))
     {
         undoManager.beginNewTransaction (editName);
         undoManager.perform (new SnapshotAction (state, editStart, after), editName);
@@ -324,6 +344,7 @@ int BandModel::createBand (Shape shape, float frequency, float gain)
         ScopedEdit edit (*this, "Create Band");
         for (int p = 0; p < kNumBandParams; ++p)
             setToDefault (band, static_cast<BandParam> (p));
+        setSpeakers (band, {});
         setValue (band, BandParam::Used, 1.0f);
         setValue (band, BandParam::On, 1.0f);
         setValue (band, BandParam::Shape, static_cast<float> (shape));
@@ -347,6 +368,7 @@ void BandModel::deleteBand (int band)
     ScopedEdit edit (*this, "Delete Band");
     for (int p = 0; p < kNumBandParams; ++p)
         setToDefault (band, static_cast<BandParam> (p));
+    setSpeakers (band, {});
 }
 
 void BandModel::deleteSelected()
@@ -372,6 +394,7 @@ void BandModel::resetBand (int band)
     const auto shape = values[static_cast<std::size_t> (band)].shape;
     setValue (band, BandParam::Q, defaultQFor (shape));
     setValue (band, BandParam::Slope, static_cast<float> (defaultSlopeFor (shape)));
+    setSpeakers (band, {});
 }
 
 void BandModel::setShape (int band, Shape shape)
@@ -416,11 +439,24 @@ void BandModel::setMode (int band, BandMode mode)
     }
 }
 
+engine::SpeakerSelection BandModel::speakers (int band) const
+{
+    return plugin::readSpeakers (state.state, band);
+}
+
+void BandModel::setSpeakers (int band, const engine::SpeakerSelection& selection)
+{
+    jassert (editDepth > 0); // recorded by the edit's snapshot
+    if (! (speakers (band) == selection))
+        plugin::writeSpeakers (state.state, band, selection, nullptr);
+}
+
 void BandModel::copyBand (int band) const
 {
     juce::StringArray items;
     for (int p = 0; p < kNumBandParams; ++p)
         items.add (juce::String (parameter (band, static_cast<BandParam> (p)).getValue(), 9));
+    items.add (plugin::speakerSelectionToString (speakers (band)));
     juce::SystemClipboard::copyTextToClipboard (kClipboardPrefix + items.joinIntoString (","));
 }
 
@@ -437,7 +473,7 @@ bool BandModel::pasteToBand (int band)
 
     juce::StringArray items;
     items.addTokens (text.fromFirstOccurrenceOf (":", false, false), ",", {});
-    if (items.size() != kNumBandParams)
+    if (items.size() != kNumBandParams && items.size() != kNumBandParams + 1)
         return false;
 
     ScopedEdit edit (*this, "Paste Band");
@@ -449,6 +485,9 @@ bool BandModel::pasteToBand (int band)
         auto& target = parameter (band, param);
         setValue (band, param, target.convertFrom0to1 (juce::jlimit (0.0f, 1.0f, items[p].getFloatValue())));
     }
+    // The speaker selection follows (texts copied before it existed give the default).
+    setSpeakers (band,
+                 items.size() > kNumBandParams ? plugin::speakerSelectionFromString (items[kNumBandParams]) : engine::SpeakerSelection {});
     return true;
 }
 } // namespace ssc::ui

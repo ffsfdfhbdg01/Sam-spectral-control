@@ -11,7 +11,8 @@ Korektor parametryczny z pasmami statycznymi, dynamicznymi i spektralno-dynamicz
 | M2 | 24 pasma statyczne (filtry dopasowane, SVF-TPT), cele L/R/M/S, edycja na wyświetlaczu, panel pasma, Undo/Redo | ✅ |
 | M3 | Pasma Dynamic (lookahead, linkowanie) i Spectral (STFT, siatka ERB, próg względny), Auto Gain globalny i pasm (ISO 226) | ✅ |
 | M4 | Natural Phase (korektor FIR amplitudy i fazy), Quality, oversampling 2×/4×/8× (IIR/FIR), Character Warm/Sharp z ADAA, brickwall liniowofazowy | ✅ |
-| M5–M8 | Panel głośników surround, modele analogowe, wizualizacje, odczyty i mierniki, wydanie | ⏳ |
+| M5 | Surround/Atmos: wybór głośników per pasmo (zapisywany po rolach Dolby, przenośny między układami), panel głośników, null testy 7.1.4 | ✅ |
+| M6–M8 | Modele analogowe (Analog Feel N/P/S), wizualizacje, odczyty i mierniki, wydanie | ⏳ |
 
 Szczegółowy stan każdego wymagania: [docs/traceability.md](docs/traceability.md).
 

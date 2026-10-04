@@ -61,6 +61,24 @@ struct BandTarget {
 - **Globalna konwersja całego bufora do M/S** — wymusza ten sam tryb na wszystkich pasmach; odrzucone na rzecz lokalnego M/S per pasmo.
 - **Średnia (zamiast maksimum) w linkowaniu** — przepuszcza szczyty w pojedynczych kanałach; odrzucone jako domyślne (może wrócić jako opcja P2).
 
+### Realizacja w M5
+
+- **Wybór głośników semantycznie** (`engine::SpeakerSelection`): maska ról (bit na `SpeakerRole`, Dolby: L, R, C, LFE, Lss, Rss, Lrs, Rrs, Lw, Rw, Ltf, Rtf, Ltm, Rtm, Ltr, Rtr, …) + maska indeksów dla kanałów bez roli (układy discrete). Domyślnie wszystkie głośniki poza LFE/LFE2. Wybór jest odwzorowywany na kanały bieżącego układu w każdym bloku (`channelMask`), więc preset przenosi się między układami; głośniki, których układ nie ma, nie robią nic.
+- **Zapis**: to nie jest parametr hosta (nikt nie automatyzuje głośników, a ~70 bitów nie mieści się w jednym parametrze) — dziecko „Speakers” drzewa stanu, właściwość na pasmo („b01” … „b24”) z maskami w hex; brak właściwości = domyślny wybór (stan bez zmian wersji, starsze wersje go ignorują). Procesor trzyma atomowe kopie dla wątku audio, odświeżane przez listener drzewa (także po `setStateInformation`).
+- **Edycja**: migawka pasm (`BandSnapshot`) obejmuje wybór głośników, więc zmiana to jeden krok Undo; Copy/Paste pasma przenosi wybór; usunięcie i reset pasma przywracają „All”.
+- **UI**: przycisk „Speakers: All / 5/12 / None …” w panelu pasma (przy > 2 kanałach) otwiera panel z widokiem pomieszczenia z góry — głośniki ear-level na zewnętrznym okręgu, wysokościowe (podwójny okrąg) na wewnętrznym, LFE jako kwadrat przed słuchaczem; szybkie wybory All, None, Bed, Tops, Front, Surround i LFE (pokazywane tylko, gdy mają sens w układzie); układy discrete — kanały numerowane.
+- **Zachowanie par**: składowe Mid/Side pary wymagają wybrania obu jej głośników (pojedynczy głośnik pary jest przetwarzany tylko w celu All/Left/Right).
+
+**Zmierzone / sprawdzone (testy `[CH-4]`, `[CH-6]`)**
+| Kryterium | Wynik |
+|---|---|
+| CH-4 mapowanie | domyślny wybór w 7.1.4 = 11 kanałów (bez LFE); Lss/Rss → kanały 4/5; discrete po indeksach |
+| CH-4 przenośność | „All + Side” ze stereo w 7.1.4 → 5 lane Side (L/R, Lss/Rss, Lrs/Rrs, Ltf/Rtf, Ltr/Rtr); „Mid” na C = sam kanał; „Side” na C — brak |
+| CH-4 stan | zapis/odczyt stanu, Undo/Redo, reset przy usunięciu pasma |
+| CH-6 | 7.1.4, pasmo Side na Lss/Rss z oversamplingiem 2×, Natural Phase i Auto Gain: 10 pozostałych kanałów bit-exact (opóźnione o latencję) |
+
+**Do zrobienia poza CI**: CH-2 — macierz hostów Atmos (`docs/testing.md`, scenariusz 7) przed wydaniem (M8).
+
 ## d) Kryteria akceptacji
 
 | ID | Kryterium | Metoda |

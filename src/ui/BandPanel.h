@@ -6,6 +6,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "ssc/engine/ChannelTopology.h"
 #include "ui/BandModel.h"
 
 namespace ssc::ui
@@ -31,7 +32,8 @@ public:
     /** Called when the preferred size changes (band, shape or mode changed). */
     std::function<void()> onPreferredSizeChanged;
 
-    void setChannelInfo (int numChannels, int numPairs);
+    /** Channel layout of the host bus: Target choices and the speaker panel follow it (CH-4). */
+    void setTopology (const engine::ChannelTopology& topology);
 
     int getBand() const noexcept { return band; }
 
@@ -69,11 +71,14 @@ private:
     int band = -1;
     bool updating = false;
     int numPairs = 1;
+    engine::ChannelTopology topology = engine::ChannelTopology::stereo();
+    void openSpeakerPanel();
     Shape itemsShape = Shape::Bell;
     bool lastDynamics = false;
 
     juce::Label title;
-    juce::TextButton onButton { "On" }, soloButton { "Solo" }, autoGainButton { "Auto Gain" }, deleteButton { "Delete" };
+    juce::TextButton onButton { "On" }, soloButton { "Solo" }, autoGainButton { "Auto Gain" }, deleteButton { "Delete" },
+        speakersButton { "Speakers" };
     std::vector<std::unique_ptr<Knob>> knobs;
     std::vector<std::unique_ptr<Choice>> choices;
 

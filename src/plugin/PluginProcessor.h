@@ -14,7 +14,7 @@ namespace ssc::plugin
 {
 inline constexpr const char* kPluginName = "Sam Spectral Control";
 
-class SscAudioProcessor final : public juce::AudioProcessor, private juce::Timer
+class SscAudioProcessor final : public juce::AudioProcessor, private juce::Timer, private juce::ValueTree::Listener
 {
 public:
     SscAudioProcessor();
@@ -81,6 +81,9 @@ public:
     /** How the bands are heard, for the display; any thread. */
     ui::ResponseCurves::Model getResponseModel() const noexcept;
 
+    /** Loudspeaker selection of a band (CH-4), as the audio thread uses it; any thread. */
+    engine::SpeakerSelection getSpeakers (int band) const noexcept;
+
     /** Newest gain view of the Spectral bands, or nullptr if nothing new (one UI reader). */
     const spectral::SpectralEngine::MaskView* pollSpectralView() noexcept { return engine.pollSpectralView(); }
 
@@ -97,12 +100,21 @@ private:
     engine::GlobalParams readGlobalParams (bool forceBypass) const noexcept;
     void readBandSettings (engine::BandSettingsArray& bands) const noexcept;
 
+    // The speaker selections live in the state tree; the audio thread reads atomic copies.
+    void refreshSpeakers();
+    void valueTreePropertyChanged (juce::ValueTree& tree, const juce::Identifier& property) override;
+    void valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTree& child) override;
+    void valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueTree& child, int index) override;
+    void valueTreeRedirected (juce::ValueTree& tree) override;
+
     juce::UndoManager undoManager { 0, 100 };
     juce::AudioProcessorValueTreeState state;
     ParameterPointers params;
     engine::Engine engine;
     engine::BandSettingsArray bandSettings {};
     std::atomic<int> soloBand { -1 };
+    std::array<std::atomic<std::uint64_t>, kNumBands> speakerRoles {};
+    std::array<std::atomic<std::uint32_t>, kNumBands> speakerDiscrete {};
     AnalyzerService analyzer;
     std::vector<float> tapScratch;
     juce::AudioProcessLoadMeasurer loadMeasurer;

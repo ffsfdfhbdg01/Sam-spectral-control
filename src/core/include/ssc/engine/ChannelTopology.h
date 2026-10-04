@@ -96,4 +96,43 @@ struct ChannelTopology
     static ChannelTopology mono() noexcept;
     static ChannelTopology discrete (int numChannels) noexcept;
 };
+
+/** Short Dolby-style label of a role (L, R, C, LFE, Lss, Rss, Lrs, Rrs, Ltf, …); empty for Unknown. */
+const char* speakerLabel (SpeakerRole role) noexcept;
+
+/**
+    The loudspeakers a band works on (research §4c, CH-4). Stored by role, not by channel index,
+    so a preset moves between layouts: "All" from stereo covers every speaker of 7.1.4. Channels
+    without a role (discrete layouts) are selected by index. The default is every speaker but
+    LFE/LFE2 (as in Pro-Q 4).
+*/
+constexpr std::uint64_t speakerBit (SpeakerRole role) noexcept
+{
+    return std::uint64_t { 1 } << static_cast<int> (role);
+}
+
+struct SpeakerSelection
+{
+    static constexpr std::uint64_t kLfeRoles = speakerBit (SpeakerRole::Lfe) | speakerBit (SpeakerRole::Lfe2);
+    static constexpr std::uint64_t kAllRoles = ~std::uint64_t { 0 };
+    static constexpr std::uint64_t kDefaultRoles = kAllRoles & ~kLfeRoles;
+    static constexpr std::uint32_t kAllDiscrete = ~std::uint32_t { 0 };
+
+    std::uint64_t roles = kDefaultRoles;
+    std::uint32_t discrete = kAllDiscrete; ///< by channel index, for channels without a role
+
+    bool operator== (const SpeakerSelection&) const = default;
+
+    bool isDefault() const noexcept { return *this == SpeakerSelection {}; }
+    bool includesLfe() const noexcept { return (roles & kLfeRoles) != 0; }
+
+    /** True if channel ch of the topology is selected. */
+    bool selects (const ChannelTopology& topology, int ch) const noexcept;
+
+    /** Mask of the selected channel indices of a topology (BandSettings::channelMask). */
+    std::uint64_t channelMask (const ChannelTopology& topology) const noexcept;
+
+    /** Number of channels of the topology that are selected. */
+    int count (const ChannelTopology& topology) const noexcept;
+};
 } // namespace ssc::engine

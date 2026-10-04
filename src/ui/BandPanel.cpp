@@ -4,6 +4,7 @@
 
 #include "plugin/Parameters.h"
 #include "ui/BandLogic.h"
+#include "ui/SpeakerPanel.h"
 #include "ui/Theme.h"
 
 namespace ssc::ui
@@ -19,6 +20,7 @@ namespace
     constexpr int kChoiceWidth = 104;
     constexpr int kChoiceHeight = 22;
     constexpr int kGap = 6;
+    constexpr int kSpeakersWidth = 122;
 
     const juce::StringArray& itemsFor (BandParam p)
     {
@@ -53,7 +55,7 @@ BandPanel::BandPanel (BandModel& m)
     title.setColour (juce::Label::textColourId, colours::text);
     addAndMakeVisible (title);
 
-    for (auto* b : { &onButton, &soloButton, &autoGainButton, &deleteButton })
+    for (auto* b : { &onButton, &soloButton, &autoGainButton, &deleteButton, &speakersButton })
     {
         styleButton (*b);
         addAndMakeVisible (*b);
@@ -84,6 +86,9 @@ BandPanel::BandPanel (BandModel& m)
         if (band >= 0)
             model.deleteBand (band);
     };
+    speakersButton.setTooltip ("Choose the speakers this band works on");
+    speakersButton.onClick = [this] { openSpeakerPanel(); };
+    speakersButton.setVisible (false);
 
     addChoice (BandParam::Shape, "Shape", false);
     addChoice (BandParam::Slope, "Slope", false);
@@ -197,14 +202,32 @@ BandPanel::Choice& BandPanel::addChoice (BandParam param, const juce::String& na
     return *choices.back();
 }
 
-void BandPanel::setChannelInfo (int, int pairs)
+void BandPanel::setTopology (const engine::ChannelTopology& newTopology)
 {
-    if (pairs == numPairs)
+    const bool surround = newTopology.numChannels > 2;
+    const bool changed = newTopology.numChannels != topology.numChannels || newTopology.roles != topology.roles;
+    topology = newTopology;
+    if (speakersButton.isVisible() != surround)
+    {
+        speakersButton.setVisible (surround);
+        resized();
+    }
+    if (changed)
+        updateFromModel();
+    if (newTopology.numPairs == numPairs)
         return;
-    numPairs = pairs;
+    numPairs = newTopology.numPairs;
     for (auto& c : choices)
         if (c->param == BandParam::Target)
             rebuildChoiceItems (*c);
+}
+
+void BandPanel::openSpeakerPanel()
+{
+    if (band < 0)
+        return;
+    auto panel = std::make_unique<SpeakerPanel> (model, band, topology);
+    juce::CallOutBox::launchAsynchronously (std::move (panel), speakersButton.getScreenBounds(), nullptr);
 }
 
 bool BandPanel::showsDynamics() const
@@ -317,6 +340,7 @@ void BandPanel::updateFromModel()
     soloButton.setToggleState (model.getSoloBand() == band, juce::dontSendNotification);
     soloButton.setEnabled (v.on);
     autoGainButton.setToggleState (v.autoGain, juce::dontSendNotification);
+    speakersButton.setButtonText ("Speakers: " + SpeakerPanel::summary (v.speakers, topology));
 
     for (auto& k : knobs)
     {
@@ -373,7 +397,7 @@ juce::Point<int> BandPanel::getPreferredSize() const
     // Row 1: title, On, Solo, Shape, Slope, Delete. Row 2: Freq, Gain, Q, Target/Mode/Character, Auto Gain.
     // Row 3 (Dynamic/Spectral): nine knobs and the detector choices.
     const int row1 = 74 + 2 * (48 + kGap) + 2 * (kChoiceWidth + kGap) + 64;
-    const int row2 = 3 * kKnobWidth + kGap + kChoiceWidth + kGap + 84;
+    const int row2 = 3 * kKnobWidth + kGap + kChoiceWidth + kGap + kSpeakersWidth;
     const int row3 = 9 * kKnobWidth + kGap + kChoiceWidth;
     const int width = 2 * kPadding + juce::jmax (row1, row2, showsDynamics() ? row3 : 0);
     const int height = 2 * kPadding + kHeaderHeight + kGap + kKnobRowHeight + (showsDynamics() ? kGap + kKnobRowHeight : 0);
@@ -431,7 +455,18 @@ void BandPanel::resized()
         }
     }
     row2.removeFromLeft (kGap);
-    autoGainButton.setBounds (row2.removeFromLeft (84).withSizeKeepingCentre (84, 24));
+    {
+        auto column = row2.removeFromLeft (kSpeakersWidth);
+        if (speakersButton.isVisible())
+        {
+            autoGainButton.setBounds (column.removeFromTop (column.getHeight() / 2).withSizeKeepingCentre (kSpeakersWidth, 24));
+            speakersButton.setBounds (column.withSizeKeepingCentre (kSpeakersWidth, 24));
+        }
+        else
+        {
+            autoGainButton.setBounds (column.withSizeKeepingCentre (84, 24));
+        }
+    }
 
     if (showsDynamics())
     {

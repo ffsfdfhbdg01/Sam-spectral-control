@@ -1,6 +1,7 @@
 #include "plugin/PluginProcessor.h"
 
 #include "plugin/ChannelLayout.h"
+#include "plugin/SpeakerState.h"
 #include "plugin/StateMigration.h"
 #include "ui/PluginEditor.h"
 
@@ -14,12 +15,56 @@ SscAudioProcessor::SscAudioProcessor()
 {
     params.attach (state);
     state.state.setProperty (kVersionProperty, kStateVersion, nullptr);
+    state.state.addListener (this);
+    refreshSpeakers();
     startTimerHz (10);
 }
 
 SscAudioProcessor::~SscAudioProcessor()
 {
     stopTimer();
+    state.state.removeListener (this);
+}
+
+void SscAudioProcessor::refreshSpeakers()
+{
+    for (int b = 0; b < kNumBands; ++b)
+    {
+        const auto selection = readSpeakers (state.state, b);
+        speakerRoles[static_cast<std::size_t> (b)].store (selection.roles, std::memory_order_relaxed);
+        speakerDiscrete[static_cast<std::size_t> (b)].store (selection.discrete, std::memory_order_relaxed);
+    }
+}
+
+engine::SpeakerSelection SscAudioProcessor::getSpeakers (int band) const noexcept
+{
+    engine::SpeakerSelection selection;
+    selection.roles = speakerRoles[static_cast<std::size_t> (band)].load (std::memory_order_relaxed);
+    selection.discrete = speakerDiscrete[static_cast<std::size_t> (band)].load (std::memory_order_relaxed);
+    return selection;
+}
+
+void SscAudioProcessor::valueTreePropertyChanged (juce::ValueTree& tree, const juce::Identifier&)
+{
+    if (tree.hasType (kSpeakersType))
+        refreshSpeakers();
+}
+
+void SscAudioProcessor::valueTreeChildAdded (juce::ValueTree&, juce::ValueTree& child)
+{
+    if (child.hasType (kSpeakersType))
+        refreshSpeakers();
+}
+
+void SscAudioProcessor::valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree& child, int)
+{
+    if (child.hasType (kSpeakersType))
+        refreshSpeakers();
+}
+
+void SscAudioProcessor::valueTreeRedirected (juce::ValueTree&)
+{
+    refreshSpeakers();
 }
 
 void SscAudioProcessor::timerCallback()
@@ -143,6 +188,10 @@ void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) cons
         s.shape.slope = choice (get (BandParam::Slope), Slope::Brickwall);
         s.mode = choice (get (BandParam::Mode), BandMode::Spectral);
         s.component = choice (get (BandParam::Target), StereoComponent::Side);
+        // Speakers are stored by role: map them onto the current layout (CH-4); the selection
+        // decides about LFE as well.
+        s.channelMask = getSpeakers (b).channelMask (engine.getConfig().topology);
+        s.includeLfe = true;
         s.shape.character = choice (get (BandParam::Character), Character::Sharp);
 
         auto value = [&get] (BandParam p) { return static_cast<double> (get (p)->load (std::memory_order_relaxed)); };
@@ -260,6 +309,7 @@ void SscAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
         return;
 
     state.replaceState (tree);
+    refreshSpeakers();
 }
 } // namespace ssc::plugin
 

@@ -25,4 +25,7 @@ Testy ręczne, których nie da się wykonać w CI (Atmos, AAX, interakcja w DAW)
 5. Render offline vs odtwarzanie — identyczny wynik (null test).
 6. Bypass z hosta i przyciskiem On/Off — bez trzasków, stała latencja.
 7. Surround: cel pasma na wybranych głośnikach; kanały nieobjęte pasmami nietknięte (null test).
+   - Panel „Speakers” w panelu pasma (widoczny przy > 2 kanałach): kliknięcie głośnika, szybkie wybory All/None/Bed/Tops/Front/Surround, LFE; każda zmiana to jeden krok Undo.
+   - Preset/projekt zapisany w stereo z pasmem „All + Side” otwarty na szynie 7.1.4 działa na Side każdej pary (L/R, Lss/Rss, Lrs/Rrs, Ltf/Rtf, Ltr/Rtr), C i LFE pozostają nietknięte.
+   - CH-2 (Atmos): ścieżka/szyna bed 7.1.2 i 7.1.4 w Nuendo/Cubase, 7.1.4 w Resolve Fairlight, 9.1.6 w Nuendo — wtyczka się ładuje, przetwarza, a latencja jest kompensowana.
 8. Skalowanie okna, HiDPI, kilka instancji jednocześnie, zamykanie i otwieranie edytora podczas odtwarzania.

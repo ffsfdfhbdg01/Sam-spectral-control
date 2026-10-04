@@ -2,7 +2,7 @@
 
 Każde wymaganie z [PROMPT.md](../PROMPT.md) z priorytetem, etapem realizacji, źródłem kryteriów akceptacji i statusem. Tabela jest aktualizowana po każdym kamieniu milowym; kolumna „Dowód” zostanie uzupełniona nazwami testów i raportów pomiarowych.
 
-Stan: **M4 zakończony** (M0 research, M1 szkielet, M2 pasma statyczne, M3 dynamika, Spectral i Auto Gain, M4 Natural Phase, Quality, oversampling, Character) — 88 wymagań, wszystkie z kryteriami akceptacji w notatkach researchu lub ADR. Kolumna „Dowód” wskazuje testy (tagi Catch2 w nawiasach) lub elementy kodu.
+Stan: **M5 zakończony** (M0 research, M1 szkielet, M2 pasma statyczne, M3 dynamika, Spectral i Auto Gain, M4 Natural Phase, Quality, oversampling, Character, M5 surround i panel głośników) — 88 wymagań, wszystkie z kryteriami akceptacji w notatkach researchu lub ADR. Kolumna „Dowód” wskazuje testy (tagi Catch2 w nawiasach) lub elementy kodu.
 
 | ID | Wymaganie (skrót) | Priorytet | Etap | Kryteria / projekt | Dowód | Status |
 |---|---|---|---|---|---|---|
@@ -18,12 +18,12 @@ Stan: **M4 zakończony** (M0 research, M1 szkielet, M2 pasma statyczne, M3 dynam
 | ARC-4 | Wątki: audio (DSP), analiza (analizator, wykrywanie rezonansów, odczyty fazy i ringingu… | P0 | M0 (projekt) → M1–M3 | ADR-0010 | `AnalyzerService` (wątek tła), triple buffer, SPSC FIFO | W realizacji: wątek analizatora (M1) |
 | ARC-5 | Każdy blok DSP da się przetestować w izolacji, bez GUI | P0 | M0 (projekt) → M1–M3 | architecture.md | `ssc_core` bez JUCE; testy Catch2 rdzenia | Zrealizowane |
 | ARC-6 | Każdy tryb pasma działa w każdym trybie fazy | P0 | M0 (projekt) → M1–M3 | architecture.md | — | Zaprojektowane (M0) |
-| CH-1 | Układy kanałów: mono, stereo i każdy układ surround/immersive, który host przekazuje przez VST3 | P0 | M5 | research/04 §d | `[CH-1]` layouts; Host layouts map to speaker pairs… | Częściowo: układy 1–32 kanałów, role głośników i pary; panel głośników — M5 |
-| CH-2 | Dolby Atmos: wtyczka działa na ścieżkach i szynach bed (do 7.1.2), na szynach monitorowych… | P0 | M5 | research/04 §d | — | Zaprojektowane, do realizacji |
+| CH-1 | Układy kanałów: mono, stereo i każdy układ surround/immersive, który host przekazuje przez VST3 | P0 | M5 | research/04 §d | `[CH-1]` layouts; Host layouts map to speaker pairs…; panel głośników (`SpeakerPanel`) | Zrealizowane (M5); weryfikacja w hostach — `docs/testing.md` (M8) |
+| CH-2 | Dolby Atmos: wtyczka działa na ścieżkach i szynach bed (do 7.1.2), na szynach monitorowych… | P0 | M5 | research/04 §d | testy 7.1.4 w CI (`[CH-6]`, `[CH-4]`); checklista hostów `docs/testing.md` (scenariusz 7) | Zrealizowane w kodzie (M5); testy w Nuendo/Resolve przed wydaniem — M8 |
 | CH-3 | Cel pasma w stereo: All (domyślnie), Left, Right, Mid, Side | P0 | M2 | research/04 §d | `[CH-3]` Mid band leaves the side signal untouched…; Left target changes only…; Band parameters drive the engine… | Zrealizowane (M2) |
-| CH-4 | Cel pasma w surround — panel wyboru głośników (nazewnictwo Dolby: L, R, C, LFE, Lss, Rss… | P0 | M5 | research/04 §d | — | Zaprojektowane, do realizacji |
+| CH-4 | Cel pasma w surround — panel wyboru głośników (nazewnictwo Dolby: L, R, C, LFE, Lss, Rss… | P0 | M5 | research/04 §d | `[CH-4]` mapowanie ról, „All + Side” ze stereo w 7.1.4, stan, Undo, panel (szybkie wybory, podsumowanie) | Zrealizowane (M5) |
 | CH-5 | Linkowanie detekcji w pasmach Dynamic/Spectral: niezależnie / w obrębie pary / w obrębie… | P0 | M5 | research/04 §d | `[CH-5]` Linked lanes share one gain (Dynamic); linkowanie w Spectral | Zrealizowane (M3) |
-| CH-6 | Kanały, których pasmo nie obejmuje, zostają nietknięte (weryfikacja null testem) | P0 | M5 | research/04 §d | `[CH-6]` Engine applies active bands and leaves inactive ones bit-exact; Band parameters drive the engine… | Zrealizowane dla pasm statycznych (M2); surround — M5 |
+| CH-6 | Kanały, których pasmo nie obejmuje, zostają nietknięte (weryfikacja null testem) | P0 | M5 | research/04 §d | `[CH-6]` stereo i 7.1.4 z oversamplingiem, Natural Phase i Auto Gain (bit-exact) | Zrealizowane (M5); z Analog Feel — sprawdzane w M6 |
 | BAND-1 | Do 24 pasm | P0 | M2 | research/05 §d | `[BAND-1]` Band slots…; Band solo auditions the band region…; Band parameters drive the engine… | Zrealizowane (M2); benchmark CPU — M3 |
 | BAND-2 | Kształty: Bell, Low Shelf, High Shelf, Low Cut, High Cut, Notch, Band Pass, Tilt Shelf | P0 (Flat Tilt, All Pass P1) | M2 | research/05 §d | `[BAND-2]` Matched bell / shelves / notch, band pass, all pass, tilt | Zrealizowane w Minimum Phase (obwiednia błędu: research/05 §c); ±0,1 dB — M4 |
 | BAND-3 | Slope dla Low/High Cut: 6, 12, 18, 24, 30, 36, 48, 72 i 96 dB/oct (płynna regulacja — P1)… | P0 (płynny slope P1) | M2 | research/05 §d | `[BAND-3]` Cut filters: -3 dB at the corner and the nominal slope; `[BAND-3]` Natural Phase brickwall | Zrealizowane (slopy stałe; Brickwall w Natural Phase liniowofazowy od 7·fs/(2D+1), niżej IIR 96 dB/oct — M4); płynny slope P1 |

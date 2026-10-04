@@ -2,6 +2,7 @@ set(SSC_PLUGIN_SOURCES
     plugin/Parameters.cpp
     plugin/ChannelLayout.cpp
     plugin/StateMigration.cpp
+    plugin/SpeakerState.cpp
     plugin/AnalyzerService.cpp
     plugin/PluginProcessor.cpp
     ui/Theme.cpp
@@ -10,6 +11,7 @@ set(SSC_PLUGIN_SOURCES
     ui/ResponseCurves.cpp
     ui/EqDisplay.cpp
     ui/BandPanel.cpp
+    ui/SpeakerPanel.cpp
     ui/ControlBar.cpp
     ui/PluginEditor.cpp)
 list(TRANSFORM SSC_PLUGIN_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")

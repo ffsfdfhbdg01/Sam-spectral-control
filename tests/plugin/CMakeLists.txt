@@ -3,6 +3,7 @@ juce_add_console_app(ssc_plugin_tests PRODUCT_NAME "SSC Plugin Tests")
 target_sources(ssc_plugin_tests PRIVATE
     TestProcessor.cpp
     TestBandEditing.cpp
+    TestSpeakers.cpp
     ${SSC_PLUGIN_SOURCES})
 
 target_include_directories(ssc_plugin_tests PRIVATE

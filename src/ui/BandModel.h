@@ -7,6 +7,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "plugin/Parameters.h"
+#include "ssc/engine/ChannelTopology.h"
 #include "ssc/filters/BandDesign.h"
 
 namespace ssc::ui
@@ -25,6 +26,7 @@ struct BandValues
     StereoComponent target = StereoComponent::All;
     Character character = Character::Clear;
     bool autoGain = false;
+    engine::SpeakerSelection speakers; ///< loudspeakers of the band (state, not a parameter; CH-4)
 
     bool active() const noexcept { return used && on; }
     filters::BandShape toShape() const noexcept;
@@ -33,12 +35,19 @@ struct BandValues
     {
         constexpr std::equal_to<float> same;
         return used == o.used && on == o.on && shape == o.shape && same (frequency, o.frequency) && same (gain, o.gain) && same (q, o.q)
-            && slope == o.slope && mode == o.mode && target == o.target && character == o.character && autoGain == o.autoGain;
+            && slope == o.slope && mode == o.mode && target == o.target && character == o.character && autoGain == o.autoGain
+            && speakers == o.speakers;
     }
 };
 
-/** Normalised values of every band parameter: the unit of undo and copy/paste. */
-using BandSnapshot = std::array<std::array<float, plugin::kNumBandParams>, kNumBands>;
+/** Normalised values of every band parameter and the speaker selections: the unit of undo. */
+struct BandSnapshot
+{
+    std::array<std::array<float, plugin::kNumBandParams>, kNumBands> params {};
+    std::array<engine::SpeakerSelection, kNumBands> speakers {};
+
+    bool operator== (const BandSnapshot& other) const noexcept;
+};
 
 BandSnapshot captureBandSnapshot (juce::AudioProcessorValueTreeState& state);
 
@@ -122,6 +131,10 @@ public:
         defaults of the new one (Dynamic: Absolute −20 dBFS, Spectral: Relative +6 dB, DYN-4).
     */
     void setMode (int band, BandMode mode);
+
+    /** Loudspeaker selection of a band (CH-4); setSpeakers() must be called inside an edit. */
+    engine::SpeakerSelection speakers (int band) const;
+    void setSpeakers (int band, const engine::SpeakerSelection& selection);
 
     void copyBand (int band) const;
     bool canPaste() const;

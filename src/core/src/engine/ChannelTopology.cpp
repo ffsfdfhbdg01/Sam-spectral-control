@@ -122,4 +122,76 @@ ChannelTopology ChannelTopology::discrete (int numChannels) noexcept
     roles.fill (SpeakerRole::Unknown);
     return fromRoles (roles.data(), numChannels);
 }
+const char* speakerLabel (SpeakerRole role) noexcept
+{
+    using R = SpeakerRole;
+    switch (role)
+    {
+        case R::Unknown: return "";
+        case R::Mono: return "M";
+        case R::Left: return "L";
+        case R::Right: return "R";
+        case R::Centre: return "C";
+        case R::Lfe: return "LFE";
+        case R::Lfe2: return "LFE2";
+        case R::LeftSurround: return "Ls";
+        case R::RightSurround: return "Rs";
+        case R::LeftSurroundSide: return "Lss";
+        case R::RightSurroundSide: return "Rss";
+        case R::LeftSurroundRear: return "Lrs";
+        case R::RightSurroundRear: return "Rrs";
+        case R::CentreSurround: return "Cs";
+        case R::LeftCentre: return "Lc";
+        case R::RightCentre: return "Rc";
+        case R::LeftWide: return "Lw";
+        case R::RightWide: return "Rw";
+        case R::TopFrontLeft: return "Ltf";
+        case R::TopFrontRight: return "Rtf";
+        case R::TopFrontCentre: return "Ctf";
+        case R::TopMiddleLeft: return "Ltm";
+        case R::TopMiddleRight: return "Rtm";
+        case R::TopMiddleCentre: return "Tc";
+        case R::TopRearLeft: return "Ltr";
+        case R::TopRearRight: return "Rtr";
+        case R::TopRearCentre: return "Ctr";
+        case R::BottomFrontLeft: return "Lbf";
+        case R::BottomFrontRight: return "Rbf";
+        case R::BottomFrontCentre: return "Cbf";
+        case R::ProximityLeft: return "Lp";
+        case R::ProximityRight: return "Rp";
+        case R::BottomSideLeft: return "Lbs";
+        case R::BottomSideRight: return "Rbs";
+        case R::BottomRearLeft: return "Lbr";
+        case R::BottomRearRight: return "Rbr";
+        case R::BottomRearCentre: return "Cbr";
+    }
+    return "";
+}
+
+bool SpeakerSelection::selects (const ChannelTopology& topology, int ch) const noexcept
+{
+    if (ch < 0 || ch >= topology.numChannels)
+        return false;
+    const auto role = topology.roles[static_cast<std::size_t> (ch)];
+    if (role == SpeakerRole::Unknown)
+        return ch < 32 && ((discrete >> ch) & 1u) != 0;
+    return (roles & speakerBit (role)) != 0;
+}
+
+std::uint64_t SpeakerSelection::channelMask (const ChannelTopology& topology) const noexcept
+{
+    std::uint64_t mask = 0;
+    for (int ch = 0; ch < topology.numChannels; ++ch)
+        if (selects (topology, ch))
+            mask |= std::uint64_t { 1 } << ch;
+    return mask;
+}
+
+int SpeakerSelection::count (const ChannelTopology& topology) const noexcept
+{
+    int n = 0;
+    for (int ch = 0; ch < topology.numChannels; ++ch)
+        n += selects (topology, ch) ? 1 : 0;
+    return n;
+}
 } // namespace ssc::engine

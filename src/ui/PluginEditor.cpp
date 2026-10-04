@@ -157,7 +157,7 @@ void SscEditor::timerCallback()
     display.setResponseModel (sscProcessor.getResponseModel());
     const auto topology = sscProcessor.getChannelTopology();
     display.setChannelInfo (topology.numChannels, topology.numPairs);
-    bandPanel.setChannelInfo (topology.numChannels, topology.numPairs);
+    bandPanel.setTopology (topology);
 
     // Re-dock the panel once a drag has finished (never while the user is dragging).
     if (! juce::ModifierKeys::currentModifiers.isAnyMouseButtonDown())
