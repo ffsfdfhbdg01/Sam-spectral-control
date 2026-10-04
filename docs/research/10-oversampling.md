@@ -33,6 +33,40 @@
 - **Oversampling całej wtyczki (z STFT)** — mnoży koszt FFT bez korzyści; odrzucone.
 - **Automatyczne włączanie OS tylko przy aktywnych nieliniowościach** — zmienia latencję w trakcie pracy; odrzucone.
 
+### Realizacja w M4 i wyniki pomiarów
+
+- **Zmiana względem ADR-0008**: zamiast `juce::dsp::Oversampling` własna implementacja w rdzeniu DSP (`ssc/oversampling/Oversampler`), bo rdzeń jest niezależny od JUCE (ARC-5), a specyfikacja jest ta sama. Kaskada stopni 2×:
+  - **PolyphaseIir** (Minimum Phase): eliptyczny półpasmowy filtr z dwóch gałęzi sekcji all-pass 1. rzędu (projekt Valenzueli–Constantinidesa w postaci z HIIR); 6–10 współczynników w pierwszym stopniu, latencja 3–6 próbek.
+  - **LinearPhaseFir** (Natural Phase, Analog Feel): półpasmowy FIR z oknem Kaisera w postaci polifazowej (długość 4M − 1, środek ½); docelowe tłumienie jest podnoszone, aż zmierzone pasmo zaporowe spełni specyfikację (wzory Kaisera są dla krótkich filtrów półpasmowych o ~1–8 dB za optymistyczne).
+  - Każdy następny stopień chroni tylko pasmo przepustowe częstotliwości bazowej, więc ma szersze pasmo przejściowe i jest krótki.
+- **Specyfikacja per Quality** (pasmo przepustowe / tłumienie): Eco 0,420·fs / 80 dB, Normal 0,432·fs / 90 dB (19 kHz przy 44,1 kHz), High 0,444·fs / 105 dB, Max 0,454·fs / 120 dB (20 kHz przy 44,1 kHz).
+- **Latencja zawsze całkowita**: ułamkowe opóźnienie filtrów jest dopełniane opóźnieniem przy najwyższej częstotliwości. FIR (48 kHz, Normal): 43 / 49 / 51 próbek dla 2× / 4× / 8×; IIR: 4 / 4 / 5.
+- **Limit częstotliwości wewnętrznej 400 kHz**: 8× do 48 kHz, 4× przy 88,2/96 kHz, 2× przy 176,4/192 kHz.
+- **Zakres** (ARC-2): wejście jest nadpróbkowywane przed opóźnieniem lookahead — historia do detekcji pasm Dynamic i ścieżka główna pracują w częstotliwości OS, pasma (filtry, dynamika, Character) też; korektor Natural Phase i silnik STFT pracują w fs.
+- **Kanały nieobjęte pasmami** omijają oversampling dokładnie (opóźnienie lookahead + OS), z crossfadem 5 ms przy zmianie pokrycia; filtry OS działają na wszystkich kanałach, więc przejście nie ma stanu przejściowego.
+- **Czasu rzeczywistego**: wszystkie kombinacje typ × współczynnik × Quality są przygotowane w `prepare()` (projekty filtrów liczone raz na proces), zmiana trybu w `process()` nie alokuje; wewnętrzny blok ≤ 512 próbek ogranicza pamięć buforów OS.
+
+**Zmierzone (testy `[oversampling]`, `[OS-*]`)**
+
+| Kryterium | Wynik |
+|---|---|
+| OS-2 zafalowania i tłumienie | wszystkie typy × Quality × 2/4/8×: interpolator, decymator i przejście w obie strony w specyfikacji (np. Normal ≤ 0,05 dB do 0,432·fs, obrazy/aliasy ≤ −90 dB) |
+| OS-3 latencja | FIR: przejście symetryczne wokół zgłaszanej latencji (różnica ≤ 1e-12); IIR: opóźnienie grupowe przy DC = latencja ±0,5/F próbki; przez silnik i wtyczkę (zgłaszana hostowi) tak samo |
+| OS-3 / CH-6 | kanał bez pasm bit-exact przy 4×, Minimum i Natural Phase |
+| OS-1 aliasing (Warm, +12 dB, 10 kHz) | 1× −66,5 dB, 2× −163 dB, 4× −164 dB, 8× −163 dB (cele 2×/4×/8× spełnione; 1× — patrz §9) |
+| NFR-3 | wynik niezależny od rozmiaru bloku hosta (OS + Natural Phase + Dynamic z lookahead + brickwall) |
+
+**CPU** (`ssc_benchmark 3 modes`; stereo, 8 pasm Static, Normal):
+
+| Oversampling | Minimum Phase (IIR) | Natural Phase (FIR) |
+|---|---|---|
+| 1× | 0,66 % · 0 smp | 0,94 % · 32 smp |
+| 2× | 1,60 % · 4 smp | 1,80 % · 75 smp |
+| 4× | 2,99 % · 4 smp | 4,53 % · 81 smp |
+| 8× | 6,22 % · 5 smp | 7,47 % · 83 smp |
+
+**Nie zrealizowane w M4**: OS-4 (osobny współczynnik dla renderu offline, P1) — M8; OS-5 (podpowiedź w UI na podstawie miernika aliasingu) — razem z miernikami w M7.
+
 ## d) Kryteria akceptacji
 
 | ID | Kryterium | Metoda |

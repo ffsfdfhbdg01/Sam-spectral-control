@@ -1,5 +1,6 @@
 // CPU benchmark of the DSP engine for the NFR-1 configurations.
 // Usage: ssc_benchmark [seconds] [case]   (prints a Markdown table; % of one core in real time)
+//        ssc_benchmark [seconds] modes    (PH-2: CPU and latency per phase mode, Quality and oversampling)
 
 #include <chrono>
 #include <cstdio>
@@ -25,6 +26,14 @@ struct Case
     Quality quality;
     bool autoGain = false;
     Character character = Character::Clear;
+    PhaseMode phaseMode = PhaseMode::MinimumPhase;
+    Oversampling oversampling = Oversampling::Off;
+};
+
+struct Result
+{
+    double cpuPercent = 0.0;
+    int latencySamples = 0;
 };
 
 std::vector<SpeakerRole> stereo()
@@ -56,7 +65,7 @@ std::vector<SpeakerRole> atmos916()
     return roles;
 }
 
-double run (const Case& c, double seconds)
+Result run (const Case& c, double seconds)
 {
     constexpr int block = 128;
     EngineConfig config;
@@ -80,6 +89,8 @@ double run (const Case& c, double seconds)
     GlobalParams params;
     params.quality = c.quality;
     params.autoGain = c.autoGain;
+    params.phaseMode = c.phaseMode;
+    params.oversampling = c.oversampling;
 
     const auto noise = ssc::test::pinkNoise (1 << 16);
     std::vector<std::vector<double>> buffers (static_cast<std::size_t> (c.channels), std::vector<double> (block));
@@ -104,7 +115,44 @@ double run (const Case& c, double seconds)
     }
 
     const double audioSeconds = static_cast<double> (totalBlocks) * block / c.sampleRate;
-    return 100.0 * std::chrono::duration<double> (busy).count() / audioSeconds;
+    return { 100.0 * std::chrono::duration<double> (busy).count() / audioSeconds, engine.getLatencySamples() };
+}
+
+/** PH-2: stereo, 8 Static bells at 48 kHz for every phase mode × Quality, and every oversampling factor. */
+void modesTable (double seconds)
+{
+    const char* qualities[] = { "Eco", "Normal", "High", "Max" };
+    std::printf ("| Phase mode | Eco | Normal | High | Max |\n|---|---|---|---|---|\n");
+    for (const auto mode : { PhaseMode::MinimumPhase, PhaseMode::NaturalPhase, PhaseMode::AnalogFeel })
+    {
+        std::printf ("| %s |",
+                     mode == PhaseMode::MinimumPhase ? "Minimum Phase"
+                                                     : (mode == PhaseMode::NaturalPhase ? "Natural Phase" : "Analog Feel"));
+        for (int q = 0; q < 4; ++q)
+        {
+            Case c { "", 48000.0, 2, stereo(), BandMode::Static, 8, static_cast<Quality> (q) };
+            c.phaseMode = mode;
+            const auto r = run (c, seconds);
+            std::printf (" %.2f %% · %d smp |", r.cpuPercent, r.latencySamples);
+        }
+        std::printf ("\n");
+    }
+    (void)qualities;
+
+    std::printf ("\n| Oversampling (Normal) | Minimum Phase (IIR) | Natural Phase (FIR) |\n|---|---|---|\n");
+    for (const auto os : { Oversampling::Off, Oversampling::X2, Oversampling::X4, Oversampling::X8 })
+    {
+        std::printf ("| %dx |", oversamplingFactor (os));
+        for (const auto mode : { PhaseMode::MinimumPhase, PhaseMode::NaturalPhase })
+        {
+            Case c { "", 48000.0, 2, stereo(), BandMode::Static, 8, Quality::Normal };
+            c.phaseMode = mode;
+            c.oversampling = os;
+            const auto r = run (c, seconds);
+            std::printf (" %.2f %% · %d smp |", r.cpuPercent, r.latencySamples);
+        }
+        std::printf ("\n");
+    }
 }
 } // namespace
 
@@ -122,12 +170,22 @@ int main (int argc, char** argv)
         { "stereo, 8 Spectral, Normal, Auto Gain", 48000.0, 2, stereo(), BandMode::Spectral, 8, Quality::Normal, true },
         { "7.1.4, 8 Spectral, Normal (NFR-1 ≤ 20 %)", 48000.0, 12, atmos714(), BandMode::Spectral, 8, Quality::Normal },
         { "9.1.6, 192 kHz, 8 Spectral, Max (worst case)", 192000.0, 16, atmos916(), BandMode::Spectral, 8, Quality::Max },
+        { "stereo, 8 Static Warm, Natural Phase, 4x", 48000.0, 2, stereo(), BandMode::Static, 8, Quality::Normal, false, Character::Warm,
+          PhaseMode::NaturalPhase, Oversampling::X4 },
+        { "7.1.4, 8 Dynamic, Natural Phase Max, 2x", 48000.0, 12, atmos714(), BandMode::Dynamic, 8, Quality::Max, false, Character::Clear,
+          PhaseMode::NaturalPhase, Oversampling::X2 },
     };
+
+    if (argc > 2 && std::string (argv[2]) == "modes")
+    {
+        modesTable (seconds);
+        return 0;
+    }
 
     const int only = argc > 2 ? std::atoi (argv[2]) : -1;
     std::printf ("| Configuration (48 kHz unless noted, buffer 128) | CPU (%% of one core) |\n|---|---|\n");
     for (std::size_t i = 0; i < cases.size(); ++i)
         if (only < 0 || static_cast<std::size_t> (only) == i)
-            std::printf ("| %s | %.2f |\n", cases[i].name.c_str(), run (cases[i], seconds));
+            std::printf ("| %s | %.2f |\n", cases[i].name.c_str(), run (cases[i], seconds).cpuPercent);
     return 0;
 }

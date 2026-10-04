@@ -8,6 +8,7 @@
 #include "plugin/AnalyzerService.h"
 #include "plugin/Parameters.h"
 #include "ssc/engine/Engine.h"
+#include "ui/ResponseCurves.h"
 
 namespace ssc::plugin
 {
@@ -70,6 +71,15 @@ public:
 
     /** Global Auto Gain correction currently applied (dB); any thread. */
     float getAutoGainDb() const noexcept { return engine.getAutoGainDb(); }
+
+    /** Oversampling factor of the band chain from the parameters, limited by the sample rate; any thread. */
+    int getOversamplingFactor() const noexcept;
+
+    /** True when the Natural Phase corrector runs (Natural Phase, Analog Feel at High/Max); any thread. */
+    bool isPhaseCorrected() const noexcept;
+
+    /** How the bands are heard, for the display; any thread. */
+    ui::ResponseCurves::Model getResponseModel() const noexcept;
 
     /** Newest gain view of the Spectral bands, or nullptr if nothing new (one UI reader). */
     const spectral::SpectralEngine::MaskView* pollSpectralView() noexcept { return engine.pollSpectralView(); }

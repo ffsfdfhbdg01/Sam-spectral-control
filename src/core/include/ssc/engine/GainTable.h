@@ -28,6 +28,9 @@ public:
 
     void prepare (double sampleRate);
 
+    /** Changes the design rate without allocating; invalidates every entry. */
+    void setSampleRate (double sampleRate) noexcept;
+
     /** Sets shape, frequency, Q, slope and Character (the gain is ignored); invalidates entries when they change. */
     void setShape (const filters::BandShape& shape) noexcept;
 
@@ -38,6 +41,8 @@ public:
     std::uint64_t designsComputed() const noexcept { return designs; }
 
 private:
+    void invalidate() noexcept;
+
     struct Entry
     {
         Params params {};

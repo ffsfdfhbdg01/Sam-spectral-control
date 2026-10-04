@@ -143,7 +143,8 @@ void SscEditor::refreshLiveViews()
 
 void SscEditor::timerCallback()
 {
-    // A latency change (Max Lookahead, first/last Spectral band, Quality) is pointed out briefly.
+    // A latency change (Max Lookahead, first/last Spectral band, Quality, phase mode, oversampling)
+    // is pointed out briefly.
     const int latency = sscProcessor.getLatencySamples();
     if (shownLatency >= 0 && latency != shownLatency)
         latencyHighlightTicks = 12;
@@ -153,6 +154,7 @@ void SscEditor::timerCallback()
     status.setText (statusText(), juce::dontSendNotification);
 
     display.setSampleRate (sscProcessor.getSampleRate());
+    display.setResponseModel (sscProcessor.getResponseModel());
     const auto topology = sscProcessor.getChannelTopology();
     display.setChannelInfo (topology.numChannels, topology.numPairs);
     bandPanel.setChannelInfo (topology.numChannels, topology.numPairs);
@@ -171,6 +173,9 @@ juce::String SscEditor::statusText() const
     auto* autoGain = sscProcessor.getValueTreeState().getRawParameterValue (plugin::id::autoGain);
     if (autoGain != nullptr && autoGain->load() >= 0.5f)
         text << "Auto Gain " << plugin::format::decibels (sscProcessor.getAutoGainDb()) << "  |  ";
+    const int factor = sscProcessor.getOversamplingFactor();
+    if (factor > 1)
+        text << "OS " << factor << "x  |  ";
     text << "Latency " << juce::String (latencyMs, 1) << " ms  |  CPU " << juce::String (sscProcessor.getCpuLoad() * 100.0, 1) << "%";
     return text;
 }

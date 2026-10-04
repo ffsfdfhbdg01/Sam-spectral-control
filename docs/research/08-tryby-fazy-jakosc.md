@@ -80,6 +80,39 @@ Każdy model składa się z trzech warstw:
 - **Natural Phase jako „mixed-phase” przez rozkład min-phase/all-pass całego EQ** — trudne do aktualizacji przy zmianach parametrów; odrzucone.
 - **Pełna symulacja SPICE całych urządzeń** — za droga w czasie rzeczywistym i nie pasuje do w pełni parametrycznych pasm.
 
+### Realizacja w M4 i wyniki pomiarów
+
+**Natural Phase** (`ssc/phase/PhaseCorrector`, ADR-0005):
+- Korektor jest pojedynczym FIR na kanał za łańcuchem pasm: C(ω) = B(ω) · T(ω)/A(ω) · e^{−jωD}. T — iloczyn prototypów analogowych pasm działających na sygnał, A — ich odpowiedzi cyfrowe przy częstotliwości przetwarzania (fs × oversampling), B — amplituda liniowofazowych cięć Brickwall.
+- **Zmiana względem ADR-0005**: korektor poprawia także resztkowy błąd amplitudy dopasowanego IIR (obiecane w odstępstwie BAND-2), nie tylko fazę. Poniżej −80 dB odpowiedzi pasma korygowana jest tylko faza; korekcja amplitudy kanału ograniczona do ±12 dB.
+- Siatka ≥ 8·(2D + 1) punktów (512…8192), odwrotna FFT, okno Kaisera β = 4 (β = 8, gdy w filtrze jest brickwall — ok. 80 dB tłumienia), 2D + 1 współczynników wyśrodkowanych w D, więc pre-ring ≤ D. Korekcja wygasa między 0,95·Nyquist a Nyquistem (β i granicę dobrano na zestawie referencyjnym; próbowane β 4…8 i granice 0,9…0,95).
+- D = 16 / 32 / 64 / 128 próbek przy 48 kHz (Eco/Normal/High/Max), skalowane z fs.
+- Baza korekcji per kanał, a M/S, gdy na parze jest pasmo Mid lub Side; obie realizowane jako FIR 2×2 na historiach kanałów (y_L = P∗x_L + Q∗x_R, P = (C_M + C_S)/2, Q = (C_M − C_S)/2), więc zmiana bazy to zwykły crossfade. Pasmo działające tylko na jednym kanale pary w bazie M/S nie jest korygowane (udokumentowane przybliżenie).
+- Odpowiedzi pasm są buforowane i przeliczane tylko po zmianie (pasma Dynamic: przy zmianie wzmocnienia ≥ 0,05 dB); korektor aktualizuje się na stałej siatce próbek (≈ 21 ms, 1024 próbki przy 48 kHz) i przechodzi na nowy filtr crossfadem 5 ms — wynik nie zależy od rozmiaru bloku hosta (NFR-3). Kanały bez pasm są dokładnym opóźnieniem D.
+- **Brickwall w Natural Phase**: liniowofazowy FIR tylko tam, gdzie jest bardziej stromy niż IIR 96 dB/oct — od fc ≥ 7·fs/(2D + 1) (≈ 1,3 kHz w Max, 5,2 kHz w Normal przy 48 kHz). Niżej pasmo pozostaje minimalnofazowym IIR 96 dB/oct (z korekcją jak inne pasma): FIR o długości 2D + 1 nie da stromego cięcia w basie bez dużo większej latencji.
+- **Analog Feel** używa korektora w High i Max (tabela wyżej); krzywe i nieliniowości modeli — M6.
+
+**Zmierzone (PH-1, testy `[PH-1]`; 20 Hz – 0,9·Nyquist, 48 kHz)** — największy błąd względem prototypu analogowego na zestawie: bell 1 kHz +12 dB, bell 10 kHz −9 dB Q 2, bell 16 kHz +6 dB Q 3, high shelf 8 kHz +12 dB, low shelf 100 Hz, high cut 15 kHz, low cut 30 Hz 24 dB/oct, miks 5 pasm:
+
+| Quality (D) | Amplituda | Faza | Kryterium |
+|---|---|---|---|
+| Eco (16) | 0,21 dB | 1,7° | — |
+| Normal (32) | 0,058 dB | 0,17° | ±0,1 dB, ≤ 5° — spełnione |
+| High (64) | 0,014 dB | 0,06° | — |
+| Max (128) | 0,004 dB | 0,01° | ±0,1 dB, ≤ 2° — spełnione |
+
+Dodatkowo: przez cały silnik (bell 12 kHz + półka, Normal, 1× i 2×) ≤ 0,1 dB i ≤ 5° (z oversamplingiem do krawędzi pasma przepustowego filtrów OS, 0,432·fs); baza M/S (półka na Mid) — błąd ≤ −40 dB względem odpowiedzi jednostkowej; brickwall 3 kHz (Max) symetryczny co do 1e-6, ≤ −60 dB oktawę niżej, płaski ±0,01 dB w paśmie; latencja = D; bez pasm — dokładne opóźnienie.
+
+**PH-2 — CPU i latencja** (`ssc_benchmark 3 modes`; stereo, 8 pasm Bell Static, 48 kHz, bufor 128; ten sam przebieg pomiarowy):
+
+| Tryb fazy | Eco | Normal | High | Max |
+|---|---|---|---|---|
+| Minimum Phase | 0,74 % · 0 smp | 0,67 % · 0 smp | 0,67 % · 0 smp | 0,71 % · 0 smp |
+| Natural Phase | 0,80 % · 16 smp | 0,86 % · 32 smp | 1,15 % · 64 smp | 1,46 % · 128 smp |
+| Analog Feel (bez modeli — M6) | 0,70 % · 0 smp | 0,76 % · 0 smp | 1,03 % · 64 smp | 1,45 % · 128 smp |
+
+Błąd odpowiedzi maleje monotonicznie z Quality (tabela PH-1). W Minimum Phase Quality zmienia tylko okres aktualizacji współczynników (32/16/8/4 próbki) — koszt prawie stały.
+
 ## d) Kryteria akceptacji
 
 | ID | Kryterium | Metoda |

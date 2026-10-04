@@ -40,6 +40,32 @@
 - **Globalny Character jak w Pro-Q 4** — wymaganie mówi o per pasmo.
 - **Sharp = tylko inna krzywa, bez nieliniowości** — barwa nie różniłaby się wtedy od Clear w odsłuchu przy łagodnych ustawieniach; odrzucone.
 
+### Realizacja w M4 i wyniki pomiarów
+
+- **Character jest częścią kształtu pasma** (`BandShape::character`): ten sam projekt krzywej trafia do audio, tablicy wzmocnień pasm Dynamic, krzywych UI i krzywych Auto Gain.
+- **Warm**: bell z Q proporcjonalnym, Q_eff = Q·(0,6 + 0,4·min(1, |G|/12 dB)).
+- **Sharp**: bell 4. rzędu jako transformacja dolnoprzepustowo-pasmowa p = (s² + ω₀²)/(s·B), B = ω₀/Q, półki 2. rzędu Holtersa–Zölzera — to samo wzmocnienie w fc i ta sama szerokość w połowie wzmocnienia (dB) co bell 2. rzędu przy tym Q, płaski szczyt i zbocza opadające dwa razy szybciej; rozkłada się na dwie sekcje strojone poniżej i powyżej fc. (Kaskada dwóch identycznych belli po ½ gainu nie byłaby bardziej stroma — w dB daje praktycznie ten sam kształt.)
+- **Cięcia z rezonansem** (Q > 0,707, Warm/Sharp): kaskada Butterwortha + osobna sekcja rezonansu (s² + d·ω·s + ω²)/(s² + (d/r)·ω·s + ω²) na końcu (ta sama odpowiedź analogowa) — kształtowany jest tylko wkład rezonansu. Notch, Band Pass, All Pass i cięcia bez rezonansu: Character nie zmienia nic.
+- **Zmiana względem planu — nieliniowość**: zamiast tanh zastosowano gładki wielomianowy soft clipper S(u) = P(a·u)/a, P(v) = v + p₂v² + p₃v³ między punktami P′ = 0 i stały poza nimi. Do wyjścia liniowego dodawane są wyłącznie produkty N(u) = S(u) − u, więc odpowiedź liniowa jest dokładnie odpowiedzią projektu, a pasmo 0 dB nic nie dodaje (CHR-2). N i jego całka to wielomiany niskiego stopnia: ADAA 1. rzędu ma postać dokładnego ilorazu bez dzielenia (wewnątrz obszaru) i nie traci precyzji przy małych sygnałach — dla tanh (log cosh) i dla S(u) − u z sigmoidy różnica antypochodnych traci cyfry znaczące i daje szum na poziomie −50 dB względem cichych sygnałów (sprawdzone analitycznie przy projektowaniu). Półpróbkowe opóźnienie ADAA dotyczy tylko produktów.
+- **Warm**: p₂ = −0,129, p₃ = −1/3, a = 0,0775 (asymetria: obcinanie +0,55/a i −0,81/a), produkty przez filtr DC 5 Hz i dolnoprzepustowy 12 kHz. **Sharp**: p₂ = 0, p₃ = −1/3, a = 0,245 (symetrycznie, same nieparzyste harmoniczne), bez filtracji.
+- **ADAA 1. rzędu we wszystkich Quality** (zamiast 2. rzędu w High/Max): pomiar pokazał, że ADAA-2 dałoby tylko kilka dB dla harmonicznych tuż nad Nyquistem (tłumienie sinc² zamiast sinc), a oversampling ≥ 2× usuwa aliasing produktów stopnia ≤ 3 praktycznie całkowicie.
+
+**Zmierzone (testy `[character]`, 48 kHz)**
+
+| Kryterium | Wynik |
+|---|---|
+| CHR-3 Warm (sinus 0 dBFS w fc, Bell +6 dB) | THD 0,245 %, H2 −52,2 dB, H3 −72,4 dB (H2 − H3 = 20 dB) |
+| CHR-3 Sharp | THD 0,246 %, H3 −52,2 dB, H2 −308 dB |
+| CHR-3 Clear | THD −276 dB |
+| CHR-2 pasmo 0 dB | bit-exact względem wejścia |
+| CHR-1 aliasing (Warm, +12 dB, 10 kHz, 0 dBFS) | 1×: −66,5 dB; 2×/4×/8×: ≈ −163 dB (OS IIR Normal); przez silnik z 2×: < −95 dB |
+| ADAA, sinus 5 kHz mocno obcięty | aliasing −10,1 dB względem −4,6 dB bez ADAA |
+| Krzywa Sharp | szczyt = G, punkty połowy wzmocnienia identyczne z bellem 2. rzędu, 2 oktawy od fc ≤ 0,6 wartości (dB) bella 2. rzędu |
+
+**Odstępstwa od kryteriów**
+- Aliasing przy 1× (−66,5 dB) nie osiąga celu −80 dB: H3 tonu 10 kHz (30 kHz) odbija się na 18 kHz, a ADAA 1. rzędu tłumi go tylko o ~6 dB. Przy 2× i więcej cel jest spełniony z dużym zapasem (≈ −160 dB); UI ma podpowiadać oversampling (OS-5, M7).
+- Narzut CPU Warm/Sharp (cel ≤ 30 % kosztu pasma Clear): zmierzone 8 pasm Warm 0,69 % vs Clear 0,51 % (+35 %), Sharp 0,74 % (+45 %, w tym druga sekcja krzywej 4. rzędu). Możliwa dalsza optymalizacja (SIMD na liniach stereo) — M8.
+
 ## d) Kryteria akceptacji
 
 | ID | Kryterium | Metoda |

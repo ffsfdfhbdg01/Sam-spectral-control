@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <mutex>
 #include <numbers>
+#include <tuple>
 
 namespace ssc::oversampling
 {
@@ -374,6 +377,26 @@ std::vector<double> designHalfbandFir (double attenuationDb, double transitionWi
     return kaiserHalfband (attenuationDb + 30.0, transitionWidth);
 }
 
+namespace
+{
+    /** Designs depend only on the specification: computed once per process and shared. */
+    const std::vector<double>& cachedDesign (FilterType type, double attenuationDb, double transition)
+    {
+        static std::mutex mutex;
+        static std::map<std::tuple<int, double, double>, std::vector<double>> cache;
+        const std::lock_guard lock (mutex);
+        const auto key = std::make_tuple (static_cast<int> (type), attenuationDb, transition);
+        auto it = cache.find (key);
+        if (it == cache.end())
+            it = cache
+                     .emplace (key,
+                               type == FilterType::PolyphaseIir ? designPolyphaseHalfband (attenuationDb, transition)
+                                                                : designHalfbandFir (attenuationDb, transition))
+                     .first;
+        return it->second; // map nodes are stable and never modified after insertion
+    }
+} // namespace
+
 Oversampler::Oversampler() = default;
 Oversampler::~Oversampler() = default;
 Oversampler::Oversampler (Oversampler&&) noexcept = default;
@@ -396,10 +419,11 @@ void Oversampler::prepare (int numChannels, int maxBlockSize, int newFactor, Fil
         const double edge = spec.passband / (2.0 * rate); // as a fraction of this stage's high rate
         const double transition = std::min (0.45, 0.5 - 2.0 * edge);
         std::unique_ptr<Stage> stage;
+        const auto& design = cachedDesign (type, spec.attenuationDb, transition);
         if (type == FilterType::PolyphaseIir)
-            stage = std::make_unique<IirStage> (designPolyphaseHalfband (spec.attenuationDb, transition));
+            stage = std::make_unique<IirStage> (design);
         else
-            stage = std::make_unique<FirStage> (designHalfbandFir (spec.attenuationDb, transition));
+            stage = std::make_unique<FirStage> (design);
         stage->prepare (channels);
         delay += stage->roundTripDelay() / rate;
         stages.push_back (std::move (stage));
@@ -413,7 +437,7 @@ void Oversampler::prepare (int numChannels, int maxBlockSize, int newFactor, Fil
     paddingLines.assign (static_cast<std::size_t> (channels), std::vector<double> (static_cast<std::size_t> (std::max (1, padding)), 0.0));
     paddingPos.assign (static_cast<std::size_t> (channels), 0);
 
-    work.assign (static_cast<std::size_t> (channels), std::vector<double> (static_cast<std::size_t> (maxBlock * factor), 0.0));
+    work.assign (static_cast<std::size_t> (maxBlock * factor), 0.0); // channels are processed one after another
 }
 
 void Oversampler::reset() noexcept
@@ -434,7 +458,7 @@ void Oversampler::upsample (int channel, const double* in, double* out, int numS
     }
 
     // Alternate between the scratch buffer and `out` so that the last stage writes into `out`.
-    double* scratch = work[static_cast<std::size_t> (channel)].data();
+    double* scratch = work.data();
     const double* source = in;
     int n = numSamples;
     const std::size_t count = stages.size();
@@ -470,7 +494,7 @@ void Oversampler::downsample (int channel, double* in, double* out, int numSampl
         paddingPos[static_cast<std::size_t> (channel)] = pos;
     }
 
-    double* scratch = work[static_cast<std::size_t> (channel)].data();
+    double* scratch = work.data();
     double* source = in;
     int n = highSamples;
     for (std::size_t s = stages.size(); s-- > 0;)

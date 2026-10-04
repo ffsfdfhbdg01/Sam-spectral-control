@@ -81,6 +81,28 @@ int correctorDelayFor (Quality quality, double sampleRate) noexcept
     return std::max (1, static_cast<int> (std::lround (kDelays48k[qualityIndex (quality)] * sampleRate / 48000.0)));
 }
 
+double minimumFirBrickwallHz (Quality quality, double sampleRate) noexcept
+{
+    return 7.0 * sampleRate / (2 * correctorDelayFor (quality, sampleRate) + 1);
+}
+
+std::vector<double> brickwallTaps (bool lowCut, double cornerHz, Quality quality, double sampleRate)
+{
+    // The windowed ideal cut: the same window as the corrector uses for filters with a brickwall.
+    const int d = correctorDelayFor (quality, sampleRate);
+    const double cutoff = std::clamp (cornerHz / sampleRate, 0.0, 0.5);
+    std::vector<double> taps (static_cast<std::size_t> (2 * d + 1));
+    for (int n = 0; n <= 2 * d; ++n)
+    {
+        const int k = n - d;
+        const double lowPass = k == 0 ? 2.0 * cutoff : std::sin (kTwoPi * cutoff * k) / (kPi * k);
+        const double r = static_cast<double> (k) / d;
+        const double window = besselI0 (kBrickwallBeta * std::sqrt (std::max (0.0, 1.0 - r * r))) / besselI0 (kBrickwallBeta);
+        taps[static_cast<std::size_t> (n)] = window * (lowCut ? (k == 0 ? 1.0 : 0.0) - lowPass : lowPass);
+    }
+    return taps;
+}
+
 void PhaseCorrector::prepare (double sampleRate, int channels, int maxBlockSize)
 {
     fs = sampleRate;

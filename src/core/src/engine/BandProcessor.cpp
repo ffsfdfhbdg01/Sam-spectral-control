@@ -182,13 +182,10 @@ void BandProcessor::Instance::clearState() noexcept
 
 void BandProcessor::prepare (double newSampleRate, int maxBlockSize)
 {
-    sampleRate = newSampleRate;
     maxBlock = std::max (1, maxBlockSize);
-    fadeLength = std::max (1, static_cast<int> (std::lround (0.01 * sampleRate)));
-    dynamicStep = dynamicStepFor (sampleRate);
-    gainTable.prepare (sampleRate);
-    for (const auto c : { Character::Clear, Character::Warm, Character::Sharp })
-        shapers[static_cast<std::size_t> (c)] = filters::makeShaper (c, sampleRate);
+    gainTable.prepare (newSampleRate);
+    sampleRate = 0.0;
+    setSampleRate (newSampleRate);
 
     fadeA.assign (static_cast<std::size_t> (kMaxChannels), std::vector<double> (static_cast<std::size_t> (kMaxControlBlock), 0.0));
     fadeB.assign (static_cast<std::size_t> (kMaxChannels), std::vector<double> (static_cast<std::size_t> (kMaxControlBlock), 0.0));
@@ -200,6 +197,19 @@ void BandProcessor::prepare (double newSampleRate, int maxBlockSize)
         fadeBPtr[i] = fadeB[i].data();
     }
 
+    reset();
+}
+
+void BandProcessor::setSampleRate (double newSampleRate) noexcept
+{
+    if (std::equal_to<double>() (newSampleRate, sampleRate))
+        return;
+    sampleRate = newSampleRate;
+    fadeLength = std::max (1, static_cast<int> (std::lround (0.01 * sampleRate)));
+    dynamicStep = dynamicStepFor (sampleRate);
+    gainTable.setSampleRate (sampleRate);
+    for (const auto c : { Character::Clear, Character::Warm, Character::Sharp })
+        shapers[static_cast<std::size_t> (c)] = filters::makeShaper (c, sampleRate);
     reset();
 }
 

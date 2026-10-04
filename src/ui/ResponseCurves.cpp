@@ -5,6 +5,9 @@
 
 #include <juce_core/juce_core.h>
 
+#include "ssc/phase/PhaseCorrector.h"
+#include "ssc/util/Math.h"
+
 namespace ssc::ui
 {
 namespace
@@ -44,6 +47,42 @@ void ResponseCurves::setSampleRate (double sampleRate)
     fs = sampleRate;
     if (! hz.empty())
         setGrid (static_cast<int> (hz.size()), hz.front(), hz.back());
+}
+
+void ResponseCurves::setResponseModel (const Model& newModel)
+{
+    auto m = newModel;
+    m.oversampling = std::max (1, m.oversampling);
+    if (m == model)
+        return;
+    model = m;
+    if (! hz.empty())
+        setGrid (static_cast<int> (hz.size()), hz.front(), hz.back());
+}
+
+void ResponseCurves::bandResponse (const filters::BandShape& shape, const float* frequencies, int count, float* outDb) const
+{
+    const bool cut = shape.shape == Shape::LowCut || shape.shape == Shape::HighCut;
+    if (model.firBrickwall && cut && shape.slope == Slope::Brickwall
+        && shape.frequencyHz >= phase::minimumFirBrickwallHz (model.quality, fs))
+    {
+        // Natural Phase brickwall: the linear-phase FIR of the corrector.
+        const auto taps = phase::brickwallTaps (shape.shape == Shape::LowCut, shape.frequencyHz, model.quality, fs);
+        for (int i = 0; i < count; ++i)
+        {
+            std::complex<double> sum (0.0, 0.0);
+            const double w = kTwoPi * frequencies[i] / fs;
+            for (std::size_t n = 0; n < taps.size(); ++n)
+                sum += taps[n] * std::polar (1.0, -w * static_cast<double> (n));
+            outDb[i] = toDb (sum);
+        }
+        return;
+    }
+
+    const double rate = fs * model.oversampling;
+    const auto design = filters::designBand (shape, rate);
+    for (int i = 0; i < count; ++i)
+        outDb[i] = toDb (model.analog ? design.analogResponse (frequencies[i]) : design.digitalResponse (frequencies[i], rate));
 }
 
 bool ResponseCurves::updateBand (int band, const std::optional<filters::BandShape>& shape)
@@ -154,8 +193,10 @@ float ResponseCurves::responseAt (const filters::BandShape& shape, float frequen
 {
     if (filters::isIdentity (shape))
         return 0.0f;
-    const auto design = filters::designBand (shape, fs);
-    return toDb (design.digitalResponse (std::min (static_cast<double> (frequencyHz), 0.4999 * fs), fs));
+    const auto f = static_cast<float> (std::min (static_cast<double> (frequencyHz), 0.4999 * fs));
+    float db = 0.0f;
+    bandResponse (shape, &f, 1, &db);
+    return db;
 }
 
 void ResponseCurves::compute (const filters::BandShape& shape, std::vector<float>& out) const
@@ -164,9 +205,7 @@ void ResponseCurves::compute (const filters::BandShape& shape, std::vector<float
     if (filters::isIdentity (shape))
         return;
 
-    const auto design = filters::designBand (shape, fs);
-    for (int i = 0; i < validPoints; ++i)
-        out[static_cast<std::size_t> (i)] = toDb (design.digitalResponse (hz[static_cast<std::size_t> (i)], fs));
+    bandResponse (shape, hz.data(), validPoints, out.data());
 
     // Above Nyquist the digital filter has no response; hold the last value so curves end flat.
     const float last = validPoints > 0 ? out[static_cast<std::size_t> (validPoints - 1)] : 0.0f;

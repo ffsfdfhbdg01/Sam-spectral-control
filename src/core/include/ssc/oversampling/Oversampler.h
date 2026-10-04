@@ -84,7 +84,7 @@ private:
     int latency = 0;
     double filterDelay = 0.0;
     std::vector<std::unique_ptr<Stage>> stages;
-    std::vector<std::vector<double>> work;
+    std::vector<double> work;
 
     // Delay at the highest rate completing the round trip to a whole number of base-rate samples.
     int padding = 0;

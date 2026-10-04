@@ -38,6 +38,17 @@ void GainTable::setShape (const filters::BandShape& s) noexcept
 
     shape = s;
     shape.gainDb = 0.0;
+    invalidate();
+}
+
+void GainTable::setSampleRate (double sampleRate) noexcept
+{
+    fs = sampleRate;
+    invalidate();
+}
+
+void GainTable::invalidate() noexcept
+{
     if (++generation == 0) // wrapped: make sure no stale entry looks valid
     {
         for (auto& e : entries)

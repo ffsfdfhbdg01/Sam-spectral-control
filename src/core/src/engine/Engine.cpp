@@ -7,45 +7,92 @@
 
 namespace ssc::engine
 {
+namespace
+{
+    std::size_t oversamplerIndex (oversampling::FilterType type, int factor, Quality quality) noexcept
+    {
+        const int factorIndex = factor >= 8 ? 2 : (factor >= 4 ? 1 : 0);
+        return static_cast<std::size_t> ((static_cast<int> (type) * 3 + factorIndex) * 4 + static_cast<int> (quality));
+    }
+
+    /** Low/High Cut with the Brickwall slope: linear phase in Natural Phase (ADR-0005). */
+    bool isBrickwallCut (const BandSettings& band) noexcept
+    {
+        return band.active && band.shape.slope == Slope::Brickwall
+            && (band.shape.shape == Shape::LowCut || band.shape.shape == Shape::HighCut);
+    }
+
+    void allocate (std::vector<std::vector<double>>& buffers, std::vector<double*>& pointers, std::size_t channels, std::size_t size)
+    {
+        buffers.assign (channels, std::vector<double> (size, 0.0));
+        pointers.resize (channels);
+        for (std::size_t ch = 0; ch < channels; ++ch)
+            pointers[ch] = buffers[ch].data();
+    }
+} // namespace
+
 void Engine::prepare (const EngineConfig& config)
 {
     cfg = config;
     cfg.numChannels = std::clamp (cfg.numChannels, 1, kMaxChannels);
     cfg.maxBlockSize = std::max (1, cfg.maxBlockSize);
+    chunkSize = std::min (cfg.maxBlockSize, kMaxChunk);
+    const auto channels = static_cast<std::size_t> (cfg.numChannels);
+    const auto chunk = static_cast<std::size_t> (chunkSize);
 
-    dry.assign (static_cast<std::size_t> (cfg.numChannels), std::vector<double> (static_cast<std::size_t> (cfg.maxBlockSize), 0.0));
-    wet = dry;
-    dryPointers.resize (dry.size());
-    wetPointers.resize (wet.size());
-    for (std::size_t ch = 0; ch < dry.size(); ++ch)
-    {
-        dryPointers[ch] = dry[ch].data();
-        wetPointers[ch] = wet[ch].data();
-    }
+    allocate (dry, dryPointers, channels, chunk);
+    allocate (wet, wetPointers, channels, chunk);
+    allocate (solo, soloPointers, channels, chunk);
 
+    maxFactor = maxOversamplingFor (cfg.sampleRate);
     for (auto& band : *bandProcessors)
-        band.prepare (cfg.sampleRate, cfg.maxBlockSize);
-    soloProcessor->prepare (cfg.sampleRate, cfg.maxBlockSize);
-    solo = dry;
-    soloPointers.resize (solo.size());
-    for (std::size_t ch = 0; ch < solo.size(); ++ch)
-        soloPointers[ch] = solo[ch].data();
+        band.prepare (cfg.sampleRate, chunkSize * maxFactor);
+    soloProcessor->prepare (cfg.sampleRate, chunkSize);
     soloAmount.prepare (cfg.sampleRate, 0.01);
     soloAmount.setCurrentAndTarget (0.0);
+    soloWasActive = false;
 
     // Input history for detection and the Max Lookahead delay of the main path (DYN-8).
     maxLookaheadSamples = static_cast<int> (std::ceil (kMaxLookaheadSeconds * cfg.sampleRate));
-    const int historySize = nextPowerOfTwo (maxLookaheadSamples + cfg.maxBlockSize + 1);
-    history.assign (static_cast<std::size_t> (cfg.numChannels), std::vector<double> (static_cast<std::size_t> (historySize), 0.0));
-    historyPointers.resize (history.size());
-    for (std::size_t ch = 0; ch < history.size(); ++ch)
+    const int historySize = nextPowerOfTwo (maxLookaheadSamples + chunkSize + 1);
+    history.assign (channels, std::vector<double> (static_cast<std::size_t> (historySize), 0.0));
+    historyPointers.resize (channels);
+    for (std::size_t ch = 0; ch < channels; ++ch)
         historyPointers[ch] = history[ch].data();
     historyMask = historySize - 1;
     historyWrite = 0;
     lookaheadSamples = 0;
 
-    // Latency so far is the lookahead only; the dry delay is sized for the M3–M4 maximum.
-    spectralEngine->prepare (cfg.sampleRate, cfg.numChannels, cfg.maxBlockSize);
+    // Oversampling (ADR-0008): every factor allowed at this rate, both filter types and every
+    // Quality are prepared now, so switching them in process() does not allocate.
+    int maxOsLatency = 0;
+    for (const auto type : { oversampling::FilterType::PolyphaseIir, oversampling::FilterType::LinearPhaseFir })
+        for (int factor = 2; factor <= maxFactor; factor *= 2)
+            for (const auto quality : { Quality::Eco, Quality::Normal, Quality::High, Quality::Max })
+            {
+                auto& os = (*oversamplers)[oversamplerIndex (type, factor, quality)];
+                os.prepare (cfg.numChannels, chunkSize, factor, type, quality);
+                maxOsLatency = std::max (maxOsLatency, os.getLatencySamples());
+            }
+    allocate (wetHigh, wetHighPointers, channels, chunk * static_cast<std::size_t> (maxFactor));
+    allocate (osBypass, osBypassPointers, channels, chunk);
+    osInput.assign (chunk * static_cast<std::size_t> (maxFactor), 0.0);
+    osOutput.assign (chunk, 0.0);
+    const int osHistorySize = maxFactor > 1 ? nextPowerOfTwo ((maxLookaheadSamples + chunkSize + 1) * maxFactor) : 1;
+    osHistory.assign (channels, std::vector<double> (static_cast<std::size_t> (osHistorySize), 0.0));
+    osHistoryPointers.resize (channels);
+    for (std::size_t ch = 0; ch < channels; ++ch)
+        osHistoryPointers[ch] = osHistory[ch].data();
+    osHistoryMask = osHistorySize - 1;
+    osBypassDelay.prepare (cfg.numChannels, maxLookaheadSamples + maxOsLatency, chunkSize);
+    osRampLength = std::max (1, static_cast<int> (std::lround (0.005 * cfg.sampleRate)));
+    osCovered.fill (false);
+
+    corrector->prepare (cfg.sampleRate, cfg.numChannels, chunkSize);
+    correctionActive = false;
+    const int maxCorrection = phase::correctorDelayFor (Quality::Max, cfg.sampleRate);
+
+    spectralEngine->prepare (cfg.sampleRate, cfg.numChannels, chunkSize);
     autoGain->prepare (cfg.sampleRate, cfg.numChannels);
     const auto erbBands = static_cast<std::size_t> (autoGain->getBands().numBands());
     bandCurvesDb.assign (static_cast<std::size_t> (kNumBands), std::vector<double> (erbBands, 0.0));
@@ -54,11 +101,10 @@ void Engine::prepare (const EngineConfig& config)
     curveLanes.fill ({});
     spectralEnabled = false;
     const int maxSpectralLatency = spectral::fftSizeFor (Quality::Max, cfg.sampleRate);
-    soloDelay.prepare (cfg.numChannels, maxSpectralLatency, cfg.maxBlockSize);
+    soloDelay.prepare (cfg.numChannels, maxOsLatency + maxCorrection + maxSpectralLatency, chunkSize);
 
     latencySamples.store (0, std::memory_order_relaxed);
-    const int maxLatency = maxLookaheadSamples + maxSpectralLatency + static_cast<int> (cfg.sampleRate * 0.05);
-    dryDelay.prepare (cfg.numChannels, maxLatency, cfg.maxBlockSize);
+    dryDelay.prepare (cfg.numChannels, maxLookaheadSamples + maxOsLatency + maxCorrection + maxSpectralLatency, chunkSize);
     dryDelay.setDelay (0);
 
     outputGain.prepare (cfg.sampleRate, kRampSeconds);
@@ -68,6 +114,7 @@ void Engine::prepare (const EngineConfig& config)
     mix.setCurrentAndTarget (1.0);
     bypass.setCurrentAndTarget (0.0);
 
+    setOversampling (1, oversampling::FilterType::PolyphaseIir, Quality::Normal);
     reset();
 }
 
@@ -76,12 +123,86 @@ void Engine::reset() noexcept
     dryDelay.reset();
     for (auto& h : history)
         std::fill (h.begin(), h.end(), 0.0);
-    for (auto& band : *bandProcessors)
-        band.reset();
     soloProcessor->reset();
     spectralEngine->reset();
     soloDelay.reset();
     autoGain->reset();
+    osBypassDelay.reset();
+    samplePosition = 0;
+    resetChain();
+}
+
+void Engine::resetChain() noexcept
+{
+    for (auto& band : *bandProcessors)
+        band.reset();
+    if (oversampler != nullptr)
+        oversampler->reset();
+    for (auto& h : osHistory)
+        std::fill (h.begin(), h.end(), 0.0);
+    osHistoryWrite = 0;
+    for (std::size_t c = 0; c < osRamp.size(); ++c)
+        osRamp[c] = osCovered[c] ? osRampLength : 0;
+    corrector->reset();
+}
+
+void Engine::setOversampling (int factor, oversampling::FilterType type, Quality quality) noexcept
+{
+    osFactor = factor;
+    osType = type;
+    osQuality = quality;
+    oversampler = factor > 1 ? &(*oversamplers)[oversamplerIndex (type, factor, quality)] : nullptr;
+
+    // Bands run at the oversampled rate (only a change of rate resets them).
+    for (auto& band : *bandProcessors)
+        band.setSampleRate (cfg.sampleRate * factor);
+    if (oversampler != nullptr)
+        oversampler->reset();
+    for (auto& h : osHistory)
+        std::fill (h.begin(), h.end(), 0.0);
+    osHistoryWrite = 0;
+    osBypassDelay.reset();
+    for (std::size_t c = 0; c < osRamp.size(); ++c)
+        osRamp[c] = osCovered[c] ? osRampLength : 0;
+}
+
+void Engine::updateCoverage (const BandSettingsArray& chain) noexcept
+{
+    // Channels processed by at least one band of the chain go through oversampling (CH-6).
+    osCovered.fill (false);
+    for (const auto& band : chain)
+    {
+        if (! band.active)
+            continue;
+        const auto lanes = makeLanes (band.component, band.channelMask, band.includeLfe, cfg.topology);
+        for (int l = 0; l < lanes.numLanes; ++l)
+        {
+            const auto& lane = lanes.lanes[static_cast<std::size_t> (l)];
+            if (lane.a >= 0)
+                osCovered[static_cast<std::size_t> (lane.a)] = true;
+            if (lane.b >= 0)
+                osCovered[static_cast<std::size_t> (lane.b)] = true;
+        }
+    }
+}
+
+void Engine::updateCorrector (const BandSettingsArray& bands) noexcept
+{
+    // The corrector follows the bands as heard: Dynamic bands at their current gain.
+    auto& target = *correctorBands;
+    for (int b = 0; b < kNumBands; ++b)
+    {
+        const auto bi = static_cast<std::size_t> (b);
+        const auto& band = bands[bi];
+        auto& c = target[bi];
+        c.brickwall = firBrickwall[bi];
+        c.shape = band.shape;
+        if (band.mode == BandMode::Dynamic && shapeHasGain (band.shape.shape))
+            c.shape.gainDb += (*bandProcessors)[bi].getDynamicGainDb();
+        c.active = band.active && (c.brickwall || ! filters::isIdentity (c.shape));
+        c.lanes = c.active ? makeLanes (band.component, band.channelMask, band.includeLfe, cfg.topology) : LaneLayout {};
+    }
+    corrector->update (target, cfg.topology, cfg.sampleRate * osFactor);
 }
 
 void Engine::updateAutoGainCurves (const BandSettingsArray& bands) noexcept
@@ -164,8 +285,8 @@ float Engine::getBandGainChangeDb (int index) const noexcept
 
 void Engine::configure (const GlobalParams& params, const BandSettingsArray& bands) noexcept
 {
-    // Configuration changes set the latency (ADR-0011): Max Lookahead, and the spectral engine
-    // while at least one band is in Spectral mode (its frame size follows Quality).
+    // Configuration changes set the latency (ADR-0011): Max Lookahead, oversampling, the Natural
+    // Phase corrector and, while at least one band is in Spectral mode, the spectral frame.
     const int lookahead =
         std::clamp (static_cast<int> (std::lround (0.001 * params.maxLookaheadMs * cfg.sampleRate)), 0, maxLookaheadSamples);
     const bool wantSpectral = std::any_of (bands.begin(), bands.end(), [] (const BandSettings& b) { return b.isSpectral(); });
@@ -177,15 +298,50 @@ void Engine::configure (const GlobalParams& params, const BandSettingsArray& ban
         spectralEngine->reset();
     spectralEnabled = wantSpectral;
 
-    const int spectralLatency = spectralEnabled ? spectralEngine->getLatencySamples() : 0;
-    const int latency = lookahead + spectralLatency;
-    if (lookahead != lookaheadSamples || latency != latencySamples.load (std::memory_order_relaxed))
+    // Natural Phase brickwall cuts are linear-phase parts of the corrector where its FIR is steeper
+    // than the 96 dB/oct IIR; below that frequency the IIR (phase-corrected) is kept.
+    const bool wantCorrection = usesPhaseCorrection (params.phaseMode, params.quality);
+    const double firBrickwallHz = phase::minimumFirBrickwallHz (params.quality, cfg.sampleRate);
+    useChainCopy = false;
+    for (std::size_t b = 0; b < bands.size(); ++b)
     {
-        lookaheadSamples = lookahead;
-        dryDelay.setDelay (latency);
-        soloDelay.setDelay (spectralLatency);
-        latencySamples.store (latency, std::memory_order_relaxed);
+        firBrickwall[b] = wantCorrection && params.phaseMode == PhaseMode::NaturalPhase && isBrickwallCut (bands[b])
+            && bands[b].shape.frequencyHz >= firBrickwallHz;
+        useChainCopy = useChainCopy || firBrickwall[b];
     }
+    if (useChainCopy)
+    {
+        *chainBands = bands;
+        for (std::size_t b = 0; b < bands.size(); ++b)
+            if (firBrickwall[b])
+                (*chainBands)[b].active = false;
+    }
+    updateCoverage (useChainCopy ? *chainBands : bands);
+
+    // Oversampling of the band chain (ADR-0008): polyphase IIR half-bands in Minimum Phase,
+    // linear-phase FIR half-bands in Natural Phase and Analog Feel.
+    const int factor = std::min (oversamplingFactor (params.oversampling), maxFactor);
+    const auto type =
+        params.phaseMode == PhaseMode::MinimumPhase ? oversampling::FilterType::PolyphaseIir : oversampling::FilterType::LinearPhaseFir;
+    if (factor != osFactor || (factor > 1 && (type != osType || params.quality != osQuality)))
+        setOversampling (factor, type, params.quality);
+
+    // Natural Phase corrector (ADR-0005).
+    const bool correctorChanged = corrector->setQuality (params.quality);
+    if (wantCorrection != correctionActive && ! correctorChanged)
+        corrector->reset();
+    correctionActive = wantCorrection;
+
+    const int osLatency = oversampler != nullptr ? oversampler->getLatencySamples() : 0;
+    const int correctionLatency = correctionActive ? corrector->getLatencySamples() : 0;
+    const int spectralLatency = spectralEnabled ? spectralEngine->getLatencySamples() : 0;
+    const int latency = lookahead + osLatency + correctionLatency + spectralLatency;
+
+    lookaheadSamples = lookahead;
+    osBypassDelay.setDelay (lookahead + osLatency);
+    soloDelay.setDelay (osLatency + correctionLatency + spectralLatency);
+    dryDelay.setDelay (latency);
+    latencySamples.store (latency, std::memory_order_relaxed);
 }
 
 template <typename Sample>
@@ -201,6 +357,8 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
         lastSoloShape = auditionShapeFor (bands[static_cast<std::size_t> (params.soloBand)].shape);
 
     configure (params, bands);
+    const BandSettingsArray& chain = useChainCopy ? *chainBands : bands; // bands of the IIR chain
+
     autoGainSettings = { params.autoGain, params.autoGainWeighting, params.autoGainSpeed };
     if (params.autoGain)
         updateAutoGainCurves (bands);
@@ -210,17 +368,90 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
     bypass.setTarget (params.bypass ? 1.0 : 0.0);
 
     Sample* chunkPointers[kMaxChannels];
-    for (int offset = 0; offset < numSamples; offset += cfg.maxBlockSize)
+    for (int offset = 0; offset < numSamples; offset += chunkSize)
     {
-        const int n = std::min (cfg.maxBlockSize, numSamples - offset);
+        const int n = std::min (chunkSize, numSamples - offset);
         for (int ch = 0; ch < numChannels; ++ch)
             chunkPointers[ch] = channels[ch] + offset;
-        processChunk (chunkPointers, numChannels, n, bands);
+        processChunk (chunkPointers, numChannels, n, chain, bands);
+    }
+}
+
+void Engine::runBands (const BandSettingsArray& chain, int numChannels, int offset, int numSamples) noexcept
+{
+    const auto n = static_cast<std::size_t> (numSamples);
+    const auto start = static_cast<std::size_t> (offset);
+
+    if (osFactor == 1)
+    {
+        // The main path is the input delayed by Max Lookahead (exactly the input when it is 0).
+        double* segment[kMaxChannels];
+        for (int ch = 0; ch < numChannels; ++ch)
+        {
+            const auto& h = history[static_cast<std::size_t> (ch)];
+            auto& w = wet[static_cast<std::size_t> (ch)];
+            for (std::size_t i = 0; i < n; ++i)
+                w[start + i] =
+                    h[static_cast<std::size_t> ((historyWrite + offset + static_cast<int> (i) - lookaheadSamples) & historyMask)];
+            segment[ch] = w.data() + offset;
+        }
+        const DetectionInput detection { historyPointers.data(), historyMask, historyWrite + offset, lookaheadSamples };
+        for (std::size_t b = 0; b < bandProcessors->size(); ++b)
+            (*bandProcessors)[b].process (chain[b], cfg.topology, segment, numChannels, numSamples, controlBlock, detection);
+        return;
+    }
+
+    // Oversampled: the upsampled input feeds the detection history and, delayed by the
+    // lookahead, the bands; every channel runs through the filters so that they stay warm.
+    const int factor = osFactor;
+    const int highSamples = numSamples * factor;
+    const int highLookahead = lookaheadSamples * factor;
+    for (int ch = 0; ch < numChannels; ++ch)
+    {
+        const auto c = static_cast<std::size_t> (ch);
+        oversampler->upsample (ch, dry[c].data() + offset, osInput.data(), numSamples);
+        auto& ring = osHistory[c];
+        auto& w = wetHigh[c];
+        for (int j = 0; j < highSamples; ++j)
+            ring[static_cast<std::size_t> ((osHistoryWrite + j) & osHistoryMask)] = osInput[static_cast<std::size_t> (j)];
+        for (int j = 0; j < highSamples; ++j)
+            w[static_cast<std::size_t> (j)] = ring[static_cast<std::size_t> ((osHistoryWrite + j - highLookahead) & osHistoryMask)];
+    }
+
+    const DetectionInput detection { osHistoryPointers.data(), osHistoryMask, osHistoryWrite, highLookahead };
+    const int highControlBlock = std::min (BandProcessor::kMaxControlBlock, controlBlock * factor);
+    for (std::size_t b = 0; b < bandProcessors->size(); ++b)
+        (*bandProcessors)[b].process (chain[b], cfg.topology, wetHighPointers.data(), numChannels, highSamples, highControlBlock,
+                                      detection);
+    osHistoryWrite = (osHistoryWrite + highSamples) & osHistoryMask;
+
+    // Channels that no band processes take the exactly delayed input instead (CH-6), with a short
+    // crossfade when that changes.
+    for (int ch = 0; ch < numChannels; ++ch)
+    {
+        const auto c = static_cast<std::size_t> (ch);
+        oversampler->downsample (ch, wetHigh[c].data(), osOutput.data(), numSamples);
+        const int target = osCovered[c] ? osRampLength : 0;
+        int ramp = osRamp[c];
+        auto& w = wet[c];
+        const auto& bypassed = osBypass[c];
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            ramp += ramp < target ? 1 : (ramp > target ? -1 : 0);
+            if (ramp == osRampLength)
+                w[start + i] = osOutput[i];
+            else if (ramp == 0)
+                w[start + i] = bypassed[start + i];
+            else
+                w[start + i] = bypassed[start + i] + (osOutput[i] - bypassed[start + i]) * ramp / osRampLength;
+        }
+        osRamp[c] = ramp;
     }
 }
 
 template <typename Sample>
-void Engine::processChunk (Sample* const* channels, int numChannels, int numSamples, const BandSettingsArray& bands) noexcept
+void Engine::processChunk (Sample* const* channels, int numChannels, int numSamples, const BandSettingsArray& chain,
+                           const BandSettingsArray& bands) noexcept
 {
     const auto n = static_cast<std::size_t> (numSamples);
 
@@ -245,29 +476,65 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
     if (inputSanitised)
         nonFiniteEvents.fetch_add (1, std::memory_order_relaxed);
 
-    // The main path is the input delayed by Max Lookahead (exactly the input when it is 0).
-    for (int ch = 0; ch < numChannels; ++ch)
-    {
-        const auto& h = history[static_cast<std::size_t> (ch)];
-        auto& w = wet[static_cast<std::size_t> (ch)];
-        for (std::size_t i = 0; i < n; ++i)
-            w[i] = h[static_cast<std::size_t> ((historyWrite + static_cast<int> (i) - lookaheadSamples) & historyMask)];
-    }
-
-    // Solo auditions the (delayed) input, so it is taken before the bands run.
+    // Solo auditions the lookahead-delayed input at the base rate.
     const bool soloActive = soloAmount.isSmoothing() || soloAmount.getCurrent() > 0.0;
     if (soloActive)
+    {
+        if (! soloWasActive)
+        {
+            soloProcessor->reset();
+            soloDelay.reset();
+        }
         for (int ch = 0; ch < numChannels; ++ch)
-            std::copy (wet[static_cast<std::size_t> (ch)].begin(), wet[static_cast<std::size_t> (ch)].begin() + numSamples,
-                       solo[static_cast<std::size_t> (ch)].begin());
+        {
+            const auto& h = history[static_cast<std::size_t> (ch)];
+            auto& s = solo[static_cast<std::size_t> (ch)];
+            for (std::size_t i = 0; i < n; ++i)
+                s[i] = h[static_cast<std::size_t> ((historyWrite + static_cast<int> (i) - lookaheadSamples) & historyMask)];
+        }
+    }
+    soloWasActive = soloActive;
 
-    const DetectionInput detection { historyPointers.data(), historyMask, historyWrite, lookaheadSamples };
-    for (std::size_t b = 0; b < bandProcessors->size(); ++b)
-        (*bandProcessors)[b].process (bands[b], cfg.topology, wetPointers.data(), numChannels, numSamples, controlBlock, detection);
+    // Exactly delayed input for the channels that bypass oversampling (CH-6).
+    if (osFactor > 1)
+    {
+        for (int ch = 0; ch < numChannels; ++ch)
+            std::copy (dry[static_cast<std::size_t> (ch)].begin(), dry[static_cast<std::size_t> (ch)].begin() + numSamples,
+                       osBypass[static_cast<std::size_t> (ch)].begin());
+        osBypassDelay.processInPlace (osBypassPointers.data(), numChannels, numSamples);
+    }
+
+    // Bands and the Natural Phase corrector, in segments that end on the corrector's update grid
+    // (absolute sample positions), so the output does not depend on the host block size (NFR-3).
+    int done = 0;
+    while (done < numSamples)
+    {
+        int length = numSamples - done;
+        if (correctionActive)
+        {
+            const int interval = corrector->getUpdateInterval();
+            const auto phaseInGrid = static_cast<int> (samplePosition % interval);
+            if (phaseInGrid == 0)
+                updateCorrector (bands);
+            length = std::min (length, interval - phaseInGrid);
+        }
+
+        runBands (chain, numChannels, done, length);
+
+        if (correctionActive)
+        {
+            double* segment[kMaxChannels];
+            for (int ch = 0; ch < numChannels; ++ch)
+                segment[ch] = wet[static_cast<std::size_t> (ch)].data() + done;
+            corrector->process (segment, numChannels, length);
+        }
+        done += length;
+        samplePosition += length;
+    }
     historyWrite = (historyWrite + numSamples) & historyMask;
 
     if (spectralEnabled)
-        spectralEngine->process (wetPointers.data(), numChannels, numSamples, bands, cfg.topology);
+        spectralEngine->process (wetPointers.data(), numChannels, numSamples, chain, cfg.topology);
 
     // Dry path aligned with the processed path (latency).
     dryDelay.processInPlace (dryPointers.data(), numChannels, numSamples);
@@ -284,8 +551,7 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         audition.active = true;
         audition.shape = lastSoloShape;
         soloProcessor->process (audition, cfg.topology, soloPointers.data(), numChannels, numSamples, controlBlock);
-        if (spectralEnabled)
-            soloDelay.processInPlace (soloPointers.data(), numChannels, numSamples);
+        soloDelay.processInPlace (soloPointers.data(), numChannels, numSamples);
         for (std::size_t i = 0; i < n; ++i)
         {
             const double s = soloAmount.next();
@@ -304,9 +570,10 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
             energy += wet[static_cast<std::size_t> (ch)][i] * wet[static_cast<std::size_t> (ch)][i];
     if (! std::isfinite (energy))
     {
-        for (auto& band : *bandProcessors)
-            band.reset();
+        resetChain();
         soloProcessor->reset();
+        spectralEngine->reset();
+        autoGain->reset();
         for (int ch = 0; ch < numChannels; ++ch)
             std::fill (wet[static_cast<std::size_t> (ch)].begin(), wet[static_cast<std::size_t> (ch)].begin() + numSamples, 0.0);
         nonFiniteEvents.fetch_add (1, std::memory_order_relaxed);

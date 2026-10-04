@@ -10,6 +10,8 @@
 #include "ssc/engine/ChannelTopology.h"
 #include "ssc/engine/Types.h"
 #include "ssc/loudness/AutoGain.h"
+#include "ssc/oversampling/Oversampler.h"
+#include "ssc/phase/PhaseCorrector.h"
 #include "ssc/spectral/SpectralEngine.h"
 #include "ssc/util/DelayLine.h"
 #include "ssc/util/LinearSmoother.h"
@@ -36,7 +38,24 @@ struct GlobalParams
     bool autoGain = false;       ///< global Auto Gain (AG-1)
     AutoGainWeighting autoGainWeighting = AutoGainWeighting::Fletcher;
     AutoGainSpeed autoGainSpeed = AutoGainSpeed::Stable;
+    PhaseMode phaseMode = PhaseMode::MinimumPhase;
+    Oversampling oversampling = Oversampling::Off; ///< of the band chain; limited by maxOversamplingFor()
 };
+
+/** Largest oversampling factor at a sample rate: the internal rate stays at or below 400 kHz. */
+constexpr int maxOversamplingFor (double sampleRate) noexcept
+{
+    int factor = 1;
+    while (factor < 8 && sampleRate * factor * 2 <= 400000.0)
+        factor *= 2;
+    return factor;
+}
+
+/** Natural Phase correction runs in Natural Phase, and in Analog Feel at High and Max (research §8c). */
+constexpr bool usesPhaseCorrection (PhaseMode mode, Quality quality) noexcept
+{
+    return mode == PhaseMode::NaturalPhase || (mode == PhaseMode::AnalogFeel && (quality == Quality::High || quality == Quality::Max));
+}
 
 /** Coefficient update interval (samples) per Quality level (research §8). */
 constexpr int controlBlockFor (Quality q) noexcept
@@ -54,11 +73,15 @@ constexpr int controlBlockFor (Quality q) noexcept
 /**
     Top-level DSP engine. Owns the processing chain and the dry path used by Mix and Bypass.
 
-    Signal flow (finalised over milestones M2–M4):
-    processed = chain(input); out = (mix * processed + (1 - mix) * dry) * outputGain,
-    crossfaded with the latency-aligned dry signal when bypassed.
+    Signal flow (ARC-2, ADR-0008, ADR-0005, ADR-0011):
+    input → Max Lookahead delay → [upsample] → bands (IIR, dynamics, Character) → [downsample]
+          → [Natural Phase corrector] → spectral engine → Auto Gain → Solo
+    out = (mix * processed + (1 - mix) * dry) * outputGain, crossfaded with the latency-aligned
+    dry signal when bypassed. Channels that no band processes bypass oversampling exactly (CH-6).
+    Latency = lookahead + oversampling + corrector + spectral frame.
 
-    prepare() allocates for the given configuration; process() is real-time safe.
+    prepare() allocates for every oversampling factor, phase mode and Quality, so process()
+    stays real-time safe when they change.
 */
 class Engine
 {
@@ -91,12 +114,19 @@ public:
     /** Reader side of the spectral mask view (one UI thread); see SpectralEngine::pollMaskView(). */
     const spectral::SpectralEngine::MaskView* pollSpectralView() noexcept { return spectralEngine->pollMaskView(); }
 
-    /** Applies configuration parameters (Max Lookahead, later phase mode and spectral engine) without
-        processing audio, so the latency is known right after prepare(). Audio thread or prepare. */
+    /** Applies configuration parameters (Max Lookahead, phase mode, oversampling, Quality, spectral
+        engine) without processing audio, so the latency is known right after prepare(). Real-time
+        safe; audio thread or prepare. */
     void configure (const GlobalParams& params, const BandSettingsArray& bands) noexcept;
 
     /** Current latency in samples; any thread. */
     int getLatencySamples() const noexcept { return latencySamples.load (std::memory_order_relaxed); }
+
+    /** Oversampling factor of the band chain in use (1 = off); audio thread. */
+    int getOversamplingFactor() const noexcept { return osFactor; }
+
+    /** True while the Natural Phase corrector is in the chain; audio thread. */
+    bool isPhaseCorrectionActive() const noexcept { return correctionActive; }
     const EngineConfig& getConfig() const noexcept { return cfg; }
 
     /** Blocks in which non-finite audio was replaced by silence (input or filter state); any thread. */
@@ -104,10 +134,19 @@ public:
 
 private:
     template <typename Sample>
-    void processChunk (Sample* const* channels, int numChannels, int numSamples, const BandSettingsArray& bands) noexcept;
+    void processChunk (Sample* const* channels, int numChannels, int numSamples, const BandSettingsArray& chain,
+                       const BandSettingsArray& bands) noexcept;
+    void runBands (const BandSettingsArray& chain, int numChannels, int offset, int numSamples) noexcept;
+    void updateCorrector (const BandSettingsArray& bands) noexcept;
+    void setOversampling (int factor, oversampling::FilterType type, Quality quality) noexcept;
+    void updateCoverage (const BandSettingsArray& chain) noexcept;
+    void resetChain() noexcept;
 
     static constexpr double kRampSeconds = 0.02;
     static constexpr double kMaxLookaheadSeconds = 0.02;
+    static constexpr int kMaxChunk = 512; ///< internal block: bounds the memory of the oversampled buffers
+
+    int chunkSize = kMaxChunk;
 
     EngineConfig cfg;
     std::atomic<int> latencySamples { 0 };
@@ -129,6 +168,7 @@ private:
     std::vector<std::vector<double>> solo;
     std::vector<double*> soloPointers;
     LinearSmoother<double> soloAmount;
+    bool soloWasActive = false;
     filters::BandShape lastSoloShape;
     int controlBlock = 16;
     MultiChannelDelay<double> dryDelay;
@@ -152,5 +192,32 @@ private:
     std::vector<double> channelCurveDb;            ///< scratch [ERB band]
     bool spectralEnabled = false;
     MultiChannelDelay<double> soloDelay;
+
+    // Oversampling of the band chain (ADR-0008): one oversampler per filter type, factor and Quality.
+    int maxFactor = 1;
+    int osFactor = 1;
+    oversampling::FilterType osType = oversampling::FilterType::PolyphaseIir;
+    Quality osQuality = Quality::Normal;
+    std::unique_ptr<std::array<oversampling::Oversampler, 24>> oversamplers = std::make_unique<std::array<oversampling::Oversampler, 24>>();
+    oversampling::Oversampler* oversampler = nullptr;
+    std::vector<std::vector<double>> osHistory, wetHigh, osBypass;
+    std::vector<const double*> osHistoryPointers;
+    std::vector<double*> wetHighPointers, osBypassPointers;
+    std::vector<double> osInput, osOutput;
+    int osHistoryMask = 0;
+    int osHistoryWrite = 0;
+    MultiChannelDelay<double> osBypassDelay;
+    std::array<bool, kMaxChannels> osCovered {};
+    std::array<int, kMaxChannels> osRamp {}; ///< 0: exact bypass … osRampLength: oversampled path
+    int osRampLength = 240;
+
+    // Natural Phase (ADR-0005): updated on a fixed sample grid so the output is block-size independent.
+    std::unique_ptr<phase::PhaseCorrector> corrector = std::make_unique<phase::PhaseCorrector>();
+    std::unique_ptr<phase::CorrectorBands> correctorBands = std::make_unique<phase::CorrectorBands>();
+    bool correctionActive = false;
+    std::int64_t samplePosition = 0;
+    std::unique_ptr<BandSettingsArray> chainBands = std::make_unique<BandSettingsArray>(); ///< bands of the IIR chain
+    bool useChainCopy = false;                   ///< chainBands differs from the parameters (Natural Phase brickwalls)
+    std::array<bool, kNumBands> firBrickwall {}; ///< Natural Phase brickwall cuts, realised by the corrector
 };
 } // namespace ssc::engine

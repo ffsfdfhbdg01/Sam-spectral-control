@@ -126,6 +126,12 @@ void EqDisplay::setSampleRate (double sampleRate)
     repaint();
 }
 
+void EqDisplay::setResponseModel (const ResponseCurves::Model& responseModel)
+{
+    curves.setResponseModel (responseModel);
+    repaint();
+}
+
 void EqDisplay::setChannelInfo (int channels, int pairs)
 {
     numChannels = channels;

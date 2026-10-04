@@ -121,6 +121,9 @@ public:
     void prepare (double sampleRate, int maxBlockSize);
     void reset() noexcept;
 
+    /** Changes the processing rate (e.g. oversampling) without allocating; resets the band. */
+    void setSampleRate (double sampleRate) noexcept;
+
     /** Processes numSamples in place; controlBlock is the coefficient update interval (Quality). */
     void process (const BandSettings& settings, const ChannelTopology& topology, double* const* channels, int numChannels, int numSamples,
                   int controlBlock, const DetectionInput& detection = {}) noexcept;

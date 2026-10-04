@@ -100,7 +100,30 @@ engine::GlobalParams SscAudioProcessor::readGlobalParams (bool forceBypass) cons
     p.autoGain = isOn (params.autoGain);
     p.autoGainWeighting = choice (params.autoGainWeighting, AutoGainWeighting::Digital);
     p.autoGainSpeed = choice (params.autoGainSpeed, AutoGainSpeed::Stable);
+    p.phaseMode = choice (params.phaseMode, PhaseMode::AnalogFeel);
+    p.oversampling = choice (params.oversampling, Oversampling::X8);
     return p;
+}
+
+int SscAudioProcessor::getOversamplingFactor() const noexcept
+{
+    const double fs = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    return std::min (oversamplingFactor (choice (params.oversampling, Oversampling::X8)), engine::maxOversamplingFor (fs));
+}
+
+bool SscAudioProcessor::isPhaseCorrected() const noexcept
+{
+    return engine::usesPhaseCorrection (choice (params.phaseMode, PhaseMode::AnalogFeel), choice (params.quality, Quality::Max));
+}
+
+ui::ResponseCurves::Model SscAudioProcessor::getResponseModel() const noexcept
+{
+    ui::ResponseCurves::Model model;
+    model.oversampling = getOversamplingFactor();
+    model.analog = isPhaseCorrected();
+    model.firBrickwall = model.analog && choice (params.phaseMode, PhaseMode::AnalogFeel) == PhaseMode::NaturalPhase;
+    model.quality = choice (params.quality, Quality::Max);
+    return model;
 }
 
 void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) const noexcept

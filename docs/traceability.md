@@ -2,7 +2,7 @@
 
 Każde wymaganie z [PROMPT.md](../PROMPT.md) z priorytetem, etapem realizacji, źródłem kryteriów akceptacji i statusem. Tabela jest aktualizowana po każdym kamieniu milowym; kolumna „Dowód” zostanie uzupełniona nazwami testów i raportów pomiarowych.
 
-Stan: **M3 zakończony** (M0 research, M1 szkielet, M2 pasma statyczne, M3 dynamika, Spectral i Auto Gain) — 88 wymagań, wszystkie z kryteriami akceptacji w notatkach researchu lub ADR. Kolumna „Dowód” wskazuje testy (tagi Catch2 w nawiasach) lub elementy kodu.
+Stan: **M4 zakończony** (M0 research, M1 szkielet, M2 pasma statyczne, M3 dynamika, Spectral i Auto Gain, M4 Natural Phase, Quality, oversampling, Character) — 88 wymagań, wszystkie z kryteriami akceptacji w notatkach researchu lub ADR. Kolumna „Dowód” wskazuje testy (tagi Catch2 w nawiasach) lub elementy kodu.
 
 | ID | Wymaganie (skrót) | Priorytet | Etap | Kryteria / projekt | Dowód | Status |
 |---|---|---|---|---|---|---|
@@ -26,7 +26,7 @@ Stan: **M3 zakończony** (M0 research, M1 szkielet, M2 pasma statyczne, M3 dynam
 | CH-6 | Kanały, których pasmo nie obejmuje, zostają nietknięte (weryfikacja null testem) | P0 | M5 | research/04 §d | `[CH-6]` Engine applies active bands and leaves inactive ones bit-exact; Band parameters drive the engine… | Zrealizowane dla pasm statycznych (M2); surround — M5 |
 | BAND-1 | Do 24 pasm | P0 | M2 | research/05 §d | `[BAND-1]` Band slots…; Band solo auditions the band region…; Band parameters drive the engine… | Zrealizowane (M2); benchmark CPU — M3 |
 | BAND-2 | Kształty: Bell, Low Shelf, High Shelf, Low Cut, High Cut, Notch, Band Pass, Tilt Shelf | P0 (Flat Tilt, All Pass P1) | M2 | research/05 §d | `[BAND-2]` Matched bell / shelves / notch, band pass, all pass, tilt | Zrealizowane w Minimum Phase (obwiednia błędu: research/05 §c); ±0,1 dB — M4 |
-| BAND-3 | Slope dla Low/High Cut: 6, 12, 18, 24, 30, 36, 48, 72 i 96 dB/oct (płynna regulacja — P1)… | P0 (płynny slope P1) | M2 | research/05 §d | `[BAND-3]` Cut filters: -3 dB at the corner and the nominal slope | Zrealizowane (slopy stałe); płynny slope P1; Brickwall w Natural Phase — M4 |
+| BAND-3 | Slope dla Low/High Cut: 6, 12, 18, 24, 30, 36, 48, 72 i 96 dB/oct (płynna regulacja — P1)… | P0 (płynny slope P1) | M2 | research/05 §d | `[BAND-3]` Cut filters: -3 dB at the corner and the nominal slope; `[BAND-3]` Natural Phase brickwall | Zrealizowane (slopy stałe; Brickwall w Natural Phase liniowofazowy od 7·fs/(2D+1), niżej IIR 96 dB/oct — M4); płynny slope P1 |
 | BAND-4 | Tworzenie pasma kliknięciem — kształt zależy od miejsca kliknięcia (jak w Pro-Q 4) | P0 | M2 | research/05 §d | `[BAND-4]` Band shape follows the click zone; hover preview w EqDisplay | Zrealizowane (M2) |
 | BAND-5 | Prawy przycisk myszy na paśmie otwiera menu kontekstowe: Shape, Slope, Mode, Target… | P0 | M2 | research/05 §d | `[BAND-5]` Slope menu lists only the slopes…; Creating, editing and deleting bands are single undo steps | Zrealizowane (M2) |
 | BAND-6 | Interakcja: przeciąganie (frequency/gain), kółko myszy zmienia Q, Shift daje precyzyjną… | P0 | M2 | research/05 §d | `[BAND-6]` Frequency sweeps are zipper-free; Typed values are parsed…; undo/gesty | Zrealizowane (M2) |
@@ -48,19 +48,19 @@ Stan: **M3 zakończony** (M0 research, M1 szkielet, M2 pasma statyczne, M3 dynam
 | AG-4 | Szybkość śledzenia: Very Fast / Fast / Medium / Long / Stable (domyślnie) | P0 | M3 | research/07 §d | `[AG-4]` time constant per speed; Stable settles | Zrealizowane (M3); tolerancja obejmuje opóźnienie analizy (research/07) |
 | AG-5 | Zabezpieczenia: limit korekcji ±24 dB; zamrożenie korekcji w ciszy (bramka jak w BS.1770… | P0 | M3 | research/07 §d | `[AG-5]` silence holds, ≤ 0,5 dB/ms; przed Solo | Zrealizowane (M3); Delta — P1 |
 | AG-6 | Test: różowy szum + Bell +6 dB przy 3 kHz → różnica głośności wejście/wyjście ≤ 0,5 dB… | P0 | M3 | research/07 §d | `[AG-6]` model −0,06 dB, BS.1770 −0,2 LU | Zrealizowane (M3) |
-| PH-1 | Globalny Phase Mode: Minimum Phase, Natural Phase, Analog Feel N/P/S | P0 | M2 (Min Phase), M4 (Natural), M6 (Analog) | research/08 §d, ADR-0004, ADR-0005, ADR-0009 | `[BAND-2]` (Minimum Phase) | Minimum Phase zrealizowane (M2); Natural Phase — M4; Analog Feel — M6 |
-| PH-2 | Quality: 4 poziomy w każdym trybie — Eco / Normal / High / Max | P0 | M4 | research/08 §d | — | Zaprojektowane, do realizacji |
-| PH-3 | Architektura nie może blokować późniejszego dodania trybu Linear Phase (P2) | P2 | M4 (przegląd) | research/08 §d | — | Zaprojektowane, do realizacji |
-| CHR-1 | Character per pasmo: Clear (domyślnie), Warm, Sharp | P0 | M4 | research/09 §d | — | Zaprojektowane, do realizacji |
-| CHR-2 | Nieliniowość działa tylko na wkład pasma, więc pasmo nie barwi całego sygnału | P0 | M4 | research/09 §d | — | Zaprojektowane, do realizacji |
-| CHR-3 | Cele pomiarowe THD dla Warm/Sharp/Clear (sinus 0 dBFS, Bell +6 dB) | P0 | M4 | research/09 §d | — | Zaprojektowane, do realizacji |
+| PH-1 | Globalny Phase Mode: Minimum Phase, Natural Phase, Analog Feel N/P/S | P0 | M2 (Min Phase), M4 (Natural), M6 (Analog) | research/08 §d, ADR-0004, ADR-0005, ADR-0009 | `[BAND-2]` (Minimum Phase); `[PH-1]` Natural Phase vs prototyp analogowy (Normal ≤ 0,058 dB / 0,17°, Max ≤ 0,004 dB / 0,01°), latencja = D, pre-ring ≤ D, baza M/S, przez silnik i wtyczkę | Minimum Phase (M2) i Natural Phase (M4) zrealizowane; Analog Feel — M6 (w M4: korektor w High/Max) |
+| PH-2 | Quality: 4 poziomy w każdym trybie — Eco / Normal / High / Max | P0 | M4 | research/08 §d | tabela CPU × latencja `ssc_benchmark modes` (research/08 „Realizacja w M4”); błąd maleje z Quality (`[PH-1]`) | Zrealizowane (M4) dla Minimum/Natural Phase; Analog Feel — M6 |
+| PH-3 | Architektura nie może blokować późniejszego dodania trybu Linear Phase (P2) | P2 | M4 (przegląd) | research/08 §d | `PhaseCorrector`: FIR z dowolnej odpowiedzi C(ω) na siatce, baza L/R i M/S, deterministyczne aktualizacje | Przegląd M4: ścieżka FIR gotowa (Linear Phase = C z amplitudą T i fazą liniową; dla basu potrzebny dłuższy FIR / splot partycjonowany) |
+| CHR-1 | Character per pasmo: Clear (domyślnie), Warm, Sharp | P0 | M4 | research/09 §d | `[CHR-1]` krzywe Warm (Q proporcjonalne), Sharp (bell 4. rzędu), cięcia z rezonansem | Zrealizowane (M4) |
+| CHR-2 | Nieliniowość działa tylko na wkład pasma, więc pasmo nie barwi całego sygnału | P0 | M4 | research/09 §d | `[CHR-2]` pasmo 0 dB bit-exact; dodawane tylko produkty N(u) = S(u) − u | Zrealizowane (M4) |
+| CHR-3 | Cele pomiarowe THD dla Warm/Sharp/Clear (sinus 0 dBFS, Bell +6 dB) | P0 | M4 | research/09 §d | `[CHR-3]` Warm 0,245 % (H2 − H3 = 20 dB), Sharp 0,246 % (H3), Clear −276 dB | Zrealizowane (M4); narzut CPU +35/45 % zamiast ≤ 30 % — odstępstwo w research/09 |
 | CHR-4 | W trybie Analog Feel Character steruje nieliniowością modelu: Clear = sam model krzywych i… | P0 | M6 | research/09 §d | — | Zaprojektowane, do realizacji |
-| CHR-5 | Kontekst: w Pro-Q 4 tryby Character (Clean/Subtle/Warm) są globalne — tutaj działają per pasmo | P0 | M4 | research/09 §d | — | Zaprojektowane, do realizacji |
-| OS-1 | Ustawienie globalne: Off (1×, domyślnie) / 2× / 4× / 8× | P0 | M4 | research/10 §d | — | Zaprojektowane, do realizacji |
-| OS-2 | Filtry: polifazowe IIR w Minimum Phase, liniowofazowe FIR w Natural Phase / Analog Feel | P0 | M4 | research/10 §d | — | Zaprojektowane, do realizacji |
-| OS-3 | Zakres działania oversamplingu zgodnie z ARC-2 | P0 | M4 | research/10 §d | — | Zaprojektowane, do realizacji |
-| OS-4 | Osobne ustawienie oversamplingu dla renderu offline (P1) | P1 | M4 | research/10 §d | — | Zaprojektowane, do realizacji |
-| OS-5 | Gdy aktywne są nieliniowości, a miernik aliasingu (sekcja 13) przekroczy próg, UI subtelnie… | P0 | M4 | research/10 §d | — | Zaprojektowane, do realizacji |
+| CHR-5 | Kontekst: w Pro-Q 4 tryby Character (Clean/Subtle/Warm) są globalne — tutaj działają per pasmo | P0 | M4 | research/09 §d | Character w parametrach pasma (`BandShape::character`) | Zrealizowane (M4) |
+| OS-1 | Ustawienie globalne: Off (1×, domyślnie) / 2× / 4× / 8× | P0 | M4 | research/10 §d | `[OS-1]` aliasing Warm +12 dB 10 kHz: 2×/4×/8× ≈ −163 dB, przez silnik 2× < −95 dB; limit 400 kHz wewnętrznie | Zrealizowane (M4); 1× −66,5 dB zamiast −80 dB — odstępstwo w research/09 |
+| OS-2 | Filtry: polifazowe IIR w Minimum Phase, liniowofazowe FIR w Natural Phase / Analog Feel | P0 | M4 | research/10 §d, ADR-0008 | `[OS-2]` zafalowania i tłumienie dla każdego typu × Quality × współczynnika | Zrealizowane (M4, własna implementacja zamiast juce::dsp — ADR-0008) |
+| OS-3 | Zakres działania oversamplingu zgodnie z ARC-2 | P0 | M4 | research/10 §d | `[OS-3]` latencja = zmierzona (moduł, silnik, wtyczka); kanały bez pasm bit-exact (`[CH-6]`) | Zrealizowane (M4) |
+| OS-4 | Osobne ustawienie oversamplingu dla renderu offline (P1) | P1 | M8 | research/10 §d | — | Przeniesione na M8 (wymaga wspólnej latencji wariantów) |
+| OS-5 | Gdy aktywne są nieliniowości, a miernik aliasingu (sekcja 13) przekroczy próg, UI subtelnie… | P0 | M7 | research/10 §d | — | Przeniesione na M7 (razem z miernikiem aliasingu §13) |
 | VIS-1 | Na środku okna analizator w czasie rzeczywistym (jak w Pro-Q 4): widmo pre/post (sidechain… | P0 (sidechain P1) | M1 (podstawy), M7 | research/11 §d | `SpectrumAnalyzer`, `[analyzer]` testy; EqDisplay | Częściowo: pre/post, oś log, tilt 4,5 dB/oct (M1); regulacje, freeze, peak hold — M7 |
 | VIS-2 | Glow aktywności: najbardziej aktywne obszary widma świecą jaśniej | P0 (paleta dla daltonistów P1) | M7 | research/11 §d | — | Zaprojektowane, do realizacji |
 | VIS-3 | Bieżąca redukcja lub podbicie pasm Dynamic i Spectral jest rysowana jako świecące… | P0 | M7 | research/11 §d | — | Zaprojektowane, do realizacji |

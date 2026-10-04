@@ -10,7 +10,8 @@ Korektor parametryczny z pasmami statycznymi, dynamicznymi i spektralno-dynamicz
 | M1 | Szkielet: CMake + JUCE 9 + VST3, CI, parametry, stan, bypass, analizator | ✅ |
 | M2 | 24 pasma statyczne (filtry dopasowane, SVF-TPT), cele L/R/M/S, edycja na wyświetlaczu, panel pasma, Undo/Redo | ✅ |
 | M3 | Pasma Dynamic (lookahead, linkowanie) i Spectral (STFT, siatka ERB, próg względny), Auto Gain globalny i pasm (ISO 226) | ✅ |
-| M4–M8 | Tryby fazy i Quality, oversampling, Character, surround, modele analogowe, wizualizacje, wydanie | ⏳ |
+| M4 | Natural Phase (korektor FIR amplitudy i fazy), Quality, oversampling 2×/4×/8× (IIR/FIR), Character Warm/Sharp z ADAA, brickwall liniowofazowy | ✅ |
+| M5–M8 | Panel głośników surround, modele analogowe, wizualizacje, odczyty i mierniki, wydanie | ⏳ |
 
 Szczegółowy stan każdego wymagania: [docs/traceability.md](docs/traceability.md).
 
@@ -49,7 +50,7 @@ Styl kodu: `.clang-format` (clang-format 18, sprawdzany w CI). `-DSSC_WARNINGS_A
 - **macOS (universal):** dodaj `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0`.
 - **Windows:** `cmake -B build -G "Visual Studio 17 2022" -A x64` i `cmake --build build --config Release`.
 - **Linux:** pakiety `libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libxi-dev libglu1-mesa-dev`.
-- **Narzędzia deweloperskie:** `-DSSC_BUILD_TOOLS=ON` buduje `ssc_screenshot` (zrzut edytora z sygnałem testowym, offscreen) i `ssc_benchmark` (obciążenie CPU konfiguracji z NFR-1, wyniki w [docs/benchmarks.md](docs/benchmarks.md)).
+- **Narzędzia deweloperskie:** `-DSSC_BUILD_TOOLS=ON` buduje `ssc_screenshot` (zrzut edytora z sygnałem testowym, offscreen) i `ssc_benchmark` (obciążenie CPU konfiguracji z NFR-1, wyniki w [docs/benchmarks.md](docs/benchmarks.md); `ssc_benchmark 3 modes` — tabela CPU i latencji trybów fazy × Quality i oversamplingu, PH-2).
 
 ## Struktura
 

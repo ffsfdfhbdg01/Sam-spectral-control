@@ -13,6 +13,16 @@ namespace ssc::phase
 /** Latency D of the corrector: 16 / 32 / 64 / 128 samples at 48 kHz per Quality, scaled with fs (ADR-0005). */
 int correctorDelayFor (Quality quality, double sampleRate) noexcept;
 
+/**
+    Lowest corner frequency at which a Brickwall cut is realised by the corrector as a linear-phase
+    FIR: there its transition (≈ 5·fs/(2D + 1) with the brickwall window) is narrower than that of
+    the 96 dB/oct IIR. Below it the band stays a phase-corrected minimum-phase IIR.
+*/
+double minimumFirBrickwallHz (Quality quality, double sampleRate) noexcept;
+
+/** Taps (2D + 1, centred on D) of the linear-phase brickwall cut the corrector realises; for displays. */
+std::vector<double> brickwallTaps (bool lowCut, double cornerHz, Quality quality, double sampleRate);
+
 /** What the corrector needs to know about one band. */
 struct CorrectorBand
 {

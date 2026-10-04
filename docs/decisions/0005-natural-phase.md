@@ -25,3 +25,11 @@ Natural Phase ma odtwarzać amplitudę **i fazę** prototypu analogowego przy ma
 - **Pełny FIR z H(jω) całego EQ** — długie filtry dla dokładnego basu; odrzucone.
 - **Korektor per pasmo** — latencje sumowałyby się (N·D); odrzucone.
 - **Korekcja MIMO 2×2 dla par** — dokładna przy mieszaniu L/R i M/S, ale złożona; P2, jeśli testy odsłuchowe pokażą potrzebę.
+
+## Aktualizacja (M4, realizacja)
+- Korektor poprawia także resztkowy błąd **amplitudy** dopasowanego IIR: C = B · T/A · e^{−jωD} (poniżej −80 dB odpowiedzi pasma tylko faza; korekcja amplitudy ograniczona do ±12 dB). To realizuje kryterium ±0,1 dB z odstępstwa BAND-2.
+- Okno Kaisera β = 4 (β = 8 z brickwallem), korekcja do 0,95·Nyquist, siatka ≥ 8·(2D + 1) punktów; aktualizacja na stałej siatce próbek (≈ 21 ms) z crossfadem 5 ms — deterministycznie (NFR-3).
+- Baza M/S realizowana jako FIR 2×2 na historiach kanałów, więc zmiana bazy to crossfade.
+- Brickwall jako FIR tylko od fc ≥ 7·fs/(2D + 1), gdzie jest bardziej stromy niż IIR 96 dB/oct; niżej pozostaje IIR (z korekcją). Pełny liniowofazowy brickwall w basie wymagałby latencji rzędu setek ms — należy do trybu Linear Phase (P2).
+- Wyniki: research/08 „Realizacja w M4” (PH-1 Normal ≤ 0,058 dB / 0,17°, Max ≤ 0,004 dB / 0,01°).
+

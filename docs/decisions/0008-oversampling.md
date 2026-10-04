@@ -20,3 +20,11 @@
 ## Rozważane alternatywy
 - **Oversampling całej wtyczki** (z STFT) — bez korzyści, duży koszt; odrzucone.
 - **Automatyczny OS zależny od aktywnych nieliniowości** — zmiany latencji; odrzucone.
+
+## Aktualizacja (M4, realizacja)
+- Zamiast `juce::dsp::Oversampling` — własna implementacja w rdzeniu DSP (`ssc/oversampling/Oversampler`): rdzeń pozostaje niezależny od JUCE (ARC-5), specyfikacja bez zmian. Interfejs `IOversampler` okazał się zbędny — jedna klasa z dwoma typami filtrów (polifazowy IIR jak w HIIR, półpasmowy FIR z oknem Kaisera).
+- Specyfikacja per Quality: Eco 0,420·fs / 80 dB, Normal 0,432·fs / 90 dB, High 0,444·fs / 105 dB, Max 0,454·fs / 120 dB; latencja zawsze całkowita (dopełnienie przy najwyższej częstotliwości).
+- Częstotliwość wewnętrzna ≤ 400 kHz: 8× do 48 kHz, 4× przy 96 kHz, 2× przy 192 kHz.
+- Wszystkie warianty przygotowane w `prepare()`; zmiana w czasie odtwarzania bez alokacji. Kanały bez pasm omijają OS bit-exact (crossfade 5 ms przy zmianie pokrycia).
+- Wyniki: research/10 „Realizacja w M4”.
+

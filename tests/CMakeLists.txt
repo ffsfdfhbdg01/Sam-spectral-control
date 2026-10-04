@@ -16,7 +16,8 @@ add_executable(ssc_core_tests
     core/TestDeterminism.cpp
     core/TestOversampling.cpp
     core/TestCharacter.cpp
-    core/TestNaturalPhase.cpp)
+    core/TestNaturalPhase.cpp
+    core/TestEngineModes.cpp)
 
 target_include_directories(ssc_core_tests PRIVATE .)
 target_link_libraries(ssc_core_tests PRIVATE ssc_core ssc_options Catch2::Catch2WithMain)

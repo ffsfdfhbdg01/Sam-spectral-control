@@ -51,6 +51,8 @@ public:
     void refreshFromAnalyzer();
 
     void setSampleRate (double sampleRate);
+    /** See ResponseCurves::setResponseModel(). */
+    void setResponseModel (const ResponseCurves::Model& responseModel);
 
     /** Source of the live dynamic gain change of each band (DYN-11); polled on every frame. */
     std::function<float (int band)> dynamicGainProvider;

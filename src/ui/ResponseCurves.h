@@ -11,8 +11,9 @@ namespace ssc::ui
 {
 /**
     Magnitude responses (dB) of the bands on the display's frequency grid, cached per band and
-    recomputed only when a band's shape or the sample rate changes. The curves are those of the
-    digital filters actually used (matched design), up to Nyquist.
+    recomputed only when a band's shape, the sample rate or the response model changes. The curves
+    are those actually heard: the matched digital filters at the processing rate (Minimum Phase),
+    or their analog prototypes when the Natural Phase corrector runs, up to Nyquist.
 */
 class ResponseCurves
 {
@@ -22,6 +23,20 @@ public:
     /** Sets the log-spaced frequency grid; invalidates every curve. */
     void setGrid (int numPoints, float minHz, float maxHz);
     void setSampleRate (double sampleRate);
+
+    /** How the bands are heard (research §8c, ADR-0005, ADR-0008). */
+    struct Model
+    {
+        int oversampling = 1;      ///< bands designed at fs × oversampling
+        bool analog = false;       ///< Natural Phase correction: the analog prototypes are heard
+        bool firBrickwall = false; ///< Natural Phase: brickwall cuts above the FIR limit are linear-phase FIRs
+        Quality quality = Quality::Normal;
+
+        bool operator== (const Model&) const = default;
+    };
+
+    /** Sets the response model; invalidates every curve when it changes. */
+    void setResponseModel (const Model& model);
 
     /** Updates one band (nullopt = band not drawn); returns true if its curve changed. */
     bool updateBand (int band, const std::optional<filters::BandShape>& shape);
@@ -64,9 +79,13 @@ private:
     void compute (const filters::BandShape& shape, std::vector<float>& out) const;
     void computeDynamic (int band);
 
+    /** Response of a band at the given frequencies (as heard, see Model). */
+    void bandResponse (const filters::BandShape& shape, const float* frequencies, int count, float* outDb) const;
+
     std::vector<float> hz;
     int validPoints = 0;
     double fs = 48000.0;
+    Model model;
     std::array<std::optional<filters::BandShape>, kNumBands> shapes {};
     std::array<std::vector<float>, kNumBands> curves {};
     std::array<float, kNumBands> dynamicGains {};

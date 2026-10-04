@@ -291,3 +291,53 @@ TEST_CASE ("Host layouts map to speaker pairs and LFE flags (CH-1, CH-4)", "[plu
     REQUIRE (discrete.numPairs == 0);
     REQUIRE (countLfe (discrete) == 0);
 }
+
+TEST_CASE ("Phase mode and oversampling set the reported latency (OS-3, PH-1)", "[plugin][OS-3][PH-1]")
+{
+    JuceEnvironment env;
+    SscAudioProcessor p;
+    p.setPlayConfigDetails (2, 2, 48000.0, 512);
+
+    // Natural Phase, Normal: corrector D = 32 samples; with 2x the linear-phase FIR adds its own.
+    setPlain (p, ssc::plugin::id::phaseMode, static_cast<float> (ssc::PhaseMode::NaturalPhase));
+    setPlain (p, ssc::plugin::id::quality, static_cast<float> (ssc::Quality::Normal));
+    p.prepareToPlay (48000.0, 512);
+    REQUIRE (p.getLatencySamples() == 32);
+    REQUIRE (p.isPhaseCorrected());
+
+    setPlain (p, ssc::plugin::id::oversampling, static_cast<float> (ssc::Oversampling::X2));
+    p.prepareToPlay (48000.0, 512);
+    REQUIRE (p.getOversamplingFactor() == 2);
+    const int withOversampling = p.getLatencySamples();
+    REQUIRE (withOversampling > 32);
+
+    // A band on the left channel only: the right channel stays an exact delay.
+    using ssc::plugin::BandParam;
+    using ssc::plugin::bandParamId;
+    setPlain (p, bandParamId (0, BandParam::Used), 1.0f);
+    setPlain (p, bandParamId (0, BandParam::Frequency), 3000.0f);
+    setPlain (p, bandParamId (0, BandParam::Gain), -6.0f);
+    setPlain (p, bandParamId (0, BandParam::Target), 1.0f); // Left
+
+    constexpr int total = 8192;
+    const auto source = ssc::test::sine (997.0, 0.25, 48000.0, total);
+    std::vector<float> right;
+    juce::AudioBuffer<float> buffer (2, 512);
+    juce::MidiBuffer midi;
+    for (int offset = 0; offset < total; offset += 512)
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            buffer.copyFrom (ch, 0, source.data() + offset, 512);
+        p.processBlock (buffer, midi);
+        right.insert (right.end(), buffer.getReadPointer (1), buffer.getReadPointer (1) + 512);
+    }
+    REQUIRE (p.getLatencySamples() == withOversampling);
+    for (std::size_t i = static_cast<std::size_t> (withOversampling); i < right.size(); ++i)
+        REQUIRE (right[i] == source[i - static_cast<std::size_t> (withOversampling)]);
+
+    // Back to Minimum Phase without oversampling: no latency.
+    setPlain (p, ssc::plugin::id::phaseMode, static_cast<float> (ssc::PhaseMode::MinimumPhase));
+    setPlain (p, ssc::plugin::id::oversampling, static_cast<float> (ssc::Oversampling::Off));
+    p.processBlock (buffer, midi);
+    REQUIRE (p.isPhaseCorrected() == false);
+}
