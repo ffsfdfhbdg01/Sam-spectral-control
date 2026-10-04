@@ -1,0 +1,12 @@
+Sam Spectral Control @VERSION@
+
+A spectral and dynamic equalizer for mono, stereo, surround and immersive (up to 9.1.6) tracks.
+
+This installer puts the plug-in into the system plug-in folders:
+  VST3:        /Library/Audio/Plug-Ins/VST3
+  Audio Unit:  /Library/Audio/Plug-Ins/Components (when included)
+
+"Customize" lets you choose the components. To remove the plug-in later, run
+"Uninstall Sam Spectral Control.command" in /Library/Application Support/Sam Spectral Control.
+
+Requires macOS 11 or later (Apple silicon or Intel).

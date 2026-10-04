@@ -1,0 +1,11 @@
+Sam Spectral Control
+Copyright (c) 2026 Sam Audio. All rights reserved.
+
+PROVISIONAL - the licence terms of Sam Spectral Control depend on the JUCE licence decision
+(docs/decisions/0002-licencja-juce.md): with the AGPLv3 edition of JUCE the plug-in is
+distributed under the GNU Affero General Public License, version 3, with its source code;
+with a commercial JUCE licence under the end-user licence agreement of the publisher.
+This text is replaced by the final terms before the first release. The release workflow
+does not publish a release while this file is provisional.
+
+Third-party components and their licences are listed in THIRD-PARTY-NOTICES.txt.

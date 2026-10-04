@@ -22,6 +22,11 @@
 - Konto Apple Developer (certyfikaty Developer ID Application/Installer, klucz API do notaryzacji).
 - Konto Azure Artifact Signing albo certyfikat OV do podpisu na Windows.
 
+## Realizacja (M8)
+- `packaging/macos/build-pkg.sh` (pkgbuild z nierelokowalnymi bundle, productbuild z `distribution.xml` — komponenty VST3 / AU / deinstalator z licencjami; codesign z hardened runtime, notarytool z kluczem API, stapler, spctl), `packaging/macos/uninstall.command`.
+- `packaging/windows/SamSpectralControl.iss` (Inno Setup 6: VST3 w `{commoncf64}\VST3`, komponent z instrukcją i licencjami, deinstalator, stały `AppId`).
+- `.github/workflows/release.yml`: tag `vX.Y.Z` albo ręcznie; podpisy tylko przy obecnych sekretach (Developer ID z `.p12`, klucz API notaryzacji; Azure Artifact Signing przez `azure/artifact-signing-action@v2`), bez nich niepodpisane artefakty; szkic wydania z CHANGELOG i SHA-256; bramka: wersja = tag, sekcja CHANGELOG, ADR-0002 i ADR-0016 zaakceptowane, licencja nie tymczasowa. Szczegóły i lista sekretów: [docs/release.md](../release.md).
+
 ## Rozważane alternatywy
 - **WiX** — bardziej złożony; Inno Setup wystarcza dla wtyczek.
 - **DMG z ręczną instalacją** — gorsze UX i brak kontroli ścieżek; odrzucone.

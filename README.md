@@ -72,7 +72,8 @@ docs/          research, architektura, ADR, śledzenie wymagań, testy w hostach
 - [docs/architecture.md](docs/architecture.md) — tor sygnału, wątki, moduły, budowanie, testy, ryzyka.
 - [docs/research/](docs/research/) — research dla każdej funkcji: literatura, wtyczki referencyjne, wybrane podejście, kryteria akceptacji.
 - [docs/decisions/](docs/decisions/) — decyzje architektoniczne (ADR), w tym otwarte pytania do właściciela projektu.
-- [docs/testing.md](docs/testing.md) — checklista testów w hostach.
+- [docs/testing.md](docs/testing.md) — checklista testów w hostach i testy obciążeniowe.
+- [docs/release.md](docs/release.md) — instalatory, podpisy, notaryzacja, workflow wydania; [CHANGELOG.md](CHANGELOG.md).
 
 ## Licencje komponentów
 

@@ -15,6 +15,8 @@ Identyfikatory (VST3 Class ID, kod producenta, kod wtyczki, bundle ID) trafiają
 | Kod wtyczki | `Sspc` |
 | Bundle ID | `com.samaudio.samspectralcontrol` *(do potwierdzenia)* |
 | VST3 Class ID | wyprowadzany przez JUCE z kodów powyżej; zapisany w repozytorium po zatwierdzeniu |
+| Identyfikatory pakietów macOS | `com.samaudio.samspectralcontrol.vst3` / `.au` / `.uninstaller` (z bundle ID) |
+| `AppId` instalatora Windows | `{BBE8FCC0-05F6-4CCE-ACA0-867AE7F01824}` (Inno Setup; wygenerowany w M8) |
 
 ## Decyzja
 - Rozwój (M1–M7) używa wartości roboczych.

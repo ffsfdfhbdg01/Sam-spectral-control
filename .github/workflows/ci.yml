@@ -81,6 +81,10 @@ jobs:
           ${{ matrix.pluginval }} --strictness-level 10 --validate-in-process --output-dir pluginval-report \
             "${{ matrix.build-dir }}/VST3/Sam Spectral Control.vst3"
 
+      - name: VST3 validator (Steinberg, extensive)
+        shell: bash
+        run: bash tools/ci/vst3-validator.sh "${{ matrix.build-dir }}/VST3/Sam Spectral Control.vst3"
+
       - name: Upload VST3
         uses: actions/upload-artifact@v4
         with:
