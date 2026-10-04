@@ -50,3 +50,17 @@ Tryby fazy × Quality i oversampling (PH-2): `ssc_benchmark 3 modes` — tabele 
 ## Koszt trybów M6 (Analog Feel)
 - Wspólna implementacja nieliniowości (9 rodzajów `ShaperKind`) ma koszt M4: porównanie naprzemienne M5/M6 w jednej sesji (minimum z 6 przebiegów) — 8 pasm Clear 0,68/0,68 %, Warm 0,88/0,90 %, Sharp 0,99/1,02 %. Współczynniki całki w ADAA są liczone raz przy przygotowaniu (bez dzielenia w próbce), a człon u⁵ tylko w modelu S.
 - Analog Feel N, 8 pasm stereo: Eco/Normal 0,68 % (same krzywe), 1,0 % z nasyceniem Warm; High 2,1 / 2,8 % (korektor D = 64 i wewnętrzne 2× FIR, 125 próbek latencji); Max 4,4 / 6,2 % (D = 128 i 4×, 224 próbki). Tabela: research/08.
+
+## Koszt mierników THD+N i aliasingu (M7, MTR-2)
+`ssc_benchmark 8 meters`: dwa silniki (mierniki wyłączone i włączone) przetwarzają na przemian te same bloki, więc wynik jest odporny na obciążenie maszyny (rozrzut ±2 %); kolumna „wątek analizy” — praca wątku mierników przy analizie wszystkich pasm w każdej migawce (sam wątek robi najwyżej 8 analiz na migawkę).
+
+| Konfiguracja (48 kHz, bufor 128) | Mierniki wył. | Mierniki wł. | Narzut w wątku audio | Wątek analizy |
+|---|---|---|---|---|
+| stereo, 8 Static Warm | 1,08 % | 1,12 % | +3,5 % DSP | 1,22 % rdzenia |
+| stereo, 24 Static Warm | 2,64 % | 2,73 % | +3,6 % DSP | 3,35 % rdzenia |
+| stereo, 8 Dynamic Sharp | 4,38 % | 4,59 % | +4,7 % DSP | 0,89 % rdzenia |
+| stereo, 8 Static Warm, 4× | 4,42 % | 4,49 % | +1,5 % DSP | 1,21 % rdzenia |
+| 7.1.4, 8 Dynamic Warm | 18,70 % | 19,43 % | +3,9 % DSP | 1,19 % rdzenia |
+
+- Mierniki działają tylko przy otwartym edytorze; zamknięty edytor = zero narzutu.
+- Narzut w wątku audio pochodzi z okien nagrywania (19 % czasu przy 1×: 1152 próbki na 125 ms) i z sumowania energii produktów w zmiennych lokalnych pętli. Pierwsza wersja (nagrywanie ciągłe, pola rejestratora aktualizowane w pamięci na każdą próbkę) kosztowała +15…38 %.

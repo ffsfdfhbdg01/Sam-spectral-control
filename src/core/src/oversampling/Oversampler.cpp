@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <map>
 #include <mutex>
 #include <numbers>
@@ -148,6 +149,10 @@ public:
     virtual void downsample (int channel, const double* in, double* out, int n) noexcept = 0;
     /** Round-trip (up + down) group delay at low frequencies, in samples of the stage's low rate. */
     virtual double roundTripDelay() const noexcept = 0;
+    /** Group delay of upsample() at low frequencies, in samples of the stage's high rate. */
+    virtual double upsampleDelay() const noexcept = 0;
+    /** |H(e^{jω})| of the half-band filter, ω = 2π·fraction of the stage's high rate. */
+    virtual double magnitude (double fraction) const noexcept = 0;
 };
 
 namespace
@@ -209,6 +214,19 @@ namespace
             for (const double c : coefs)
                 sum += (1.0 - c) / (1.0 + c);
             return sum;
+        }
+
+        double upsampleDelay() const noexcept override { return roundTripDelay() + 0.5; }
+
+        double magnitude (double fraction) const noexcept override
+        {
+            // ½·|A₀(e^{j2ω}) + e^{−jω}·A₁(e^{j2ω})|: the branches run at the low rate.
+            const double omega = 2.0 * kPi * fraction;
+            const std::complex<double> z1 = std::polar (1.0, -2.0 * omega); // z⁻¹ of the low rate
+            std::complex<double> a0 (1.0, 0.0), a1 (1.0, 0.0);
+            for (std::size_t c = 0; c < coefs.size(); ++c)
+                (c % 2 == 0 ? a0 : a1) *= (coefs[c] + z1) / (1.0 + coefs[c] * z1);
+            return 0.5 * std::abs (a0 + std::polar (1.0, -omega) * a1);
         }
 
     private:
@@ -309,6 +327,17 @@ namespace
         }
 
         double roundTripDelay() const noexcept override { return 2 * half - 1; }
+        double upsampleDelay() const noexcept override { return 2 * half - 1; }
+
+        double magnitude (double fraction) const noexcept override
+        {
+            // Zero-phase form about the centre 2M − 1: ½ + Σ h[n]·cos(ω(n − c)) over the even taps.
+            const double omega = 2.0 * kPi * fraction;
+            double h = 0.5;
+            for (std::size_t i = 0; i < reversed.size(); ++i)
+                h += reversed[i] * std::cos (omega * static_cast<double> (2 * half - 1 - 2 * static_cast<int> (i)));
+            return std::abs (h);
+        }
 
     private:
         struct Channel
@@ -438,6 +467,32 @@ void Oversampler::prepare (int numChannels, int maxBlockSize, int newFactor, Fil
     paddingPos.assign (static_cast<std::size_t> (channels), 0);
 
     work.assign (static_cast<std::size_t> (maxBlock * factor), 0.0); // channels are processed one after another
+}
+
+double Oversampler::getUpsampleDelay() const noexcept
+{
+    // Stage s (from the base rate up) runs at 2^(s+1) times the base rate.
+    double delay = 0.0;
+    int stageFactor = 2;
+    for (const auto& stage : stages)
+    {
+        delay += stage->upsampleDelay() * (factor / stageFactor);
+        stageFactor *= 2;
+    }
+    return delay;
+}
+
+double Oversampler::decimationGain (double fraction) const noexcept
+{
+    double gain = 1.0;
+    double f = fraction;
+    for (std::size_t s = stages.size(); s-- > 0;)
+    {
+        const double m = stages[s]->magnitude (f);
+        gain *= m * m;
+        f *= 2.0; // the next stage runs at half the rate
+    }
+    return gain;
 }
 
 void Oversampler::reset() noexcept

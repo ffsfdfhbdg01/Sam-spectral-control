@@ -6,6 +6,7 @@ set(SSC_PLUGIN_SOURCES
     plugin/AnalyzerService.cpp
     plugin/AnalyzerSettings.cpp
     plugin/ReadoutService.cpp
+    plugin/MeterService.cpp
     plugin/PluginProcessor.cpp
     ui/Theme.cpp
     ui/BandLogic.cpp
@@ -14,6 +15,7 @@ set(SSC_PLUGIN_SOURCES
     ui/EqDisplay.cpp
     ui/BandPanel.cpp
     ui/SpeakerPanel.cpp
+    ui/MeterView.cpp
     ui/ControlBar.cpp
     ui/PluginEditor.cpp)
 list(TRANSFORM SSC_PLUGIN_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")

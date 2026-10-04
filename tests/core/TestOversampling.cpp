@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -330,4 +331,58 @@ TEST_CASE ("Oversampling: reset clears the state, factor 1 is a copy", "[oversam
     bypass.upsample (0, in.data(), high.data(), 3);
     bypass.downsample (0, high.data(), out.data(), 3);
     CHECK (out == in);
+}
+
+TEST_CASE ("Decimation gain and upsampling delay match the measured responses (MTR-2)", "[oversampling][MTR-2]")
+{
+    for (const auto type : kTypes)
+        for (const auto quality : { Quality::Normal, Quality::Max })
+            for (const int factor : kFactors)
+            {
+                CAPTURE (static_cast<int> (type), static_cast<int> (quality), factor);
+                Oversampler os;
+                os.prepare (1, kMaxBlock, factor, type, quality);
+
+                // |D(f)|² of the equivalent high-rate decimation filter against the formula.
+                const std::size_t size = 1 << 16;
+                const auto down = decimatorResponse (os, 4096);
+                const auto magnitude = magnitudeSpectrum (down, size);
+                double worst = 0.0;
+                for (std::size_t k = 0; k <= size / 2; k += 7)
+                {
+                    const double fraction = static_cast<double> (k) / static_cast<double> (size);
+                    const double measured = magnitude[k] * magnitude[k];
+                    const double predicted = os.decimationGain (fraction);
+                    // Compare in dB down to −200 dB.
+                    const double error = std::abs (10.0 * std::log10 (std::max (measured, 1e-20) / std::max (predicted, 1e-20)));
+                    if (measured > 1e-20 || predicted > 1e-20)
+                        worst = std::max (worst, error);
+                }
+                CHECK (worst < 0.01);
+                CHECK (os.decimationGain (0.0) == Catch::Approx (1.0).margin (1e-6));
+                // Half the base rate: −6 dB for the FIR (amplitude ½), −3 dB for the power-complementary IIR.
+                CHECK (os.decimationGain (0.5 / factor) == Catch::Approx (type == FilterType::LinearPhaseFir ? 0.25 : 0.5).margin (1e-3));
+
+                // Upsampling delay: the centre of the interpolator's impulse response (FIR), its DC
+                // group delay (IIR).
+                const auto up = interpolatorResponse (os, 4096);
+                double m0 = 0.0, m1 = 0.0;
+                for (std::size_t n = 0; n < up.size(); ++n)
+                {
+                    m0 += up[n];
+                    m1 += static_cast<double> (n) * up[n];
+                }
+                if (type == FilterType::LinearPhaseFir)
+                {
+                    const auto peak =
+                        std::max_element (up.begin(), up.end(), [] (double a, double b) { return std::abs (a) < std::abs (b); })
+                        - up.begin();
+                    CHECK (static_cast<double> (peak) == os.getUpsampleDelay());
+                    CHECK (std::abs (m1 / m0 - os.getUpsampleDelay()) < 1e-6);
+                }
+                else
+                {
+                    CHECK (std::abs (m1 / m0 - os.getUpsampleDelay()) < 0.75);
+                }
+            }
 }

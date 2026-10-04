@@ -6,6 +6,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "plugin/AnalyzerService.h"
+#include "plugin/MeterService.h"
 #include "plugin/Parameters.h"
 #include "plugin/ReadoutService.h"
 #include "ssc/engine/Engine.h"
@@ -88,6 +89,9 @@ public:
     /** Band readouts (phase, group delay, ringing; research §12c), computed in the background. */
     ReadoutService& getReadouts() noexcept { return readoutService; }
 
+    /** THD+N and aliasing meters (research §13c), computed in the background while shown. */
+    MeterService& getMeters() noexcept { return meterService; }
+
     /** Newest gain view of the Spectral bands, or nullptr if nothing new (one UI reader). */
     const spectral::SpectralEngine::MaskView* pollSpectralView() noexcept { return engine.pollSpectralView(); }
 
@@ -122,6 +126,8 @@ private:
     AnalyzerService analyzer;
     std::vector<float> tapScratch;
     juce::AudioProcessLoadMeasurer loadMeasurer;
+
+    MeterService meterService { engine }; // after the engine: stops before it goes
 
     // Last member: its thread reads the parameters above and stops first.
     ReadoutService readoutService { [this] (engine::GlobalParams& p, engine::BandSettingsArray& b, std::array<float, kNumBands>& gains,

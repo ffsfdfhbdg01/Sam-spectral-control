@@ -92,29 +92,30 @@ docs/                  – research, ADR, architektura, testy, pomiary, manual
 ```mermaid
 flowchart TB
     subgraph Audio["Wątek audio (host)"]
-        P[processBlock: DSP, Auto Gain,<br/>dynamika, mierniki residuum]
+        P[processBlock: DSP, Auto Gain,<br/>dynamika, nagrywanie wejść<br/>nieliniowości w oknach]
     end
-    subgraph Analysis["Wątek analizy (własny)"]
-        A1[Analizator widma]
-        A2[Detektor rezonansów]
-        A3[Analiza pasm:<br/>faza, ringing]
+    subgraph Analysis["Wątki tła (własne, niski priorytet)"]
+        A1[Analizator widma<br/>i detektor rezonansów]
+        A3[Odczyty pasm:<br/>faza, ringing]
+        A4[Mierniki THD+N<br/>i aliasingu]
     end
     subgraph UI["Wątek komunikatów / UI"]
         E[Edytor: rysowanie,<br/>interakcja, parametry]
     end
     P -- "SPSC ring buffer (pre/post audio)" --> A1
-    P -- "SPSC ring buffer" --> A2
-    P -- "atomics: gain pasm, maski (decymowane),<br/>THD/aliasing, CPU" --> E
+    P -- "triple buffer: migawki nieliniowości (co 125 ms)" --> A4
+    P -- "atomics: gain pasm, maski (decymowane), CPU" --> E
     E -- "parametry (APVTS atomics)" --> P
-    E -- "żądania przeliczeń" --> A3
+    E -- "parametry (odczyt atomics)" --> A3
     A1 -- "triple buffer" --> E
-    A2 -- "triple buffer" --> E
     A3 -- "triple buffer" --> E
+    A4 -- "triple buffer" --> E
 ```
 
 - FIFO: jednoproducentowe/jednokonsumenckie, prealokowane; przy przepełnieniu producent nadpisuje najstarsze dane (wizualizacja może zgubić ramkę — audio nigdy nie czeka).
 - Telemetria dużych tablic (maski spektralne) — decymowana do ≤ 512 punktów i przekazywana przez triple buffer.
-- Wątek analizy budzony przez timer (60 Hz) lub semafor po zapisie do FIFO; brak pracy, gdy edytor jest zamknięty.
+- Wątki tła działają tylko przy otwartym edytorze (klienci `AnalyzerService`, `ReadoutService`, `MeterService`); bez edytora wątek audio nie nagrywa też migawek mierników (`Engine::setDistortionMetering`).
+- Mierniki (§13e): wątek audio podłącza rejestratory pasm tylko na okno na końcu każdego 125-milisekundowego okresu i publikuje migawkę przez triple buffer; analiza (replika ADAA i cień bez próbkowania) działa w `MeterService`.
 
 ## 7. Wydajność (NFR-1)
 

@@ -69,6 +69,17 @@ public:
     /** Low-frequency group delay of the filters alone (base-rate samples, fractional for the IIR). */
     double getFilterDelay() const noexcept { return filterDelay; }
 
+    /** Low-frequency group delay of upsample() alone, in samples of the high rate (an integer for
+        the linear-phase FIR, whose impulse response is centred there). */
+    double getUpsampleDelay() const noexcept;
+
+    /**
+        Power gain of downsample() for a component at `fraction` of the high sample rate (0 … 0.5):
+        |H|² of the equivalent high-rate filter, Πₖ |Hₖ(e^{j2π·fraction·2ᵏ})|² over the stages from the
+        highest rate down. What it lets through above half the base rate folds into the base band.
+    */
+    double decimationGain (double fraction) const noexcept;
+
     /** in: numSamples (≤ maxBlockSize) at the base rate; out: factor × numSamples. */
     void upsample (int channel, const double* in, double* out, int numSamples) noexcept;
 

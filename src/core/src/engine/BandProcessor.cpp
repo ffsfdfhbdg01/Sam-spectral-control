@@ -4,6 +4,8 @@
 #include <cmath>
 #include <functional>
 
+#include "ssc/util/Math.h"
+
 namespace ssc::engine
 {
 namespace
@@ -410,6 +412,8 @@ void BandProcessor::runDetection (const BandSettings& settings, const Instance& 
                 }
                 d.gainStep = (target + d.makeup - d.gain) / dynamicStep;
             }
+            if (recorder != nullptr)
+                recordModulation (inst);
         }
 
         for (int l = 0; l < numLanes; ++l)
@@ -430,7 +434,47 @@ void BandProcessor::runDetection (const BandSettings& settings, const Instance& 
     dynamicGainDb.store (extreme, std::memory_order_relaxed);
 }
 
-void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, ParamSource source) noexcept
+void BandProcessor::recordModulation (const Instance& inst) noexcept
+{
+    // Gain modulation (research §13c, MTR-2): the fast part m of the linear band gain G — a
+    // second-order Butterworth high-pass at max(fc/8, 20 Hz) — modulates the band's signal b (the
+    // detection filter output) and adds products of power E[b²·m²]. The intended, slower action of
+    // the dynamics is not counted.
+    auto& rec = *recorder;
+    const double cutoff = std::max (smoothed.frequencyHz / 8.0, 20.0);
+    if (std::abs (cutoff - rec.modulationCutoff) > 1.0e-3 * cutoff)
+    {
+        rec.modulationCutoff = cutoff;
+        rec.modulationG = std::tan (kPi * std::min (cutoff * dynamicStep / sampleRate, 0.45));
+    }
+    const double g = rec.modulationG;
+    constexpr double k = 1.4142135623730951; // 2R of a Butterworth SVF
+    const double d = 1.0 / (1.0 + g * (k + g));
+    for (int l = 0; l < inst.lanes.numLanes; ++l)
+    {
+        const auto li = static_cast<std::size_t> (l);
+        const auto& lane = dynLanes[li];
+        const double gain = dbToGain (smoothed.gainDb + dynamicMix * lane.gain);
+        double& s1 = rec.gainS1[li];
+        double& s2 = rec.gainS2[li];
+        if (! rec.modulationPrimed)
+        {
+            s1 = 0.0; // settled at a constant gain: no high-pass output
+            s2 = gain;
+        }
+        const double high = (gain - (k + g) * s1 - s2) * d;
+        const double band = g * high + s1;
+        s1 = g * high + band;
+        const double low = g * band + s2;
+        s2 = g * band + low;
+        const double weight = inst.lanes.lanes[li].kind == Lane::Kind::Channel ? 1.0 : 2.0;
+        rec.modulationEnergy += weight * lane.level.meanSquare * high * high * dynamicStep;
+    }
+    rec.modulationSamples += dynamicStep;
+    rec.modulationPrimed = true;
+}
+
+void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, ParamSource source, bool record) noexcept
 {
     if (inst.isIdentity())
         return;
@@ -485,6 +529,47 @@ void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, 
     const auto& shaper = shapers[static_cast<std::size_t> (inst.design.shaper)];
     const bool shaping = from >= 0 && shaper.enabled;
 
+    // Distortion meters (research §13c): the input of the nonlinearity (after its LF emphasis,
+    // st.previous) of one lane into the ring, and the energy of the products of every lane. The
+    // state lives in locals during the loops: no stores to the recorder per sample.
+    BandRecorder* const rec = record && shaping ? recorder : nullptr;
+    float* const ring = rec != nullptr ? rec->ring.data() : nullptr;
+    const int ringLane = rec != nullptr ? rec->lane : -1;
+    const int ringStart = rec != nullptr ? rec->position : 0;
+    int ringPosition = ringStart;
+    int energyLane = -1;
+    double energy = 0.0;
+    if (rec != nullptr)
+    {
+        rec->kind = inst.design.shaper;
+        rec->shapedThisBlock = true;
+        for (int l = 0; l < inst.lanes.numLanes; ++l)
+        {
+            const auto li = static_cast<std::size_t> (l);
+            rec->laneWeight[li] = inst.lanes.lanes[li].kind == Lane::Kind::Channel ? 1.0 : 2.0;
+        }
+    }
+    auto recordSample = [&] (int l, double input, double products) noexcept {
+        if (l != energyLane)
+        {
+            if (energyLane >= 0)
+                rec->laneEnergy[static_cast<std::size_t> (energyLane)] += energy;
+            energy = 0.0;
+            energyLane = l;
+        }
+        energy += products * products;
+        if (l == ringLane)
+            ring[ringPosition++ & BandRecorder::kRingMask] = static_cast<float> (input);
+    };
+    auto finishRecording = [&]() noexcept {
+        if (rec == nullptr)
+            return;
+        if (energyLane >= 0)
+            rec->laneEnergy[static_cast<std::size_t> (energyLane)] += energy;
+        rec->recorded += ringPosition - ringStart;
+        rec->position = ringPosition & BandRecorder::kRingMask;
+    };
+
     // Runs `section (s, states, x)` over the cascade of every lane, shaping when needed.
     auto runCascade = [&] (auto&& section) {
         if (! shaping)
@@ -504,7 +589,11 @@ void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, 
                     in = x;
                 x = section (i, s, states, x);
             }
-            return x + filters::shapeContribution (shaper, inst.shaperState[static_cast<std::size_t> (l)], x - in);
+            auto& st = inst.shaperState[static_cast<std::size_t> (l)];
+            const double products = filters::shapeContribution (shaper, st, x - in);
+            if (rec != nullptr)
+                recordSample (l, st.previous, products);
+            return x + products;
         });
     };
 
@@ -519,6 +608,7 @@ void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, 
             const auto si = static_cast<std::size_t> (s);
             return filters::processPrepared (prepared[si], digital[si].firstOrder, states[si], x);
         });
+        finishRecording();
         return;
     }
 
@@ -537,6 +627,7 @@ void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, 
         });
         for (int s = 0; s < sections; ++s)
             inst.params[static_cast<std::size_t> (s)] = targetParams[static_cast<std::size_t> (s)];
+        finishRecording();
         return;
     }
 
@@ -554,11 +645,18 @@ void BandProcessor::runInstance (Instance& inst, double* const* buffers, int n, 
         }
         // Only shapes with gain are Dynamic: the whole band is shaped.
         if (shaping)
-            x += filters::shapeContribution (shaper, inst.shaperState[static_cast<std::size_t> (l)], x - in);
+        {
+            auto& st = inst.shaperState[static_cast<std::size_t> (l)];
+            const double products = filters::shapeContribution (shaper, st, x - in);
+            if (rec != nullptr)
+                recordSample (l, st.previous, products);
+            x += products;
+        }
         return x;
     };
     forEachLane (dynamicSample);
     inst.params = dynamicParams; // a frozen state if the instance is faded out later
+    finishRecording();
 }
 
 void BandProcessor::process (const BandSettings& settings, const ChannelTopology& topology, double* const* channels, int numChannels,
@@ -700,7 +798,15 @@ void BandProcessor::process (const BandSettings& settings, const ChannelTopology
         }
         else
         {
-            runInstance (current, buffers, n, source);
+            runInstance (current, buffers, n, source, recorder != nullptr);
+        }
+
+        // The recording must be gapless: a block without shaping (off, crossfade) starts it over.
+        if (recorder != nullptr)
+        {
+            if (! recorder->shapedThisBlock)
+                recorder->recorded = 0;
+            recorder->shapedThisBlock = false;
         }
     }
 }

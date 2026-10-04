@@ -30,6 +30,21 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
     display.dynamicGainProvider = [this] (int band) { return sscProcessor.getBandDynamicGainDb (band); };
     display.spectralViewProvider = [this] { return sscProcessor.pollSpectralView(); };
     bandPanel.onPreferredSizeChanged = [this] { layoutBandPanel(); };
+    auto& meterView = controlBar.getMeterView();
+    meterView.readingsProvider = [this] {
+        auto& readings = sscProcessor.getMeters().readings();
+        readings.update();
+        return readings.read();
+    };
+    meterView.bandDescription = [this] (int band) {
+        const auto& v = bandModel.band (band);
+        auto text = plugin::labels::shapes()[static_cast<int> (v.shape)] + " " + plugin::format::frequency (v.frequency);
+        if (v.character != Character::Clear)
+            text << ", " << plugin::labels::characters()[static_cast<int> (v.character)];
+        if (v.mode != BandMode::Static)
+            text << ", " << plugin::labels::bandModes()[static_cast<int> (v.mode)];
+        return text;
+    };
     bandPanel.readoutProvider = [this] (int band) {
         auto& readouts = sscProcessor.getReadouts().readouts();
         readouts.update();
@@ -47,7 +62,8 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
     addAndMakeVisible (eqRange);
     setEqRange (static_cast<float> (sscProcessor.getValueTreeState().state.getProperty (plugin::kUiEqRange, kDefaultEqRange)));
 
-    analyzerButton.setTooltip ("Analyzer: spectra, resolution, speed, tilt, range, freeze, peak hold, glow, resonance hints");
+    analyzerButton.setTooltip (
+        "Analyzer: spectra, resolution, speed, tilt, range, freeze, peak hold, glow, resonance hints, meter warnings");
     analyzerButton.onClick = [this] { showAnalyzerMenu(); };
     addAndMakeVisible (analyzerButton);
     applyAnalyzerSettings (plugin::readAnalyzerSettings (sscProcessor.getValueTreeState().state), false);
@@ -69,6 +85,7 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
 
     sscProcessor.getAnalyzer().addClient();
     sscProcessor.getReadouts().addClient();
+    sscProcessor.getMeters().addClient();
     startTimerHz (4);
 }
 
@@ -78,6 +95,7 @@ SscEditor::~SscEditor()
     sscProcessor.setSoloBand (-1);
     sscProcessor.getAnalyzer().removeClient();
     sscProcessor.getReadouts().removeClient();
+    sscProcessor.getMeters().removeClient();
     setLookAndFeel (nullptr);
 }
 
@@ -103,6 +121,7 @@ void SscEditor::applyAnalyzerSettings (const plugin::AnalyzerSettings& settings,
     analyzerSettings = settings;
     sscProcessor.getAnalyzer().setSettings (settings);
     display.setAnalyzerSettings (settings);
+    controlBar.getMeterView().setThresholds (settings.thdWarningDb, settings.aliasingWarningDb);
     analyzerButton.setToggleState (settings.freeze, juce::dontSendNotification);
     analyzerButton.setButtonText (settings.freeze ? "Frozen" : "Analyzer");
     if (store)
@@ -170,6 +189,18 @@ void SscEditor::showAnalyzerMenu()
         sensitivity.addItem (name, s.resonanceHints, s.hintSensitivity == value,
                              change ([v = value] (plugin::AnalyzerSettings& n) { n.hintSensitivity = v; }));
     menu.addSubMenu ("Hint sensitivity", sensitivity, s.resonanceHints);
+
+    // Meter warning thresholds (MTR-4).
+    menu.addSectionHeader ("Meters");
+    juce::PopupMenu thdWarning, aliasingWarning;
+    for (const float value : plugin::kThdWarnings)
+        thdWarning.addItem (MeterView::formatDb (value), true, juce::approximatelyEqual (s.thdWarningDb, value),
+                            change ([value] (plugin::AnalyzerSettings& n) { n.thdWarningDb = value; }));
+    for (const float value : plugin::kAliasingWarnings)
+        aliasingWarning.addItem (MeterView::formatDb (value), true, juce::approximatelyEqual (s.aliasingWarningDb, value),
+                                 change ([value] (plugin::AnalyzerSettings& n) { n.aliasingWarningDb = value; }));
+    menu.addSubMenu ("THD+N warning above", thdWarning);
+    menu.addSubMenu ("Aliasing warning above", aliasingWarning);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (analyzerButton));
 }
 
@@ -228,6 +259,7 @@ void SscEditor::refreshLiveViews()
 {
     timerCallback();
     display.refreshFromAnalyzer();
+    controlBar.getMeterView().refresh();
 }
 
 void SscEditor::timerCallback()

@@ -59,13 +59,16 @@ struct AnalyzerSettings
     bool glow = true;
     bool resonanceHints = true;
     HintSensitivity hintSensitivity = HintSensitivity::Medium;
+    float thdWarningDb = -40.0f;      ///< THD+N meter turns to the warning colour above this (MTR-4)
+    float aliasingWarningDb = -80.0f; ///< aliasing meter turns to the warning colour above this (MTR-4)
 
     bool operator== (const AnalyzerSettings& other) const noexcept
     {
         constexpr std::equal_to<float> same; // exact: the values come from fixed lists
         return mode == other.mode && resolution == other.resolution && speed == other.speed && same (tiltDbPerOctave, other.tiltDbPerOctave)
             && same (rangeDb, other.rangeDb) && peakHold == other.peakHold && freeze == other.freeze && glow == other.glow
-            && resonanceHints == other.resonanceHints && hintSensitivity == other.hintSensitivity;
+            && resonanceHints == other.resonanceHints && hintSensitivity == other.hintSensitivity && same (thdWarningDb, other.thdWarningDb)
+            && same (aliasingWarningDb, other.aliasingWarningDb);
     }
 
     bool showsPre() const noexcept { return mode == AnalyzerMode::PrePost || mode == AnalyzerMode::Pre; }
@@ -74,6 +77,8 @@ struct AnalyzerSettings
 
 inline constexpr float kAnalyzerTilts[] = { 0.0f, 1.5f, 3.0f, 4.5f, 6.0f };
 inline constexpr float kAnalyzerRanges[] = { 60.0f, 90.0f, 120.0f };
+inline constexpr float kThdWarnings[] = { -20.0f, -30.0f, -40.0f, -50.0f, -60.0f };
+inline constexpr float kAliasingWarnings[] = { -60.0f, -70.0f, -80.0f, -90.0f, -100.0f };
 
 int analyzerFftSize (AnalyzerResolution resolution, double sampleRate) noexcept;
 double analyzerAveragingMs (AnalyzerSpeed speed) noexcept;

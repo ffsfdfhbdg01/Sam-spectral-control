@@ -6,6 +6,7 @@ add_library(ssc_core STATIC
     src/analysis/ResonanceDetector.cpp
     src/analysis/ResonanceHints.cpp
     src/analysis/BandReadouts.cpp
+    src/analysis/DistortionMeter.cpp
     src/engine/Engine.cpp
     src/engine/BandProcessor.cpp
     src/engine/GainTable.cpp

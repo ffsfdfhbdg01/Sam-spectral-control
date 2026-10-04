@@ -114,6 +114,9 @@ void Engine::prepare (const EngineConfig& config)
     mix.setCurrentAndTarget (1.0);
     bypass.setCurrentAndTarget (0.0);
 
+    // At least the capture window at 1× plus a chunk (low sample rates).
+    meterPeriod = std::max (static_cast<int> (std::lround (kMeterPeriodSeconds * cfg.sampleRate)), BandCapture::lengthFor (1) + chunkSize);
+
     setOversampling (1, oversampling::FilterType::PolyphaseIir, Quality::Normal);
     reset();
 }
@@ -130,6 +133,10 @@ void Engine::reset() noexcept
     osBypassDelay.reset();
     samplePosition = 0;
     resetChain();
+    attachRecorders (false);
+    for (auto& r : *recorders)
+        r.clear();
+    meterCounter = 0;
 }
 
 void Engine::resetChain() noexcept
@@ -164,6 +171,101 @@ void Engine::setOversampling (int factor, oversampling::FilterType type, Quality
     osBypassDelay.reset();
     for (std::size_t c = 0; c < osRamp.size(); ++c)
         osRamp[c] = osCovered[c] ? osRampLength : 0;
+    for (auto& r : *recorders)
+        r.recorded = 0; // recorded at the previous rate
+}
+
+void Engine::updateMetering() noexcept
+{
+    const bool wanted = meteringRequested.load (std::memory_order_relaxed);
+    if (wanted == metering)
+        return;
+    metering = wanted;
+    attachRecorders (false);
+    for (auto& r : *recorders)
+        r.clear();
+    meterCounter = 0;
+}
+
+void Engine::attachRecorders (bool attach) noexcept
+{
+    recording = attach;
+    for (std::size_t b = 0; b < recorders->size(); ++b)
+    {
+        auto& r = (*recorders)[b];
+        if (attach)
+            r.startWindow();
+        (*bandProcessors)[b].setRecorder (attach ? &r : nullptr);
+    }
+    meterEnergy = 0.0;
+    meterWindowSamples = 0;
+}
+
+template <typename Sample>
+void Engine::meterChunk (const Sample* const* channels, int numChannels, int numSamples) noexcept
+{
+    if (recording)
+    {
+        double energy = 0.0;
+        for (int ch = 0; ch < numChannels; ++ch)
+            for (int i = 0; i < numSamples; ++i)
+            {
+                const auto v = static_cast<double> (channels[ch][i]);
+                energy += v * v;
+            }
+        meterEnergy += energy;
+        meterWindowSamples += numSamples;
+    }
+    meterCounter += numSamples;
+    if (meterCounter >= meterPeriod)
+        publishDistortion();
+}
+
+void Engine::publishDistortion() noexcept
+{
+    // Research §13c: what reaches the meters per period. The products of the bands pass Auto Gain,
+    // Mix, Output and Bypass on their way to the output.
+    auto& out = captures->writeBuffer();
+    out.baseRate = cfg.sampleRate;
+    out.osFactor = osFactor;
+    out.osType = osType;
+    out.osQuality = osQuality;
+    out.periodSeconds = meterCounter / cfg.sampleRate;
+    out.outputPower = meterWindowSamples > 0 ? meterEnergy / meterWindowSamples : 0.0;
+    const double wetGain = static_cast<double> (dbToGain (autoGain->getCorrectionDb())) * mix.getCurrent() * outputGain.getCurrent()
+        * (1.0 - bypass.getCurrent());
+    out.productsGain = wetGain * wetGain;
+
+    for (std::size_t b = 0; b < recorders->size(); ++b)
+    {
+        auto& rec = (*recorders)[b];
+        auto& band = out.bands[b];
+        band.kind = rec.kind;
+        const int length = BandCapture::lengthFor (osFactor);
+        band.shaped = recording && rec.kind != filters::ShaperKind::None && rec.recorded >= length;
+        double weighted = 0.0;
+        std::size_t loudest = static_cast<std::size_t> (rec.lane);
+        for (std::size_t l = 0; l < rec.laneEnergy.size(); ++l)
+        {
+            weighted += rec.laneWeight[l] * rec.laneEnergy[l];
+            if (rec.laneEnergy[l] > rec.laneEnergy[loudest])
+                loudest = l;
+        }
+        const double recorded = rec.laneEnergy[static_cast<std::size_t> (rec.lane)];
+        band.lanesScale = recorded > 0.0 ? weighted / recorded : 1.0;
+        band.modulationPower = rec.modulationSamples > 0 ? rec.modulationEnergy / rec.modulationSamples : 0.0;
+        if (band.shaped)
+            for (int i = 0; i < length; ++i) // oldest first
+                band.x[static_cast<std::size_t> (i)] =
+                    rec.ring[static_cast<std::size_t> ((rec.position - length + i) & BandRecorder::kRingMask)];
+
+        // Next window: record the lane with the most products.
+        rec.lane = static_cast<int> (loudest);
+    }
+    out.serial = ++meterSerial;
+    captures->publish();
+    attachRecorders (false);
+    meterCounter = 0;
 }
 
 void Engine::updateCoverage (const BandSettingsArray& chain) noexcept
@@ -360,6 +462,7 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
 {
     numChannels = std::min (numChannels, cfg.numChannels);
     controlBlock = controlBlockFor (params.quality);
+    updateMetering();
 
     const bool soloing = params.soloBand >= 0 && params.soloBand < kNumBands && bands[static_cast<std::size_t> (params.soloBand)].active;
     soloAmount.setTarget (soloing ? 1.0 : 0.0);
@@ -384,7 +487,17 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
         const int n = std::min (chunkSize, numSamples - offset);
         for (int ch = 0; ch < numChannels; ++ch)
             chunkPointers[ch] = channels[ch] + offset;
+        if (metering && ! recording)
+        {
+            // The capture window: the last BandCapture::lengthFor() samples at the processing rate
+            // before the end of the period (at the granularity of a chunk).
+            const int window = (BandCapture::lengthFor (osFactor) + osFactor - 1) / osFactor;
+            if (meterCounter + n > meterPeriod - window)
+                attachRecorders (true);
+        }
         processChunk (chunkPointers, numChannels, n, chain, heard);
+        if (metering)
+            meterChunk (chunkPointers, numChannels, n);
     }
 }
 

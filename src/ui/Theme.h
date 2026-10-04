@@ -25,6 +25,7 @@ namespace colours
     inline const juce::Colour curve { 0xfff1f4f8 };
     inline const juce::Colour powerOn { 0xff4cc38a };
     inline const juce::Colour powerOff { 0xff5a616c };
+    inline const juce::Colour warning { 0xffff6b5a }; ///< meters above their warning threshold (MTR-4)
 } // namespace colours
 
 /** 24 distinct band colours, evenly spaced in hue with matched lightness. */

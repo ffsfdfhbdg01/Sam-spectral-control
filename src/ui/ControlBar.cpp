@@ -63,6 +63,9 @@ ControlBar::ControlBar (juce::AudioProcessorValueTreeState& s)
     setupKnob (mix, "Mix", plugin::id::mix);
     setupKnob (output, "Output", plugin::id::outputGain);
 
+    addAndMakeVisible (meters);
+    meters.onOversamplingHint = [this] (int factor, float aliasingDb) { setOversamplingHint (factor, aliasingDb); };
+
     phaseMode.box.onChange = [this] { updateEnablement(); };
     analogModel.box.onChange = [this] { updateModelTooltip(); };
     autoGainButton.onStateChange = [this] { updateEnablement(); };
@@ -114,6 +117,26 @@ void ControlBar::updateModelTooltip()
                                 + "\nBand Character: Clear = curves only, Warm = soft saturation, Sharp = hard saturation");
 }
 
+void ControlBar::setOversamplingHint (int factor, float aliasingDb)
+{
+    if (factor > 0)
+    {
+        const auto reason =
+            "Aliasing " + MeterView::formatDb (aliasingDb) + ": Oversampling " + juce::String (factor) + "x would reduce it";
+        oversampling.label.setText (juce::String::fromUTF8 ("Oversampling \xe2\x96\xb4"), juce::dontSendNotification);
+        oversampling.label.setColour (juce::Label::textColourId, colours::accent);
+        oversampling.label.setTooltip (reason);
+        oversampling.box.setTooltip (reason);
+    }
+    else
+    {
+        oversampling.label.setText ("Oversampling", juce::dontSendNotification);
+        oversampling.label.setColour (juce::Label::textColourId, colours::textDim);
+        oversampling.label.setTooltip ({});
+        oversampling.box.setTooltip ({});
+    }
+}
+
 void ControlBar::paint (juce::Graphics& g)
 {
     g.setColour (colours::panel);
@@ -141,6 +164,10 @@ void ControlBar::resized()
     };
     placeKnob (mix);
     placeKnob (output);
+    area.removeFromRight (gap);
+
+    // The meters (MTR-4): small, between the settings and Mix/Output.
+    meters.setBounds (area.removeFromRight (juce::jmin (150, area.getWidth() / 5)));
     area.removeFromRight (gap);
 
     constexpr int widths[] = { 130, 96, 84, 96, 92, 90, 96 };

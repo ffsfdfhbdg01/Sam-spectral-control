@@ -9,6 +9,7 @@
 
 #include "ssc/engine/BandProcessor.h"
 #include "ssc/engine/ChannelTopology.h"
+#include "ssc/engine/DistortionCapture.h"
 #include "ssc/engine/Types.h"
 #include "ssc/loudness/AutoGain.h"
 #include "ssc/oversampling/Oversampler.h"
@@ -16,6 +17,7 @@
 #include "ssc/spectral/SpectralEngine.h"
 #include "ssc/util/DelayLine.h"
 #include "ssc/util/LinearSmoother.h"
+#include "ssc/util/TripleBuffer.h"
 
 namespace ssc::engine
 {
@@ -146,6 +148,15 @@ public:
     /** Blocks in which non-finite audio was replaced by silence (input or filter state); any thread. */
     std::uint32_t getNonFiniteEvents() const noexcept { return nonFiniteEvents.load (std::memory_order_relaxed); }
 
+    /** Switches the recording for the distortion meters on or off (research §13c); any thread,
+        effective from the next block. Off by default: the meters only run while they are shown. */
+    void setDistortionMetering (bool enabled) noexcept { meteringRequested.store (enabled, std::memory_order_relaxed); }
+
+    /** Reader side (one thread) of the captures published every kMeterPeriodSeconds while metering. */
+    TripleBuffer<DistortionCapture>& distortionCaptures() noexcept { return *captures; }
+
+    static constexpr double kMeterPeriodSeconds = 0.125; ///< 8 readings per second (MTR-1: 5–10 Hz)
+
 private:
     template <typename Sample>
     void processChunk (Sample* const* channels, int numChannels, int numSamples, const BandSettingsArray& chain,
@@ -155,6 +166,11 @@ private:
     void setOversampling (int factor, oversampling::FilterType type, Quality quality) noexcept;
     void updateCoverage (const BandSettingsArray& chain) noexcept;
     void resetChain() noexcept;
+    void updateMetering() noexcept;
+    void attachRecorders (bool attach) noexcept;
+    template <typename Sample>
+    void meterChunk (const Sample* const* channels, int numChannels, int numSamples) noexcept;
+    void publishDistortion() noexcept;
 
     static constexpr double kRampSeconds = 0.02;
     static constexpr double kMaxLookaheadSeconds = 0.02;
@@ -236,5 +252,19 @@ private:
     bool useHeardCopy = false;
     bool useChainCopy = false;
     std::array<bool, kNumBands> firBrickwall {}; ///< Natural Phase brickwall cuts, realised by the corrector
+
+    // Distortion meters (research §13c): recorders of the band nonlinearities, published per period.
+    // The recorders are attached for a window at the end of each period, long enough to fill the
+    // capture at the processing rate: the rest of the time the bands run as without meters.
+    std::atomic<bool> meteringRequested { false };
+    bool metering = false;
+    bool recording = false;
+    std::unique_ptr<std::array<BandRecorder, kNumBands>> recorders = std::make_unique<std::array<BandRecorder, kNumBands>>();
+    std::unique_ptr<TripleBuffer<DistortionCapture>> captures = std::make_unique<TripleBuffer<DistortionCapture>>();
+    int meterPeriod = 4800; ///< base-rate samples between captures
+    int meterCounter = 0;   ///< base-rate samples since the last capture
+    double meterEnergy = 0.0;
+    int meterWindowSamples = 0;
+    std::uint64_t meterSerial = 0;
 };
 } // namespace ssc::engine

@@ -17,6 +17,8 @@ namespace
     const juce::Identifier kGlow { "glow" };
     const juce::Identifier kHints { "hints" };
     const juce::Identifier kHintSensitivity { "hintSensitivity" };
+    const juce::Identifier kThdWarning { "thdWarning" };
+    const juce::Identifier kAliasingWarning { "aliasingWarning" };
 
     template <typename Enum>
     Enum readChoice (const juce::ValueTree& tree, const juce::Identifier& id, Enum fallback, Enum last)
@@ -86,6 +88,8 @@ AnalyzerSettings readAnalyzerSettings (const juce::ValueTree& state)
     s.glow = tree.getProperty (kGlow, s.glow);
     s.resonanceHints = tree.getProperty (kHints, s.resonanceHints);
     s.hintSensitivity = readChoice (tree, kHintSensitivity, s.hintSensitivity, HintSensitivity::High);
+    s.thdWarningDb = readListed (tree, kThdWarning, kThdWarnings, s.thdWarningDb);
+    s.aliasingWarningDb = readListed (tree, kAliasingWarning, kAliasingWarnings, s.aliasingWarningDb);
     return s;
 }
 
@@ -102,5 +106,7 @@ void writeAnalyzerSettings (juce::ValueTree& state, const AnalyzerSettings& s)
     tree.setProperty (kGlow, s.glow, nullptr);
     tree.setProperty (kHints, s.resonanceHints, nullptr);
     tree.setProperty (kHintSensitivity, static_cast<int> (s.hintSensitivity), nullptr);
+    tree.setProperty (kThdWarning, s.thdWarningDb, nullptr);
+    tree.setProperty (kAliasingWarning, s.aliasingWarningDb, nullptr);
 }
 } // namespace ssc::plugin

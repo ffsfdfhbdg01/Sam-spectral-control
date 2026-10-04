@@ -67,6 +67,8 @@
 
 **Nie zrealizowane w M4**: OS-4 (osobny współczynnik dla renderu offline, P1) — M8; OS-5 (podpowiedź w UI na podstawie miernika aliasingu) — razem z miernikami w M7.
 
+**Realizacja OS-5 w M7**: gdy działa nieliniowość pasma, uśredniony aliasing (§13e) przekracza −80 dB, a współczynnik jest mniejszy od maksymalnego dla częstotliwości próbkowania, etykieta „Oversampling ▴” w dolnym pasku przybiera kolor akcentu, a tooltip podaje aliasing i proponowany współczynnik (dwukrotnie większy od bieżącego). Ustawienie nigdy nie zmienia się samo. Logika `plugin::suggestedOversampling` jest testowana osobno (`[OS-5]`), a test wtyczki sprawdza, że podpowiedź pojawia się przy Warm +12 dB / 10 kHz / 1× (aliasing −66,5 dB) i znika po przełączeniu na 2× (−124 dB). `Oversampler::decimationGain` (wzmocnienie decymacji dla dowolnej częstotliwości, z kaskady filtrów) służy miernikom do oceny wycieku przez filtr decymujący.
+
 ## d) Kryteria akceptacji
 
 | ID | Kryterium | Metoda |

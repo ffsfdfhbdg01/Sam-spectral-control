@@ -7,6 +7,7 @@
 
 #include "ssc/dynamics/Dynamics.h"
 #include "ssc/engine/ChannelTopology.h"
+#include "ssc/engine/DistortionCapture.h"
 #include "ssc/engine/GainTable.h"
 #include "ssc/filters/BandDesign.h"
 #include "ssc/filters/Character.h"
@@ -140,6 +141,10 @@ public:
     /** Automatic make-up of one lane (AG-2). */
     double getLaneMakeupDb (int lane) const noexcept { return dynLanes[static_cast<std::size_t> (lane)].makeup; }
 
+    /** Records the nonlinearity and the gain modulation for the distortion meters (research §13c);
+        nullptr stops recording. Audio thread, or before processing starts. */
+    void setRecorder (BandRecorder* r) noexcept { recorder = r; }
+
     static constexpr int kMaxControlBlock = 64;
 
 private:
@@ -177,7 +182,8 @@ private:
     };
 
     void advanceSmoothing (const BandSettings& target, int blockSize) noexcept;
-    void runInstance (Instance& instance, double* const* buffers, int numSamples, ParamSource source) noexcept;
+    void runInstance (Instance& instance, double* const* buffers, int numSamples, ParamSource source, bool record = false) noexcept;
+    void recordModulation (const Instance& instance) noexcept;
     void updateDetection (const BandSettings& settings) noexcept;
     void runDetection (const BandSettings& settings, const Instance& instance, const ChannelTopology& topology,
                        const DetectionInput& detection, const double* const* blockInput, int offset, int numSamples) noexcept;
@@ -216,5 +222,7 @@ private:
 
     std::vector<std::vector<double>> fadeA, fadeB;
     std::vector<double*> fadeAPtr, fadeBPtr;
+
+    BandRecorder* recorder = nullptr; ///< distortion meters (owned by the engine)
 };
 } // namespace ssc::engine
