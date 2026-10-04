@@ -17,8 +17,10 @@ if(SSC_ENABLE_SANITIZERS AND NOT MSVC)
     target_link_options(ssc_options INTERFACE -fsanitize=address,undefined)
 endif()
 
+# RealtimeSanitizer: functions marked SSC_REALTIME (ssc/util/Realtime.h) are checked at run time;
+# the compile-time effect analysis would flag every call into unannotated code, so it is off.
 if(SSC_ENABLE_RTSAN AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(ssc_options INTERFACE -fsanitize=realtime)
+    target_compile_options(ssc_options INTERFACE -fsanitize=realtime -Wno-function-effects)
     target_link_options(ssc_options INTERFACE -fsanitize=realtime)
     target_compile_definitions(ssc_options INTERFACE SSC_RTSAN=1)
 endif()

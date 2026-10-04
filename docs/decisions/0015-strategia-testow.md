@@ -8,7 +8,8 @@
 - **Testy pomiarowe**: narzędzie `ssc-measure` (CLI) — sygnały testowe, metryki (amplituda/faza vs prototyp, THD z analizy harmonicznych, aliasing jako składowe nieharmoniczne, głośność wg modelu i BS.1770, precision/recall detektora rezonansów). Raporty Markdown/CSV w `docs/measurements/`.
 - **Benchmarki**: `ssc-bench` — scenariusze NFR-1; wynik jako tabela.
 - **Walidacja wtyczki**: pluginval (strictness 10, headless) na trzech systemach; Steinberg VST3 validator (z vst3sdk na licencji MIT) budowany w CI; `auval` dla AU.
-- **Sanitizery**: ASan/UBSan (testy), TSan (komunikacja wątków), RealtimeSanitizer (ścieżka audio, Clang 20+).
+- **Sanitizery**: ASan/UBSan (testy), TSan (komunikacja wątków), RealtimeSanitizer (ścieżka audio, Clang 20+; preset `rtsan`, zadanie CI „Real-time safety”).
+- **Testy obciążeniowe** (TST-4, M8): `tests/plugin/TestStress.cpp` przez `AudioProcessor` jak host — macierz w `docs/testing.md`; każdy przebieg sprawdza skończone i ograniczone wyjście, brak wyciszeń NaN i zero alokacji w `processBlock`.
 - **Śledzenie**: każde wymaganie z PROMPT.md ma wiersz w `docs/traceability.md` (test/dowód, kamień milowy, status).
 - **Hosty**: ręczna checklista w `docs/testing.md` (Atmos i AAX poza CI).
 

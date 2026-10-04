@@ -46,7 +46,7 @@ ctest --preset release
 
 Gotowa wtyczka: `build/release/src/SamSpectralControl_artefacts/Release/VST3/Sam Spectral Control.vst3`.
 
-Inne presety: `dev` (Debug), `core-tests` (tylko rdzeń DSP, szybko), `sanitize` (rdzeń z ASan/UBSan).
+Inne presety: `dev` (Debug), `core-tests` (tylko rdzeń DSP, szybko), `sanitize` (rdzeń z ASan/UBSan), `rtsan` (testy rdzenia i wtyczki z RealtimeSanitizerem — wymaga Clang 20: `CC=clang-20 CXX=clang++-20 cmake --preset rtsan`).
 
 Styl kodu: `.clang-format` (clang-format 18, sprawdzany w CI). `-DSSC_WARNINGS_AS_ERRORS=ON` traktuje ostrzeżenia w kodzie projektu jak błędy (włączone w CI).
 

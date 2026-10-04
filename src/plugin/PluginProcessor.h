@@ -10,6 +10,7 @@
 #include "plugin/Parameters.h"
 #include "plugin/ReadoutService.h"
 #include "ssc/engine/Engine.h"
+#include "ssc/util/Realtime.h"
 #include "ui/ResponseCurves.h"
 
 namespace ssc::plugin
@@ -74,6 +75,9 @@ public:
     /** Global Auto Gain correction currently applied (dB); any thread. */
     float getAutoGainDb() const noexcept { return engine.getAutoGainDb(); }
 
+    /** Blocks in which non-finite audio was replaced by silence (PLT-5); any thread. */
+    std::uint32_t getNonFiniteEvents() const noexcept { return engine.getNonFiniteEvents(); }
+
     /** Oversampling factor of the band chain from the parameters, limited by the sample rate; any thread. */
     int getOversamplingFactor() const noexcept;
 
@@ -100,7 +104,7 @@ private:
     void timerCallback() override;
 
     template <typename Sample>
-    void processImpl (juce::AudioBuffer<Sample>& buffer, bool forceBypass) noexcept;
+    void processImpl (juce::AudioBuffer<Sample>& buffer, bool forceBypass) noexcept SSC_REALTIME;
 
     template <typename Sample>
     void pushAnalyzerTap (const juce::AudioBuffer<Sample>& buffer, bool post) noexcept;

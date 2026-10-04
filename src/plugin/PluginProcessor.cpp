@@ -247,7 +247,7 @@ void SscAudioProcessor::pushAnalyzerTap (const juce::AudioBuffer<Sample>& buffer
 }
 
 template <typename Sample>
-void SscAudioProcessor::processImpl (juce::AudioBuffer<Sample>& buffer, bool forceBypass) noexcept
+void SscAudioProcessor::processImpl (juce::AudioBuffer<Sample>& buffer, bool forceBypass) noexcept SSC_REALTIME
 {
     juce::ScopedNoDenormals noDenormals;
     juce::AudioProcessLoadMeasurer::ScopedTimer timer (loadMeasurer, buffer.getNumSamples());

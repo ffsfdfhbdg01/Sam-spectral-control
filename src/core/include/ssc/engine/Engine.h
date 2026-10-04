@@ -17,6 +17,7 @@
 #include "ssc/spectral/SpectralEngine.h"
 #include "ssc/util/DelayLine.h"
 #include "ssc/util/LinearSmoother.h"
+#include "ssc/util/Realtime.h"
 #include "ssc/util/TripleBuffer.h"
 
 namespace ssc::engine
@@ -107,7 +108,7 @@ public:
 
     template <typename Sample>
     void process (Sample* const* channels, int numChannels, int numSamples, const GlobalParams& params,
-                  const BandSettingsArray& bands) noexcept;
+                  const BandSettingsArray& bands) noexcept SSC_REALTIME;
 
     /** Convenience overload without bands (all inactive). */
     template <typename Sample>
@@ -177,6 +178,7 @@ private:
     static constexpr int kMaxChunk = 512; ///< internal block: bounds the memory of the oversampled buffers
 
     int chunkSize = kMaxChunk;
+    bool prepared = false; ///< process() before prepare() leaves the audio untouched (a host error)
 
     EngineConfig cfg;
     std::atomic<int> latencySamples { 0 };

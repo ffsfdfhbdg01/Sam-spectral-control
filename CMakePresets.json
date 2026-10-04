@@ -42,18 +42,30 @@
         "SSC_BUILD_PLUGIN": "OFF",
         "SSC_ENABLE_SANITIZERS": "ON"
       }
+    },
+    {
+      "name": "rtsan",
+      "displayName": "Core and plugin tests with RealtimeSanitizer (Clang 20+: CC=clang-20 CXX=clang++-20)",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "SSC_ENABLE_RTSAN": "ON"
+      }
     }
   ],
   "buildPresets": [
     { "name": "dev", "configurePreset": "dev" },
     { "name": "release", "configurePreset": "release" },
     { "name": "core-tests", "configurePreset": "core-tests" },
-    { "name": "sanitize", "configurePreset": "sanitize" }
+    { "name": "sanitize", "configurePreset": "sanitize" },
+    { "name": "rtsan", "configurePreset": "rtsan", "targets": [ "ssc_core_tests", "ssc_plugin_tests" ] }
   ],
   "testPresets": [
     { "name": "dev", "configurePreset": "dev", "output": { "outputOnFailure": true } },
     { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
     { "name": "core-tests", "configurePreset": "core-tests", "output": { "outputOnFailure": true } },
-    { "name": "sanitize", "configurePreset": "sanitize", "output": { "outputOnFailure": true } }
+    { "name": "sanitize", "configurePreset": "sanitize", "output": { "outputOnFailure": true } },
+    { "name": "rtsan", "configurePreset": "rtsan", "output": { "outputOnFailure": true } }
   ]
 }

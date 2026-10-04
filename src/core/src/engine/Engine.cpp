@@ -119,6 +119,7 @@ void Engine::prepare (const EngineConfig& config)
 
     setOversampling (1, oversampling::FilterType::PolyphaseIir, Quality::Normal);
     reset();
+    prepared = true;
 }
 
 void Engine::reset() noexcept
@@ -458,8 +459,10 @@ void Engine::configure (const GlobalParams& params, const BandSettingsArray& ban
 
 template <typename Sample>
 void Engine::process (Sample* const* channels, int numChannels, int numSamples, const GlobalParams& params,
-                      const BandSettingsArray& bands) noexcept
+                      const BandSettingsArray& bands) noexcept SSC_REALTIME
 {
+    if (! prepared)
+        return;
     numChannels = std::min (numChannels, cfg.numChannels);
     controlBlock = controlBlockFor (params.quality);
     updateMetering();
@@ -746,6 +749,6 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
     }
 }
 
-template void Engine::process<float> (float* const*, int, int, const GlobalParams&, const BandSettingsArray&) noexcept;
-template void Engine::process<double> (double* const*, int, int, const GlobalParams&, const BandSettingsArray&) noexcept;
+template void Engine::process<float> (float* const*, int, int, const GlobalParams&, const BandSettingsArray&) noexcept SSC_REALTIME;
+template void Engine::process<double> (double* const*, int, int, const GlobalParams&, const BandSettingsArray&) noexcept SSC_REALTIME;
 } // namespace ssc::engine
