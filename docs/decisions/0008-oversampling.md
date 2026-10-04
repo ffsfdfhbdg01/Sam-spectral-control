@@ -11,7 +11,7 @@
 - Specyfikacja: Normal — pasmo do 0,43·fs, zafalowania ≤ 0,05 dB, tłumienie ≥ 90 dB; Max — 0,45·fs, ≤ 0,01 dB, ≥ 120 dB (do potwierdzenia pomiarami wg Kahles i in. 2019).
 - Przy OS > 1× oversampling działa zawsze (stała latencja), także bez aktywnych nieliniowości.
 - HIIR (de Soras) jako kandydat do podmiany, jeśli benchmark M4 wykaże przewagę.
-- Render offline z osobnym współczynnikiem (P1) — z dopełnieniem do wspólnej latencji.
+- Render offline z osobnym współczynnikiem (P1) — z dopełnieniem do wspólnej latencji. Zrealizowane w M8: parametr „Offline” (Same / Off / 2× / 4× / 8×), silnik wybiera współczynnik według `isNonRealtime()` hosta w każdym bloku, a latencja obu ustawień jest równa większej z nich (tor krótszy dopełniony opóźnieniem na końcu toru przetwarzanego).
 
 ## Konsekwencje
 - Kanały nieobjęte pasmami omijają oversampling (CH-6).

@@ -2,8 +2,10 @@
 
 #include <cmath>
 #include <complex>
+#include <cstdio>
 #include <memory>
 #include <numbers>
+#include <utility>
 #include <vector>
 
 #include "TestSignals.h"
@@ -333,4 +335,140 @@ TEST_CASE ("Character aliasing through the engine with oversampling (OS-1)", "[e
     for (const double alias : { 18000.0, 8000.0, 2000.0, 12000.0, 22000.0, 6000.0, 4000.0 })
         worst = std::max (worst, amplitudeAt (alias));
     CHECK (20.0 * std::log10 (worst / fundamental) < -95.0);
+}
+
+TEST_CASE ("[OS-4] An offline render may oversample more; real time and render share the latency", "[engine][oversampling][OS-4]")
+{
+    using Pair = std::pair<Oversampling, Oversampling>; // real time, render
+    for (const auto phaseMode : { PhaseMode::MinimumPhase, PhaseMode::NaturalPhase })
+        for (const auto& [realtime, render] : { Pair { Oversampling::Off, Oversampling::X8 }, Pair { Oversampling::X4, Oversampling::Off },
+                                                Pair { Oversampling::X2, Oversampling::X2 } })
+        {
+            CAPTURE (static_cast<int> (phaseMode), static_cast<int> (realtime), static_cast<int> (render));
+            BandSettingsArray bands {};
+            bands[0] = bell (1000.0, 0.0, 1.0); // a band at 0 dB: the channels take the oversampled path
+            GlobalParams params;
+            params.phaseMode = phaseMode;
+
+            // The latency of each setting on its own.
+            auto plain = makeEngine();
+            params.oversampling = realtime;
+            plain->configure (params, bands);
+            const int realtimeAlone = plain->getLatencySamples();
+            params.oversampling = render;
+            plain->configure (params, bands);
+            const int renderAlone = plain->getLatencySamples();
+
+            params.oversampling = realtime;
+            params.renderOversampling = render;
+            for (const bool offline : { false, true })
+            {
+                CAPTURE (offline);
+                params.nonRealtime = offline;
+                auto engine = makeEngine();
+                engine->configure (params, bands);
+                const int latency = engine->getLatencySamples();
+                CHECK (latency == std::max (realtimeAlone, renderAlone));
+                CHECK (engine->getOversamplingFactor() == oversamplingFactor (offline ? render : realtime));
+
+                // Measured = reported, padded or not.
+                std::vector<double> left (8192, 0.0), right (8192, 0.0);
+                left[100] = 1.0;
+                ::render (*engine, left, right, params, bands);
+                double m0 = 0.0, m1 = 0.0;
+                for (std::size_t i = 0; i < left.size(); ++i)
+                {
+                    m0 += left[i];
+                    m1 += static_cast<double> (i) * left[i];
+                }
+                const double delay = m1 / m0 - 100.0;
+                const int factor = engine->getOversamplingFactor();
+                if (phaseMode == PhaseMode::NaturalPhase || factor == 1)
+                    CHECK (std::abs (delay - latency) < 1e-6);
+                else
+                    CHECK (std::abs (delay - latency) <= 0.5 / factor + 1e-6);
+            }
+        }
+}
+
+TEST_CASE ("[OS-4] Offline render: aligned with real time, less aliasing; unset it changes nothing", "[engine][oversampling][OS-4][NFR-3]")
+{
+    constexpr int length = 19200;
+    auto run = [] (const GlobalParams& params, const BandSettingsArray& bands, const std::vector<double>& input) {
+        auto engine = makeEngine();
+        std::vector<double> left = input, right (input.size(), 0.0);
+        render (*engine, left, right, params, bands);
+        return std::make_pair (left, engine->getLatencySamples());
+    };
+    auto amplitudeAt = [] (const std::vector<double>& x, double hz) {
+        std::complex<double> sum (0.0, 0.0);
+        for (int i = 0; i < 4800; ++i)
+            sum += x[static_cast<std::size_t> (length - 4800 + i)] * std::polar (1.0, -2.0 * std::numbers::pi * hz * i / kFs);
+        return 2.0 * std::abs (sum) / 4800.0;
+    };
+
+    // Aligned: Natural Phase, a linear bell; the render at 4x matches real time at 1x sample by sample.
+    {
+        std::vector<double> input (static_cast<std::size_t> (length));
+        for (int i = 0; i < length; ++i)
+            input[static_cast<std::size_t> (i)] =
+                0.4 * std::sin (2.0 * std::numbers::pi * 1000.0 * i / kFs) + 0.3 * std::sin (2.0 * std::numbers::pi * 3100.0 * i / kFs);
+        BandSettingsArray bands {};
+        bands[0] = bell (1500.0, 6.0, 1.0);
+        GlobalParams params;
+        params.phaseMode = PhaseMode::NaturalPhase;
+        params.renderOversampling = Oversampling::X4;
+        const auto [realtime, latency] = run (params, bands, input);
+        params.nonRealtime = true;
+        const auto [offline, renderLatency] = run (params, bands, input);
+        REQUIRE (renderLatency == latency);
+        double signal = 0.0, difference = 0.0;
+        for (std::size_t i = static_cast<std::size_t> (latency) + 2000; i < realtime.size(); ++i)
+        {
+            signal += realtime[i] * realtime[i];
+            difference += (realtime[i] - offline[i]) * (realtime[i] - offline[i]);
+        }
+        const double residualDb = 10.0 * std::log10 (difference / signal);
+        std::printf ("[OS-4] Natural Phase, real time 1x vs render 4x: residual %.1f dB\n", residualDb);
+        CHECK (residualDb < -60.0);
+    }
+
+    // Less aliasing: Warm +12 dB at 10 kHz (the OS-1 case), real time 1x, render 8x.
+    {
+        std::vector<double> input (static_cast<std::size_t> (length));
+        for (int i = 0; i < length; ++i)
+            input[static_cast<std::size_t> (i)] = std::sin (2.0 * std::numbers::pi * 10000.0 * i / kFs);
+        BandSettingsArray bands {};
+        bands[0] = bell (10000.0, 12.0, 1.0);
+        bands[0].shape.character = Character::Warm;
+        GlobalParams params;
+        params.renderOversampling = Oversampling::X8;
+        auto worstAliasDb = [&] (const std::vector<double>& x) {
+            double worst = 0.0;
+            for (const double alias : { 18000.0, 8000.0, 2000.0, 12000.0, 22000.0, 6000.0, 4000.0 })
+                worst = std::max (worst, amplitudeAt (x, alias));
+            return 20.0 * std::log10 (worst / amplitudeAt (x, 10000.0));
+        };
+        const double realtimeDb = worstAliasDb (run (params, bands, input).first);
+        params.nonRealtime = true;
+        const double offlineDb = worstAliasDb (run (params, bands, input).first);
+        std::printf ("[OS-4] Warm +12 dB 10 kHz: aliasing real time (1x) %.1f dB, offline render (8x) %.1f dB\n", realtimeDb, offlineDb);
+        CHECK (offlineDb < -110.0);
+        CHECK (offlineDb < realtimeDb - 30.0);
+    }
+
+    // Unset: an offline render equals real time bit for bit (NFR-3), and nothing is padded.
+    {
+        const auto noise = ssc::test::pinkNoise (1 << 14);
+        std::vector<double> input (noise.begin(), noise.end());
+        BandSettingsArray bands {};
+        bands[0] = bell (2000.0, 4.0, 1.0);
+        bands[0].shape.character = Character::Warm;
+        GlobalParams params;
+        params.oversampling = Oversampling::X2;
+        const auto realtime = run (params, bands, input);
+        params.nonRealtime = true;
+        const auto offline = run (params, bands, input);
+        CHECK (offline == realtime);
+    }
 }

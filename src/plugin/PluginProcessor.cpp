@@ -148,6 +148,9 @@ engine::GlobalParams SscAudioProcessor::readGlobalParams (bool forceBypass) cons
     p.phaseMode = choice (params.phaseMode, PhaseMode::AnalogFeel);
     p.analogModel = choice (params.analogModel, AnalogModel::S);
     p.oversampling = choice (params.oversampling, Oversampling::X8);
+    if (const int render = static_cast<int> (std::lround (params.renderOversampling->load (std::memory_order_relaxed))); render > 0)
+        p.renderOversampling = static_cast<Oversampling> (juce::jlimit (0, static_cast<int> (Oversampling::X8), render - 1));
+    p.nonRealtime = isNonRealtime();
     return p;
 }
 

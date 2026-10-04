@@ -37,7 +37,7 @@ Uwagi:
 
 | Składnik | Kiedy | Wartość (48 kHz) |
 |---|---|---|
-| Oversampling | OS > 1× | zależnie od typu filtra (IIR: kilka próbek; FIR: dziesiątki) |
+| Oversampling | OS > 1× | zależnie od typu filtra (IIR: kilka próbek; FIR: dziesiątki); przy osobnym ustawieniu renderu offline (OS-4) — większa z dwóch latencji, krótszy tor dopełniony opóźnieniem |
 | Natural Phase | tryb Natural Phase (lub Analog Feel High/Max) | D = 16 / 32 / 64 / 128 próbek (Eco…Max) |
 | Max Lookahead | > 0 | 0–20 ms |
 | Silnik STFT | istnieje ≥ 1 pasmo w trybie Spectral | ≈ N_fft (2048–8192 próbek) |

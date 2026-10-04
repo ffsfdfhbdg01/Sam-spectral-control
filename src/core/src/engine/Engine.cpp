@@ -85,6 +85,8 @@ void Engine::prepare (const EngineConfig& config)
         osHistoryPointers[ch] = osHistory[ch].data();
     osHistoryMask = osHistorySize - 1;
     osBypassDelay.prepare (cfg.numChannels, maxLookaheadSamples + maxOsLatency, chunkSize);
+    renderPadDelay.prepare (cfg.numChannels, maxOsLatency, chunkSize);
+    renderPadActive = false;
     osRampLength = std::max (1, static_cast<int> (std::lround (0.005 * cfg.sampleRate)));
     osCovered.fill (false);
 
@@ -132,6 +134,7 @@ void Engine::reset() noexcept
     soloDelay.reset();
     autoGain->reset();
     osBypassDelay.reset();
+    renderPadDelay.reset();
     samplePosition = 0;
     resetChain();
     attachRecorders (false);
@@ -432,8 +435,13 @@ void Engine::configure (const GlobalParams& params, const BandSettingsArray& ban
     updateCoverage (useChainCopy ? *chainBands : heard);
 
     // Oversampling of the band chain (ADR-0008): polyphase IIR half-bands in Minimum Phase,
-    // linear-phase FIR half-bands in Natural Phase and Analog Feel.
-    const int factor = effectiveOversampling (params.oversampling, params.phaseMode, params.quality, cfg.sampleRate);
+    // linear-phase FIR half-bands in Natural Phase and Analog Feel. An offline render may use its
+    // own factor (OS-4).
+    const int realtimeFactor = effectiveOversampling (params.oversampling, params.phaseMode, params.quality, cfg.sampleRate);
+    const int renderFactor = params.renderOversampling.has_value()
+        ? effectiveOversampling (*params.renderOversampling, params.phaseMode, params.quality, cfg.sampleRate)
+        : realtimeFactor;
+    const int factor = params.nonRealtime ? renderFactor : realtimeFactor;
     const auto type =
         params.phaseMode == PhaseMode::MinimumPhase ? oversampling::FilterType::PolyphaseIir : oversampling::FilterType::LinearPhaseFir;
     if (factor != osFactor || (factor > 1 && (type != osType || params.quality != osQuality)))
@@ -448,13 +456,29 @@ void Engine::configure (const GlobalParams& params, const BandSettingsArray& ban
     const int osLatency = oversampler != nullptr ? oversampler->getLatencySamples() : 0;
     const int correctionLatency = correctionActive ? corrector->getLatencySamples() : 0;
     const int spectralLatency = spectralEnabled ? spectralEngine->getLatencySamples() : 0;
-    const int latency = lookahead + osLatency + correctionLatency + spectralLatency;
+
+    // OS-4: real time and offline render report the same latency, so the render stays aligned
+    // with what was heard; the processed path of the shorter one is padded at its end.
+    const int sharedOsLatency =
+        std::max (oversamplingLatency (type, realtimeFactor, params.quality), oversamplingLatency (type, renderFactor, params.quality));
+    const bool padding = params.renderOversampling.has_value();
+    if (padding && ! renderPadActive)
+        renderPadDelay.reset();
+    renderPadActive = padding;
+    renderPadDelay.setDelay (sharedOsLatency - osLatency);
+
+    const int latency = lookahead + sharedOsLatency + correctionLatency + spectralLatency;
 
     lookaheadSamples = lookahead;
     osBypassDelay.setDelay (lookahead + osLatency);
-    soloDelay.setDelay (osLatency + correctionLatency + spectralLatency);
+    soloDelay.setDelay (sharedOsLatency + correctionLatency + spectralLatency);
     dryDelay.setDelay (latency);
     latencySamples.store (latency, std::memory_order_relaxed);
+}
+
+int Engine::oversamplingLatency (oversampling::FilterType type, int factor, Quality quality) const noexcept
+{
+    return factor > 1 ? (*oversamplers)[oversamplerIndex (type, factor, quality)].getLatencySamples() : 0;
 }
 
 template <typename Sample>
@@ -662,6 +686,9 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
 
     if (spectralEnabled)
         spectralEngine->process (wetPointers.data(), numChannels, numSamples, chain, cfg.topology);
+
+    if (renderPadActive)
+        renderPadDelay.processInPlace (wetPointers.data(), numChannels, numSamples);
 
     // Dry path aligned with the processed path (latency).
     dryDelay.processInPlace (dryPointers.data(), numChannels, numSamples);

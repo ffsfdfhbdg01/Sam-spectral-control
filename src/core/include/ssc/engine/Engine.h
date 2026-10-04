@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "ssc/engine/BandProcessor.h"
@@ -45,6 +46,11 @@ struct GlobalParams
     PhaseMode phaseMode = PhaseMode::MinimumPhase;
     AnalogModel analogModel = AnalogModel::N;      ///< curves and nonlinearity in Analog Feel (ADR-0009)
     Oversampling oversampling = Oversampling::Off; ///< of the band chain; see effectiveOversampling()
+
+    /** Oversampling of an offline render (OS-4), used while nonRealtime; unset = as in real time.
+        Both settings report the larger latency: the path with the shorter one is padded. */
+    std::optional<Oversampling> renderOversampling;
+    bool nonRealtime = false; ///< the host renders offline (AudioProcessor::isNonRealtime())
 };
 
 /** Largest oversampling factor at a sample rate: the internal rate stays at or below 400 kHz. */
@@ -165,6 +171,7 @@ private:
     void runBands (const BandSettingsArray& chain, int numChannels, int offset, int numSamples) noexcept;
     void updateCorrector (const BandSettingsArray& bands) noexcept;
     void setOversampling (int factor, oversampling::FilterType type, Quality quality) noexcept;
+    int oversamplingLatency (oversampling::FilterType type, int factor, Quality quality) const noexcept;
     void updateCoverage (const BandSettingsArray& chain) noexcept;
     void resetChain() noexcept;
     void updateMetering() noexcept;
@@ -239,6 +246,8 @@ private:
     int osHistoryMask = 0;
     int osHistoryWrite = 0;
     MultiChannelDelay<double> osBypassDelay;
+    MultiChannelDelay<double> renderPadDelay; ///< OS-4: pads the processed path to the shared latency
+    bool renderPadActive = false;
     std::array<bool, kMaxChannels> osCovered {};
     std::array<int, kMaxChannels> osRamp {}; ///< 0: exact bypass … osRampLength: oversampled path
     int osRampLength = 240;

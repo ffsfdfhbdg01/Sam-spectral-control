@@ -81,7 +81,7 @@ TEST_CASE ("Parameter layout has stable IDs and the expected size", "[plugin][PL
     SscAudioProcessor p;
     auto& state = p.getValueTreeState();
 
-    REQUIRE (p.getParameters().size() == 11 + ssc::kNumBands * ssc::plugin::kNumBandParams);
+    REQUIRE (p.getParameters().size() == 12 + ssc::kNumBands * ssc::plugin::kNumBandParams);
     REQUIRE (ssc::plugin::bandParamId (0, ssc::plugin::BandParam::Frequency) == "b01_freq");
     REQUIRE (ssc::plugin::bandParamId (23, ssc::plugin::BandParam::Link) == "b24_link");
     REQUIRE (state.getParameter ("b12_threshold") != nullptr);
@@ -91,6 +91,7 @@ TEST_CASE ("Parameter layout has stable IDs and the expected size", "[plugin][PL
     REQUIRE_FALSE (state.getParameter (ssc::plugin::id::phaseMode)->isAutomatable());
     REQUIRE_FALSE (state.getParameter (ssc::plugin::id::quality)->isAutomatable());
     REQUIRE_FALSE (state.getParameter (ssc::plugin::id::oversampling)->isAutomatable());
+    REQUIRE_FALSE (state.getParameter (ssc::plugin::id::renderOversampling)->isAutomatable());
     REQUIRE (state.getParameter ("b05_freq")->isAutomatable());
 }
 
@@ -358,4 +359,55 @@ TEST_CASE ("Phase mode and oversampling set the reported latency (OS-3, PH-1)", 
     p.processBlock (buffer, midi);
     REQUIRE (p.isPhaseCorrected() == false);
     REQUIRE_FALSE (p.getResponseModel().analogModel.has_value());
+}
+
+TEST_CASE ("Offline render oversampling follows the host's offline mode; the latency stays (OS-4)", "[plugin][OS-4]")
+{
+    JuceEnvironment env;
+    using ssc::plugin::BandParam;
+    using ssc::plugin::bandParamId;
+
+    auto render = [] (bool renderSetting, bool switchToOffline) {
+        SscAudioProcessor p;
+        p.setPlayConfigDetails (2, 2, 48000.0, 512);
+        setPlain (p, ssc::plugin::id::phaseMode, static_cast<float> (ssc::PhaseMode::NaturalPhase));
+        setPlain (p, bandParamId (0, BandParam::Used), 1.0f);
+        setPlain (p, bandParamId (0, BandParam::Frequency), 10000.0f);
+        setPlain (p, bandParamId (0, BandParam::Gain), 12.0f);
+        setPlain (p, bandParamId (0, BandParam::Character), static_cast<float> (ssc::Character::Warm));
+        if (renderSetting)
+            setPlain (p, ssc::plugin::id::renderOversampling, 4.0f); // "8x"
+        p.prepareToPlay (48000.0, 512);
+        const int latency = p.getLatencySamples();
+
+        const auto source = ssc::test::sine (10000.0, 0.5, 48000.0, 512 * 40);
+        std::vector<float> out;
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        for (int block = 0; block < 40; ++block)
+        {
+            // JUCE's VST3 wrapper sets the mode with every process call (ProcessData::processMode).
+            p.setNonRealtime (switchToOffline && block >= 10);
+            for (int ch = 0; ch < 2; ++ch)
+                buffer.copyFrom (ch, 0, source.data() + block * 512, 512);
+            p.processBlock (buffer, midi);
+            out.insert (out.end(), buffer.getReadPointer (0), buffer.getReadPointer (0) + 512);
+        }
+        CHECK (p.getLatencySamples() == latency);
+        CHECK (p.getNonFiniteEvents() == 0);
+        return std::make_pair (out, latency);
+    };
+
+    // "Same": the offline mode changes nothing.
+    const auto plain = render (false, false);
+    CHECK (render (false, true) == plain);
+
+    // "8x": the same latency in real time and offline (the larger one), a different (oversampled) render.
+    const auto realtime = render (true, false);
+    const auto offline = render (true, true);
+    CHECK (realtime.second == offline.second);
+    CHECK (realtime.second > plain.second);
+    CHECK (realtime.first != offline.first);
+    for (const float y : offline.first)
+        REQUIRE (std::isfinite (y));
 }

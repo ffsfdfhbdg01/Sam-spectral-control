@@ -23,6 +23,7 @@ namespace id
     inline constexpr const char* autoGainWeighting = "auto_gain_weighting";
     inline constexpr const char* autoGainSpeed = "auto_gain_speed";
     inline constexpr const char* maxLookahead = "max_lookahead";
+    inline constexpr const char* renderOversampling = "render_oversampling";
 } // namespace id
 
 enum class BandParam
@@ -75,6 +76,7 @@ namespace labels
     const juce::StringArray& analogModels();
     const juce::StringArray& qualities();
     const juce::StringArray& oversampling();
+    const juce::StringArray& renderOversampling(); ///< "Same", then the oversampling() choices
     const juce::StringArray& autoGainWeightings();
     const juce::StringArray& autoGainSpeeds();
 } // namespace labels
@@ -108,6 +110,7 @@ struct ParameterPointers
     std::atomic<float>* autoGainWeighting = nullptr;
     std::atomic<float>* autoGainSpeed = nullptr;
     std::atomic<float>* maxLookahead = nullptr;
+    std::atomic<float>* renderOversampling = nullptr;
     std::array<std::array<std::atomic<float>*, kNumBandParams>, kNumBands> bands {};
 
     void attach (juce::AudioProcessorValueTreeState& state);

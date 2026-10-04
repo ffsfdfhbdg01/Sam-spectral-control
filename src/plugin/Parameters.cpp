@@ -194,6 +194,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                 [] (float v, int) { return format::milliseconds (v); }));
         global->addChild (std::move (maxLookahead));
     }
+    // Offline render (OS-4): "Same" or its own oversampling; latency stays that of the larger one.
+    global->addChild (choiceParam (id::renderOversampling, "Offline Oversampling", labels::renderOversampling(), 0, false));
     layout.add (std::move (global));
 
     for (int band = 0; band < kNumBands; ++band)
@@ -269,6 +271,11 @@ namespace labels
     const juce::StringArray& oversampling()
     {
         static const juce::StringArray s { "Off", "2x", "4x", "8x" };
+        return s;
+    }
+    const juce::StringArray& renderOversampling()
+    {
+        static const juce::StringArray s { "Same", "Off", "2x", "4x", "8x" };
         return s;
     }
     const juce::StringArray& autoGainWeightings()
@@ -356,6 +363,7 @@ void ParameterPointers::attach (juce::AudioProcessorValueTreeState& state)
     autoGainWeighting = get (id::autoGainWeighting);
     autoGainSpeed = get (id::autoGainSpeed);
     maxLookahead = get (id::maxLookahead);
+    renderOversampling = get (id::renderOversampling);
 
     for (int band = 0; band < kNumBands; ++band)
         for (int p = 0; p < kNumBandParams; ++p)

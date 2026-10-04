@@ -53,6 +53,9 @@ ControlBar::ControlBar (juce::AudioProcessorValueTreeState& s)
     setupCombo (analogModel, "Model", plugin::id::analogModel);
     setupCombo (quality, "Quality", plugin::id::quality);
     setupCombo (oversampling, "Oversampling", plugin::id::oversampling);
+    setupCombo (renderOversampling, "Offline", plugin::id::renderOversampling);
+    renderOversampling.box.setTooltip ("Oversampling of an offline render (export, bounce). Same: as in real time.\n"
+                                       "Real time and render keep the same latency: the shorter one is padded.");
     setupCombo (autoGainWeighting, "Weighting", plugin::id::autoGainWeighting);
     setupCombo (autoGainSpeed, "Speed", plugin::id::autoGainSpeed);
 
@@ -170,7 +173,7 @@ void ControlBar::resized()
     meters.setBounds (area.removeFromRight (juce::jmin (150, area.getWidth() / 5)));
     area.removeFromRight (gap);
 
-    constexpr int widths[] = { 130, 96, 84, 96, 92, 90, 96 };
+    constexpr int widths[] = { 130, 96, 84, 96, 72, 92, 90, 96 };
     int total = 0;
     for (int w : widths)
         total += w + gap;
@@ -189,6 +192,7 @@ void ControlBar::resized()
     placeCombo (analogModel);
     placeCombo (quality);
     placeCombo (oversampling);
+    placeCombo (renderOversampling);
     {
         auto column = area.removeFromLeft (nextWidth());
         column.removeFromTop (14);

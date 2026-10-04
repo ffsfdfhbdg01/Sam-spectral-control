@@ -64,7 +64,7 @@ private:
     juce::AudioProcessorValueTreeState& state;
 
     PowerButton power;
-    LabelledCombo phaseMode, analogModel, quality, oversampling, autoGainWeighting, autoGainSpeed;
+    LabelledCombo phaseMode, analogModel, quality, oversampling, renderOversampling, autoGainWeighting, autoGainSpeed;
     juce::ToggleButton autoGainButton { "Auto Gain" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> autoGainAttachment;
     LabelledKnob mix, output;
