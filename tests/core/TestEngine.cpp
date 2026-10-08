@@ -173,3 +173,47 @@ TEST_CASE ("Delta: the input minus the output, crossfaded; dry + delta reconstru
     for (std::size_t i = 2048; i < silent.size(); ++i)
         REQUIRE (std::abs (silent[i]) < 1e-12);
 }
+
+TEST_CASE ("Delta is heard without the Auto Gain correction (AG-5, GLB-2)", "[engine][GLB-2][AG-5]")
+{
+    using namespace ssc;
+    using namespace ssc::engine;
+    BandSettingsArray bands {};
+    bands[0].used = bands[0].active = true;
+    bands[0].shape = { Shape::Bell, 3000.0, 8.0, 1.0, Slope::Db12 };
+
+    const auto noise = ssc::test::pinkNoise (1 << 16);
+    auto render = [&] (bool autoGain, bool delta, float* correctionDb) {
+        PreparedEngine engine (512);
+        GlobalParams p;
+        p.autoGain = autoGain;
+        p.autoGainSpeed = AutoGainSpeed::VeryFast;
+        p.delta = delta;
+        std::vector<double> left (noise.begin(), noise.end()), right (left.size(), 0.0);
+        for (std::size_t offset = 0; offset < left.size(); offset += 512)
+        {
+            double* block[] = { left.data() + offset, right.data() + offset };
+            engine.process (block, 2, 512, p, bands);
+        }
+        *correctionDb = engine.getAutoGainDb();
+        return left;
+    };
+
+    float correction = 0.0f, none = 0.0f;
+    const auto compensated = render (true, false, &correction);
+    const auto plain = render (false, false, &none);
+    REQUIRE (correction < -1.0f); // the boost is compensated…
+    double difference = 0.0;
+    for (std::size_t i = noise.size() / 2; i < noise.size(); ++i)
+        difference = std::max (difference, std::abs (compensated[i] - plain[i]));
+    REQUIRE (difference > 0.01); // …and the output shows it
+
+    // …but the delta is the same with and without Auto Gain: it holds only what the EQ changes.
+    const auto deltaWithAutoGain = render (true, true, &correction);
+    const auto deltaPlain = render (false, true, &none);
+    REQUIRE (correction < -1.0f);
+    double worst = 0.0;
+    for (std::size_t i = 2048; i < noise.size(); ++i) // after the Delta ramp (20 ms)
+        worst = std::max (worst, std::abs (deltaWithAutoGain[i] - deltaPlain[i]));
+    CHECK (worst < 1e-12);
+}

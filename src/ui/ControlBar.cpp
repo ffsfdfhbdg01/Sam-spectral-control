@@ -96,6 +96,17 @@ ControlBar::ControlBar (juce::AudioProcessorValueTreeState& s)
     addAndMakeVisible (meters);
     meters.onOversamplingHint = [this] (int factor, float aliasingDb) { setOversamplingHint (factor, aliasingDb); };
 
+    // PH-2: what each mode and Quality costs (measured at 48 kHz, stereo, 8 bands; docs/measurements).
+    phaseMode.box.setTooltip ("Minimum Phase: no latency; minimum-phase filters.\n"
+                              "Natural Phase: magnitude and phase of the analog prototypes, no cramping near Nyquist; "
+                              "latency 0.3 / 0.7 / 1.3 / 2.7 ms by Quality.\n"
+                              "Analog Feel: curves and saturation of the selected console model; latency at High and Max.");
+    quality.box.setTooltip ("Higher Quality: more accurate, more CPU and/or latency (48 kHz, stereo, 8 bands).\n"
+                            "Minimum Phase: Eco/Normal 0 ms, 0.7 % CPU; High 1.0 %, Max 1.2 % with the analog magnitude (still 0 ms).\n"
+                            "Natural Phase: Eco 0.3 ms, Normal 0.7 ms, High 1.3 ms, Max 2.7 ms; 0.8 - 1.6 % CPU.\n"
+                            "Analog Feel: Eco/Normal 0 ms, 0.7 - 1.3 % CPU; High 2.6 ms, Max 4.7 ms "
+                            "(internal 2x / 4x oversampling), 2 - 7 % CPU.\n"
+                            "Spectral bands add their frame: Eco 43 ms, Normal 85 ms, High and Max 171 ms.");
     phaseMode.box.onChange = [this] { updateEnablement(); };
     analogModel.box.onChange = [this] { updateModelTooltip(); };
     autoGainButton.onStateChange = [this] { updateEnablement(); };

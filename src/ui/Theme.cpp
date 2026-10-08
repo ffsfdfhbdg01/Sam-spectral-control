@@ -38,8 +38,10 @@ LookAndFeel::LookAndFeel()
 }
 
 void LookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height, float sliderPos, float rotaryStartAngle,
-                                    float rotaryEndAngle, juce::Slider&)
+                                    float rotaryEndAngle, juce::Slider& slider)
 {
+    // A disabled knob (e.g. Gain of a cut, Selectivity outside Spectral) is drawn faded.
+    const float alpha = slider.isEnabled() ? 1.0f : 0.35f;
     const auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat().reduced (3.0f);
     const auto radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
     const auto centre = bounds.getCentre();
@@ -48,16 +50,16 @@ void LookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, 
 
     juce::Path track;
     track.addCentredArc (centre.x, centre.y, radius - thickness, radius - thickness, 0.0f, rotaryStartAngle, rotaryEndAngle, true);
-    g.setColour (colours::panelEdge);
+    g.setColour (colours::panelEdge.withMultipliedAlpha (alpha));
     g.strokePath (track, juce::PathStrokeType (thickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
     juce::Path value;
     value.addCentredArc (centre.x, centre.y, radius - thickness, radius - thickness, 0.0f, rotaryStartAngle, angle, true);
-    g.setColour (colours::accent);
+    g.setColour (colours::accent.withMultipliedAlpha (alpha));
     g.strokePath (value, juce::PathStrokeType (thickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
     const auto tip = centre.getPointOnCircumference (radius - thickness * 2.2f, angle);
-    g.setColour (colours::text);
+    g.setColour (colours::text.withMultipliedAlpha (alpha));
     g.drawLine ({ centre.getPointOnCircumference (radius * 0.15f, angle), tip }, 1.5f);
 }
 

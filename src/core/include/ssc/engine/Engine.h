@@ -212,6 +212,7 @@ private:
     std::unique_ptr<BandProcessor> soloProcessor = std::make_unique<BandProcessor>();
     std::vector<std::vector<double>> solo;
     std::vector<double*> soloPointers;
+    std::vector<std::vector<double>> deltaWet; ///< processed signal without the Auto Gain correction (AG-5)
     LinearSmoother<double> soloAmount;
     bool soloWasActive = false;
     filters::BandShape lastSoloShape;

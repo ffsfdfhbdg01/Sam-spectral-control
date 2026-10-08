@@ -43,6 +43,7 @@ void Engine::prepare (const EngineConfig& config)
     allocate (dry, dryPointers, channels, chunk);
     allocate (wet, wetPointers, channels, chunk);
     allocate (solo, soloPointers, channels, chunk);
+    deltaWet.assign (channels, std::vector<double> (chunk, 0.0));
 
     maxFactor = maxOversamplingFor (cfg.sampleRate);
     for (auto& band : *bandProcessors)
@@ -697,9 +698,16 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
     dryDelay.processInPlace (dryPointers.data(), numChannels, numSamples);
 
     // Global Auto Gain on the processed channels, before Solo, so the audition is unaffected (AG-5).
-    if (autoGainSettings.enabled || std::abs (autoGain->getCorrectionDb()) > 0.0f)
+    // Delta is heard without it: the difference shows what the EQ changes, not the level make-up.
+    const bool autoGainActive = autoGainSettings.enabled || std::abs (autoGain->getCorrectionDb()) > 0.0f;
+    const bool deltaCopy = autoGainActive && (delta.isSmoothing() || delta.getCurrent() > 0.0);
+    if (deltaCopy)
+        for (int ch = 0; ch < numChannels; ++ch)
+            std::copy_n (wet[static_cast<std::size_t> (ch)].begin(), n, deltaWet[static_cast<std::size_t> (ch)].begin());
+    if (autoGainActive)
         autoGain->process (dryPointers.data(), wetPointers.data(), numChannels, numSamples, autoGainSettings, autoGainWeights,
                            autoGainCovered);
+    const auto& deltaSource = deltaCopy ? deltaWet : wet;
 
     // Solo: crossfade the processed signal with the band's audition filter applied to the input.
     if (soloActive)
@@ -716,6 +724,8 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
             {
                 const auto c = static_cast<std::size_t> (ch);
                 wet[c][i] = wet[c][i] * (1.0 - s) + solo[c][i] * s;
+                if (deltaCopy)
+                    deltaWet[c][i] = deltaWet[c][i] * (1.0 - s) + solo[c][i] * s;
             }
         }
     }
@@ -732,7 +742,10 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         spectralEngine->reset();
         autoGain->reset();
         for (int ch = 0; ch < numChannels; ++ch)
+        {
             std::fill (wet[static_cast<std::size_t> (ch)].begin(), wet[static_cast<std::size_t> (ch)].begin() + numSamples, 0.0);
+            std::fill (deltaWet[static_cast<std::size_t> (ch)].begin(), deltaWet[static_cast<std::size_t> (ch)].begin() + numSamples, 0.0);
+        }
         nonFiniteEvents.fetch_add (1, std::memory_order_relaxed);
     }
 
@@ -777,7 +790,8 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
             const double d = dry[c][i];
             const double mixed = wet[c][i] * m + d * (1.0 - m);
             // Delta (GLB-2): what the plugin changes, crossfaded in and out.
-            const double heard = (mixed + ((d - mixed) - mixed) * dl) * g;
+            const double changed = d - (deltaSource[c][i] * m + d * (1.0 - m));
+            const double heard = (mixed * (1.0 - dl) + changed * dl) * g;
             channels[ch][i] = static_cast<Sample> (heard * (1.0 - b) + d * b);
         }
     }

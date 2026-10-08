@@ -69,7 +69,7 @@ BandPanel::BandPanel (BandModel& m)
     onButton.setColour (juce::TextButton::buttonOnColourId, colours::powerOn);
     onButton.setTooltip ("Switch the band on or off (double-click its node)");
     soloButton.setTooltip ("Listen to the region the band works on (Alt/Option + click its node)");
-    autoGainButton.setTooltip ("Compensate the loudness change of this band");
+    autoGainButton.setTooltip ("Compensate the average gain change of this Dynamic or Spectral band");
     deleteButton.setTooltip ("Delete the band (Delete key)");
 
     onButton.onClick = [this] {
@@ -346,6 +346,8 @@ void BandPanel::updateFromModel()
     soloButton.setToggleState (model.getSoloBand() == band, juce::dontSendNotification);
     soloButton.setEnabled (v.on);
     autoGainButton.setToggleState (v.autoGain, juce::dontSendNotification);
+    // AG-2: make-up for the dynamic part only; a Static band's change is the user's choice.
+    autoGainButton.setEnabled (v.mode != BandMode::Static);
     speakersButton.setButtonText ("Speakers: " + SpeakerPanel::summary (v.speakers, topology));
 
     for (auto& k : knobs)
@@ -357,6 +359,8 @@ void BandPanel::updateFromModel()
             k->slider.setEnabled (shapeUsesGain (v.shape));
         if (k->param == BandParam::Q)
             k->slider.setEnabled (shapeUsesQ (v.shape));
+        if (k->param == BandParam::Selectivity)
+            k->slider.setEnabled (v.mode == BandMode::Spectral); // the frequency resolution of the Spectral mask
     }
 
     for (auto& c : choices)

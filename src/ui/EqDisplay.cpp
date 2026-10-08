@@ -700,9 +700,9 @@ void EqDisplay::showBandMenu (int band)
     }
     menu.addSubMenu ("Character", characters);
 
-    menu.addItem ("Auto Gain", true, v.autoGain, forTargets ("Toggle Auto Gain", [on = ! v.autoGain] (BandModel& m, int b) {
-                      m.setValue (b, BandParam::AutoGain, on ? 1.0f : 0.0f);
-                  }));
+    menu.addItem ("Auto Gain", v.mode != BandMode::Static, v.autoGain,
+                  forTargets ("Toggle Auto Gain",
+                              [on = ! v.autoGain] (BandModel& m, int b) { m.setValue (b, BandParam::AutoGain, on ? 1.0f : 0.0f); }));
     menu.addSeparator();
     menu.addItem ("Bypass", true, ! v.on,
                   forTargets ("Toggle Band", [on = ! v.on] (BandModel& m, int b) { m.setValue (b, BandParam::On, on ? 1.0f : 0.0f); }));
