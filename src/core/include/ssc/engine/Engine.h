@@ -75,10 +75,15 @@ constexpr int effectiveOversampling (Oversampling setting, PhaseMode mode, Quali
     return std::min (factor, maxOversamplingFor (sampleRate));
 }
 
-/** Natural Phase correction runs in Natural Phase, and in Analog Feel at High and Max (research §8c). */
+/**
+    The corrector runs and the bands are heard with the magnitude of their analog prototypes
+    (research §8c, PH-1): in Natural Phase (and their phase, latency D), in Analog Feel at High and
+    Max (likewise), and in Minimum Phase at High and Max (minimum phase, no latency).
+*/
 constexpr bool usesPhaseCorrection (PhaseMode mode, Quality quality) noexcept
 {
-    return mode == PhaseMode::NaturalPhase || (mode == PhaseMode::AnalogFeel && (quality == Quality::High || quality == Quality::Max));
+    const bool fine = quality == Quality::High || quality == Quality::Max;
+    return mode == PhaseMode::NaturalPhase || ((mode == PhaseMode::AnalogFeel || mode == PhaseMode::MinimumPhase) && fine);
 }
 
 /** Coefficient update interval (samples) per Quality level (research §8). */

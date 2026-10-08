@@ -450,7 +450,7 @@ void Engine::configure (const GlobalParams& params, const BandSettingsArray& ban
         setOversampling (factor, type, params.quality);
 
     // Natural Phase corrector (ADR-0005).
-    const bool correctorChanged = corrector->setQuality (params.quality);
+    const bool correctorChanged = corrector->setQuality (params.quality, params.phaseMode == PhaseMode::MinimumPhase);
     if (wantCorrection != correctionActive && ! correctorChanged)
         corrector->reset();
     correctionActive = wantCorrection;

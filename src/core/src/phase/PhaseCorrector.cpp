@@ -124,6 +124,7 @@ void PhaseCorrector::prepare (double sampleRate, int channels, int maxBlockSize)
     const auto points = static_cast<std::size_t> (maxGrid / 2 + 1);
     window.assign (static_cast<std::size_t> (maxLength), 0.0);
     brickwallWindow.assign (static_cast<std::size_t> (maxLength), 0.0);
+    minimumPhaseWindow.assign (static_cast<std::size_t> (maxLength), 0.0);
     delayPhase.assign (points, {});
     zInverse.assign (points, {});
     spectrum.assign (static_cast<std::size_t> (maxGrid + 2), 0.0f);
@@ -144,27 +145,36 @@ void PhaseCorrector::prepare (double sampleRate, int channels, int maxBlockSize)
     setQuality (Quality::Normal);
 }
 
-bool PhaseCorrector::setQuality (Quality q) noexcept
+bool PhaseCorrector::setQuality (Quality q, bool minimum) noexcept
 {
     const int d = correctorDelayFor (q, fs);
-    if (d == delay && q == quality)
+    const int newDelay = minimum ? 0 : d;
+    if (newDelay == delay && q == quality && minimum == minimumPhase && delay >= 0)
         return false;
 
     quality = q;
-    delay = d;
-    length = 2 * d + 1;
+    minimumPhase = minimum;
+    delay = newDelay;
+    length = minimum ? d + 1 : 2 * d + 1;
     gridSize = gridSizes[static_cast<std::size_t> (qualityIndex (q))];
     numPoints = gridSize / 2 + 1;
 
-    for (int m = 0; m < length; ++m)
+    for (int m = 0; m < 2 * d + 1; ++m)
     {
         const double r = static_cast<double> (m - d) / d;
         const double x = std::sqrt (std::max (0.0, 1.0 - r * r));
         window[static_cast<std::size_t> (m)] = besselI0 (kKaiserBeta * x) / besselI0 (kKaiserBeta);
         brickwallWindow[static_cast<std::size_t> (m)] = besselI0 (kBrickwallBeta * x) / besselI0 (kBrickwallBeta);
     }
+    // Minimum phase: the right half of the Kaiser window over D + 1 taps (the energy is at the start).
+    for (int m = 0; m <= d; ++m)
+    {
+        const double r = static_cast<double> (m) / (d + 1);
+        minimumPhaseWindow[static_cast<std::size_t> (m)] =
+            besselI0 (kKaiserBeta * std::sqrt (std::max (0.0, 1.0 - r * r))) / besselI0 (kKaiserBeta);
+    }
     for (int k = 0; k < numPoints; ++k)
-        delayPhase[static_cast<std::size_t> (k)] = std::polar (1.0, -kTwoPi * static_cast<double> (k) * d / gridSize);
+        delayPhase[static_cast<std::size_t> (k)] = std::polar (1.0, -kTwoPi * static_cast<double> (k) * delay / gridSize);
 
     // Everything is rebuilt on the next update; until then every channel is a pure delay.
     factorValid.fill (false);
@@ -304,9 +314,21 @@ bool PhaseCorrector::designTaps (std::uint32_t mask, std::vector<double>& revers
             gain = std::pow (gain, 1.0 - w);
         }
 
+        if (minimumPhase)
+        {
+            // Magnitude only: its log, for the cepstrum.
+            spectrum[static_cast<std::size_t> (2 * k)] = static_cast<float> (std::log (magnitude * gain));
+            spectrum[static_cast<std::size_t> (2 * k + 1)] = 0.0f;
+            continue;
+        }
         const auto c = magnitude * gain * phase * delayPhase[static_cast<std::size_t> (k)];
         spectrum[static_cast<std::size_t> (2 * k)] = static_cast<float> (c.real());
         spectrum[static_cast<std::size_t> (2 * k + 1)] = static_cast<float> (c.imag());
+    }
+    if (minimumPhase)
+    {
+        minimumPhaseTaps (reversed);
+        return true;
     }
     spectrum[1] = 0.0f;
     spectrum[static_cast<std::size_t> (2 * (numPoints - 1) + 1)] = 0.0f;
@@ -322,6 +344,38 @@ bool PhaseCorrector::designTaps (std::uint32_t mask, std::vector<double>& revers
         reversed[static_cast<std::size_t> (length - 1 - m)] =
             static_cast<double> (time[static_cast<std::size_t> (m)]) * w[static_cast<std::size_t> (m)];
     return true;
+}
+
+void PhaseCorrector::minimumPhaseTaps (std::vector<double>& reversed) noexcept
+{
+    // Real cepstrum of the log magnitude, folded onto positive times (the minimum-phase cepstrum),
+    // back to the spectrum, exponentiated and transformed: the minimum-phase response.
+    auto& fft = ffts[static_cast<std::size_t> (qualityIndex (quality))];
+    fft.inverse (spectrum.data(), time.data());
+    const int half = gridSize / 2;
+    for (int n = 1; n < half; ++n)
+        time[static_cast<std::size_t> (n)] *= 2.0f;
+    std::fill (time.begin() + half + 1, time.begin() + gridSize, 0.0f);
+    fft.forward (time.data(), spectrum.data());
+    for (int k = 0; k < numPoints; ++k)
+    {
+        const auto v =
+            std::exp (std::complex<double> (spectrum[static_cast<std::size_t> (2 * k)], spectrum[static_cast<std::size_t> (2 * k + 1)]));
+        spectrum[static_cast<std::size_t> (2 * k)] = static_cast<float> (v.real());
+        spectrum[static_cast<std::size_t> (2 * k + 1)] = static_cast<float> (v.imag());
+    }
+    spectrum[1] = 0.0f;
+    spectrum[static_cast<std::size_t> (2 * (numPoints - 1) + 1)] = 0.0f;
+    fft.inverse (spectrum.data(), time.data());
+    for (int m = 0; m < length; ++m)
+        reversed[static_cast<std::size_t> (length - 1 - m)] =
+            static_cast<double> (time[static_cast<std::size_t> (m)]) * minimumPhaseWindow[static_cast<std::size_t> (m)];
+}
+
+void PhaseCorrector::impulseTaps (std::vector<double>& reversed) const noexcept
+{
+    std::fill (reversed.begin(), reversed.begin() + length, 0.0);
+    reversed[static_cast<std::size_t> (length - 1 - delay)] = 1.0;
 }
 
 void PhaseCorrector::install (Channel& ch, bool selfDelay, bool crossZero) noexcept
@@ -454,10 +508,7 @@ void PhaseCorrector::update (const CorrectorBands& bands, const engine::ChannelT
                 continue;
             const bool filtered = designTaps (mask, tapsA);
             if (! filtered)
-            {
-                std::fill (tapsA.begin(), tapsA.begin() + length, 0.0);
-                tapsA[static_cast<std::size_t> (delay)] = 1.0;
-            }
+                impulseTaps (tapsA);
             std::fill (tapsB.begin(), tapsB.begin() + length, 0.0);
             install (ch, ! filtered, true);
             // The partner stays known so that a fade from a Mid/Side filter keeps its cross term.
@@ -489,16 +540,10 @@ void PhaseCorrector::update (const CorrectorBands& bands, const engine::ChannelT
         std::vector<double>& cs = tapsB;
         const bool midFiltered = designTaps (m, cm);
         if (! midFiltered)
-        {
-            std::fill (cm.begin(), cm.begin() + length, 0.0);
-            cm[static_cast<std::size_t> (delay)] = 1.0;
-        }
+            impulseTaps (cm);
         const bool sideFiltered = designTaps (s, cs);
         if (! sideFiltered)
-        {
-            std::fill (cs.begin(), cs.begin() + length, 0.0);
-            cs[static_cast<std::size_t> (delay)] = 1.0;
-        }
+            impulseTaps (cs);
         for (int i = 0; i < length; ++i)
         {
             const double a = cm[static_cast<std::size_t> (i)], b = cs[static_cast<std::size_t> (i)];

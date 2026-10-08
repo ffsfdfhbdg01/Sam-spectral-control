@@ -65,7 +65,7 @@ Każdy model składa się z trzech warstw:
 ### Poziomy Quality (PH-2)
 | Tryb | Eco | Normal | High | Max |
 |---|---|---|---|---|
-| Minimum Phase | parametry co 32 próbki, float | co 8 próbek, float | per próbka, stan w double | per próbka, double; pasma z fc > fs/4 w wewnętrznym 2× |
+| Minimum Phase | parametry co 32 próbki, float | co 8 próbek, float | per próbka, stan w double | per próbka, double; pasma z fc > fs/4 w wewnętrznym 2× (zrealizowane inaczej w M8: minimalnofazowy korektor amplitudy w High i Max — niżej) |
 | Natural Phase | D ≈ 0,33 ms | D ≈ 0,67 ms | D ≈ 1,33 ms | D ≈ 2,67 ms (korekcja do 0,95·Nyquist) |
 | Analog Feel | krzywe + saturacja bez pamięci, ADAA-1 | + interakcje zależne od poziomu, ADAA-1 | + modele z pamięcią (state-space/WDF), ADAA-2, wewnętrzne 2× | + pełne modele nieliniowe (Newton–Raphson), Jiles–Atherton, wewnętrzne 4× |
 | Silnik spektralny | N = 2048, hop N/4 | 4096, N/4 | 8192, N/4 | 8192, N/8 + okienkowanie maski |
@@ -112,7 +112,7 @@ Dodatkowo: przez cały silnik (bell 12 kHz + półka, Normal, 1× i 2×) ≤ 0,1
 | Analog Feel N, Clear (krzywe modelu) | 0,69 % · 0 smp | 0,68 % · 0 smp | 2,12 % · 125 smp | 4,44 % · 224 smp |
 | Analog Feel N, Warm (krzywe + nasycenie) | 0,99 % · 0 smp | 1,04 % · 0 smp | 2,82 % · 125 smp | 6,15 % · 224 smp |
 
-Błąd odpowiedzi maleje monotonicznie z Quality (tabela PH-1). W Minimum Phase Quality zmienia tylko okres aktualizacji współczynników (32/16/8/4 próbki) — koszt prawie stały. Analog Feel w High/Max: korektor fazy (D = 64/128) plus wewnętrzny oversampling 2×/4× z filtrami FIR (M6) — stąd latencja 125 i 224 próbek i koszt pasm × 2/× 4.
+Błąd odpowiedzi maleje monotonicznie z Quality (tabela PH-1). W Minimum Phase Quality zmieniała w M4 tylko okres aktualizacji współczynników (32/16/8/4 próbki) — koszt prawie stały; od M8 High i Max dodają minimalnofazowy korektor amplitudy (niżej). Analog Feel w High/Max: korektor fazy (D = 64/128) plus wewnętrzny oversampling 2×/4× z filtrami FIR (M6) — stąd latencja 125 i 224 próbek i koszt pasm × 2/× 4.
 
 ### Realizacja w M6 i wyniki pomiarów (Analog Feel N / P / S)
 
@@ -150,11 +150,20 @@ Błąd odpowiedzi maleje monotonicznie z Quality (tabela PH-1). W Minimum Phase 
 - N: HPF 18 dB/oct nie jest wymuszany — nachylenie cięć pozostaje wyborem użytkownika.
 - Parametr „P-Atten” (P1) — nie zrealizowany; efekt boost + cut uzyskuje się dwoma pasmami P.
 
+### Realizacja w M8: Minimum Phase High/Max — minimalnofazowy korektor amplitudy
+
+Raport pomiarowy M8 (`ssc_measure`, docs/measurements/filters.md) pokazał, że obiecane w M4 „wewnętrzne 2× dla pasm powyżej fs/8” w Minimum Phase Max nie powstało: Max miał ten sam błąd co Normal (0,71 dB przy 44,1 kHz dla cięcia 15 kHz). Zamiast wewnętrznego oversamplingu pasm (latencja filtrów półpasmowych, koszt) korektor z Natural Phase dostał tryb minimalnofazowy:
+- korygowana jest tylko amplituda |T/A| (ta sama siatka, ograniczenie ±12 dB, wygaszanie powyżej 0,95·Nyquista, bez korekcji tam, gdzie pasmo jest poniżej −80 dB);
+- filtr FIR o fazie minimalnej budowany jest z niej metodą cepstrum rzeczywistego (log |C| → cepstrum → złożenie na czasy dodatnie → widmo → exp → odpowiedź impulsowa), D + 1 współczynników (65 w High, 129 w Max przy 48 kHz) z prawą połową okna Kaisera β = 4;
+- latencja 0; kanały bez pasm przechodzą bit w bit; aktualizacje i crossfade jak w Natural Phase (wynik nie zależy od rozmiaru bloku).
+
+Wyniki (`[PH-1]`, docs/measurements/filters.md; 20 Hz – 20 kHz, poziomy powyżej −30 dB): największy błąd amplitudy względem prototypu przy 44,1 kHz — Normal 0,84 dB (sam dopasowany IIR), **High 0,004 dB, Max 0,001 dB**. Faza jest minimalna dla analogowej amplitudy: poniżej ok. fs/4 bliska fazie prototypu, bliżej Nyquista inna (do ~43° przy 19,7 kHz i 44,1 kHz dla półki −9 dB przy 15 kHz) — tego przy zerowej latencji nie da się uniknąć; fazę prototypu w całym paśmie daje Natural Phase (latencja D). Względem samego IIR faza zmienia się najwyżej o ~6° przy samym Nyquiście. CPU (`ssc_benchmark 3 modes`, stereo, 8 pasm): Minimum Phase Normal 0,69 %, High 1,00 %, Max 1,24 % (wcześniej ok. 0,7 %). Normal pozostaje samym IIR, żeby domyślne ustawienie spełniało budżet NFR-1 z zapasem.
+
 ## d) Kryteria akceptacji
 
 | ID | Kryterium | Metoda |
 |---|---|---|
-| PH-1 | Minimum Phase: obwiednia błędu amplitudy jak w research/05 §d (BAND-2), zmierzona w M2; ±0,1 dB do 20 kHz przy 44,1 kHz zapewnia Quality Max z wewnętrznym 2× dla pasm powyżej fs/8 (M4) | test jednostkowy |
+| PH-1 | Minimum Phase: Eco/Normal — obwiednia błędu amplitudy dopasowanego IIR jak w research/05 §d (BAND-2); High/Max — ±0,1 dB do 20 kHz przy 44,1 kHz bez latencji (minimalnofazowy korektor amplitudy, M8) | test jednostkowy, docs/measurements/filters.md |
 | PH-1 | Natural Phase: amplituda ±0,1 dB; błąd fazy vs prototyp ≤ 5° (Normal) i ≤ 2° (Max) w 20 Hz–0,9·Nyquist; latencja = D; pre-ring (kryterium −60 dB) ≤ D | test jednostkowy |
 | PH-1 | Analog Feel: odpowiedź dla ustawień referencyjnych ±0,5 dB względem krzywych referencyjnych (np. model WDF EQP-1A); THD w punktach kalibracji w oknie docelowym ±3 dB | test pomiarowy |
 | PH-2 | Tabela CPU i latencji wszystkich kombinacji tryb × Quality wygenerowana przez benchmark; błąd odpowiedzi maleje monotonicznie z Quality | benchmark |

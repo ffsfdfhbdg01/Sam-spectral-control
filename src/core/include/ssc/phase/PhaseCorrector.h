@@ -57,6 +57,11 @@ using CorrectorBands = std::array<CorrectorBand, kNumBands>;
     and recomputed only when a band changes; new filters are crossfaded in. update() is meant to be
     called at fixed sample positions (getUpdateInterval()) so that the output does not depend on the
     host block size. prepare() allocates; everything else is real-time safe.
+
+    Minimum-phase mode (Minimum Phase at Quality High and Max, PH-1): only the magnitude |T/A| is
+    corrected, by a minimum-phase FIR of D + 1 taps built from it through the real cepstrum, with
+    no latency. The bands then have the magnitude of their analog prototypes and stay minimum
+    phase; channels without corrected bands pass bit-exact.
 */
 class PhaseCorrector
 {
@@ -64,9 +69,11 @@ public:
     void prepare (double sampleRate, int numChannels, int maxBlockSize);
     void reset() noexcept;
 
-    /** Selects D for a Quality level; returns true (and resets the filters) if it changed. */
-    bool setQuality (Quality quality) noexcept;
+    /** Selects D for a Quality level, and the mode: Natural Phase (linear-phase centre D) or
+        minimum phase (no latency); returns true (and resets the filters) if either changed. */
+    bool setQuality (Quality quality, bool minimumPhase = false) noexcept;
     int getLatencySamples() const noexcept { return delay; }
+    bool isMinimumPhase() const noexcept { return minimumPhase; }
 
     /** Interval (samples) at which the engine updates the correction (≈ 21 ms). */
     int getUpdateInterval() const noexcept { return updateInterval; }
@@ -99,6 +106,10 @@ private:
     void computeBandFactor (int band, const CorrectorBand& settings) noexcept;
     /** Designs the reversed taps of C for a set of bands; returns false for a pure delay (mask 0). */
     bool designTaps (std::uint32_t mask, std::vector<double>& reversed) noexcept;
+    /** The minimum-phase FIR of the magnitude on the spectrum grid (log magnitudes in `spectrum`). */
+    void minimumPhaseTaps (std::vector<double>& reversed) noexcept;
+    /** Reversed taps of a unit impulse at the corrector's delay (a pure delay as a filter). */
+    void impulseTaps (std::vector<double>& reversed) const noexcept;
     std::uint64_t versionOf (std::uint32_t mask) const noexcept;
     void install (Channel& ch, bool selfDelay, bool crossZero) noexcept;
 
@@ -107,6 +118,7 @@ private:
     int maxBlock = 0;
     int maxDelay = 0, maxLength = 1;
     int delay = 0, length = 1;
+    bool minimumPhase = false;
     int gridSize = 512, numPoints = 257;
     int updateInterval = 1024;
     int fadeLength = 256;
@@ -115,7 +127,7 @@ private:
 
     std::array<RealFft, 4> ffts; ///< per Quality (grid sizes differ)
     std::array<int, 4> gridSizes {};
-    std::vector<double> window, brickwallWindow;
+    std::vector<double> window, brickwallWindow, minimumPhaseWindow;
     std::vector<std::complex<double>> delayPhase; ///< e^{−jω_k·D} on the current grid
     std::vector<std::complex<double>> zInverse;   ///< e^{−j2πf_k/processRate}
     std::vector<float> spectrum, time;

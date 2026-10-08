@@ -353,9 +353,14 @@ TEST_CASE ("Phase mode and oversampling set the reported latency (OS-3, PH-1)", 
     REQUIRE (p.isPhaseCorrected());
     REQUIRE (p.getLatencySamples() > 128); // corrector D = 128 plus the 4x FIR
 
-    // Back to Minimum Phase without oversampling: no latency.
+    // Back to Minimum Phase without oversampling: no latency. At Max the minimum-phase corrector
+    // gives the bands their analog magnitude (the display draws the prototypes); at Normal it is off.
     setPlain (p, ssc::plugin::id::phaseMode, static_cast<float> (ssc::PhaseMode::MinimumPhase));
     setPlain (p, ssc::plugin::id::oversampling, static_cast<float> (ssc::Oversampling::Off));
+    p.prepareToPlay (48000.0, 512);
+    REQUIRE (p.isPhaseCorrected());
+    REQUIRE (p.getLatencySamples() == 0);
+    setPlain (p, ssc::plugin::id::quality, static_cast<float> (ssc::Quality::Normal));
     p.processBlock (buffer, midi);
     REQUIRE (p.isPhaseCorrected() == false);
     REQUIRE_FALSE (p.getResponseModel().analogModel.has_value());

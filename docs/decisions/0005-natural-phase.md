@@ -33,3 +33,6 @@ Natural Phase ma odtwarzać amplitudę **i fazę** prototypu analogowego przy ma
 - Brickwall jako FIR tylko od fc ≥ 7·fs/(2D + 1), gdzie jest bardziej stromy niż IIR 96 dB/oct; niżej pozostaje IIR (z korekcją). Pełny liniowofazowy brickwall w basie wymagałby latencji rzędu setek ms — należy do trybu Linear Phase (P2).
 - Wyniki: research/08 „Realizacja w M4” (PH-1 Normal ≤ 0,058 dB / 0,17°, Max ≤ 0,004 dB / 0,01°).
 
+## Aktualizacja (M8)
+- Korektor ma drugi tryb, **minimalnofazowy**, używany w Minimum Phase przy Quality High i Max: z tej samej korekcji amplitudy |T/A| (bez fazy) powstaje metodą cepstrum filtr FIR o fazie minimalnej (D + 1 współczynników) bez latencji. Pasma mają wtedy amplitudę prototypów analogowych (≤ 0,005 dB do 20 kHz przy 44,1 kHz) i pozostają minimalnofazowe. Szczegóły i pomiary: research/08 „Realizacja w M8”.
+

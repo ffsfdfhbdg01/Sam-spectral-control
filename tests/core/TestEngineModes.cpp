@@ -209,6 +209,71 @@ TEST_CASE ("Natural Phase through the engine follows the analog prototype (PH-1)
     }
 }
 
+TEST_CASE ("Minimum Phase at High and Max: analog magnitude, minimum phase, no latency (PH-1, TST-1)", "[engine][PH-1][TST-1]")
+{
+    for (const double fs : { 44100.0, 48000.0 })
+        for (const auto quality : { Quality::Normal, Quality::High, Quality::Max })
+        {
+            CAPTURE (fs, static_cast<int> (quality));
+            auto engine = makeEngine (fs);
+            GlobalParams params;
+            params.quality = quality;
+            BandSettingsArray bands {};
+            bands[0] = bell (12000.0, 9.0, 1.5);
+            bands[1].used = bands[1].active = true;
+            bands[1].shape = { Shape::HighShelf, 15000.0, -9.0, 0.7071, Slope::Db12 };
+            bands[2] = bell (16000.0, -6.0, 3.0, StereoComponent::Left);
+
+            const int settle = 8192, length = 1 << 15;
+            std::vector<double> left (static_cast<std::size_t> (settle + length), 0.0), right (left.size(), 0.0);
+            left[static_cast<std::size_t> (settle)] = 1.0;
+            right[static_cast<std::size_t> (settle)] = 1.0;
+            render (*engine, left, right, params, bands);
+            CHECK (engine->getLatencySamples() == 0);
+            CHECK (engine->isPhaseCorrectionActive() == (quality != Quality::Normal));
+
+            // Magnitude against the analog prototypes up to 20 kHz (left: three bands, right: two).
+            double worst = 0.0;
+            for (const bool isLeft : { true, false })
+            {
+                const auto& out = isLeft ? left : right;
+                const std::vector<double> h (out.begin() + settle, out.end());
+                const auto spectrum = ssc::test::spectrumOf (h, static_cast<std::size_t> (length));
+                for (std::size_t k = 1; k < spectrum.size(); ++k)
+                {
+                    const double hz = static_cast<double> (k) * fs / length;
+                    if (hz < 20.0 || hz > 20000.0)
+                        continue;
+                    double target = 1.0;
+                    for (std::size_t b = 0; b < (isLeft ? 3u : 2u); ++b)
+                        target *= std::abs (filters::designBand (bands[b].shape, fs).analogResponse (hz));
+                    worst = std::max (worst, std::abs (20.0 * std::log10 (std::abs (spectrum[k]) / target)));
+                }
+                // Causal from the impulse on: nothing before it (no latency, no pre-ring).
+                for (int i = 0; i < settle; ++i)
+                    REQUIRE (out[static_cast<std::size_t> (i)] == 0.0);
+            }
+            std::printf ("[PH-1] Minimum Phase %s at %.1f kHz: largest magnitude error vs analog %.3f dB (0-latency)\n",
+                         quality == Quality::Normal ? "Normal" : (quality == Quality::High ? "High" : "Max"), fs / 1000.0, worst);
+            if (quality == Quality::Normal)
+                CHECK (worst > 0.1); // the matched IIR alone: its documented error envelope near Nyquist
+            else
+                CHECK (worst <= 0.02);
+        }
+
+    // Channels without bands stay bit-exact with the correction running on the others.
+    auto engine = makeEngine();
+    GlobalParams params;
+    params.quality = Quality::Max;
+    BandSettingsArray bands {};
+    bands[0] = bell (14000.0, 6.0, 1.0, StereoComponent::Left);
+    const auto noise = ssc::test::pinkNoise (1 << 14);
+    std::vector<double> left (noise.begin(), noise.end()), right = left;
+    render (*engine, left, right, params, bands, 0);
+    for (std::size_t i = 0; i < right.size(); ++i)
+        REQUIRE (right[i] == static_cast<double> (noise[i]));
+}
+
 TEST_CASE ("Natural Phase brickwall cut through the engine is linear phase", "[engine][PH-1][BAND-3]")
 {
     CHECK (phase::minimumFirBrickwallHz (Quality::Max, kFs) < 1500.0);
