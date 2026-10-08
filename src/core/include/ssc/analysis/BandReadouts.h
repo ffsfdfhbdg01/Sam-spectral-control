@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -20,6 +21,23 @@ struct BandReadout
     float rangePreRingMs = -1.0f; ///< Dynamic bands: the same at the full range (−1: not a Dynamic band)
     float rangePostRingMs = -1.0f;
     float stftPreEchoMs = -1.0f; ///< Spectral bands: half the STFT frame (−1: not a Spectral band)
+};
+
+/**
+    Phase and group delay of the whole EQ as heard (PR-4), on a log frequency grid from 10 Hz: the
+    left channel for a centred source (L = R), so the bands on All, Left and Mid act, Dynamic bands
+    at their current gain; the engine latency removed. Spectral bands are zero-phase (STFT mask)
+    and left out.
+*/
+struct ChainResponse
+{
+    static constexpr int kMaxPoints = 256;
+    bool valid = false;
+    int numPoints = 0;
+    std::array<float, kMaxPoints> hz {};
+    std::array<float, kMaxPoints> phaseDeg {};     ///< excess phase, wrapped to (−180°, 180°]
+    std::array<float, kMaxPoints> groupDelayMs {}; ///< excess group delay
+    std::array<bool, kMaxPoints> defined {};       ///< false where |H| < −60 dB (deep cuts, notches)
 };
 
 /**
@@ -63,14 +81,23 @@ public:
     /** Measures one static band shape (the work of compute()). */
     Measurement measure (const engine::BandSettings& band, const engine::GlobalParams& params);
 
+    /** The response of the whole EQ (PR-4); dynamicGainsDb: the current gain change of each band. */
+    ChainResponse computeChain (const engine::BandSettingsArray& bands, const engine::GlobalParams& params,
+                                const std::array<float, kNumBands>& dynamicGainsDb);
+
 private:
-    void runImpulse (const engine::BandSettings& band, const engine::GlobalParams& params);
+    /** Impulse response of `bands` through `e` (every channel fed, the first recorded) into `response`. */
+    void runImpulse (engine::Engine& e, int numChannels, const engine::BandSettingsArray& bands, const engine::GlobalParams& params);
+    /** Spectra of `response` and of n·response (for the group delay), zero-padded to at least
+        minimumSize points; returns the FFT size. */
+    int responseSpectra (int minimumSize = 16384);
 
     bool aborted() const { return abortCheck && abortCheck(); }
 
     double fs = 48000.0;
     std::function<bool()> abortCheck;
     std::unique_ptr<engine::Engine> engine;
+    std::unique_ptr<engine::Engine> chainEngine; ///< stereo, prepared on first use
     std::vector<double> response;
     RealFft fft;
     std::vector<float> buffer, spectrum, rampSpectrum;

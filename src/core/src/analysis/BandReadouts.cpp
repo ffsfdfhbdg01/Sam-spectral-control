@@ -1,6 +1,7 @@
 #include "ssc/analysis/BandReadouts.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "ssc/dynamics/Dynamics.h"
@@ -101,38 +102,40 @@ void BandReadouts::prepare (double sampleRate)
     config.numChannels = 1;
     config.topology = engine::ChannelTopology::mono();
     engine->prepare (config);
+    chainEngine.reset();
 }
 
-void BandReadouts::runImpulse (const engine::BandSettings& band, const engine::GlobalParams& params)
+void BandReadouts::runImpulse (engine::Engine& e, int numChannels, const engine::BandSettingsArray& bands,
+                               const engine::GlobalParams& params)
 {
     auto p = params;
     p.autoGain = false;
     p.mix = 1.0;
     p.outputGainDb = 0.0;
     p.bypass = false;
+    p.delta = false;
     p.soloBand = -1;
     p.maxLookaheadMs = 0.0;
+    p.nonRealtime = false;
 
-    engine::BandSettingsArray bands {};
-    auto& b = bands[0];
-    b = band;
-    b.used = b.active = true;
-    b.mode = BandMode::Static;
-    b.component = StereoComponent::All;
-    b.channelMask = ~std::uint64_t { 0 };
-    b.includeLfe = true;
-
-    engine->reset();
-    std::vector<double> block (static_cast<std::size_t> (kBlock), 0.0);
-    double* channel[] = { block.data() };
+    e.reset();
+    std::array<std::vector<double>, 2> blocks;
+    for (auto& b : blocks)
+        b.assign (static_cast<std::size_t> (kBlock), 0.0);
+    double* channels[] = { blocks[0].data(), blocks[1].data() };
+    auto clear = [&blocks] {
+        for (auto& b : blocks)
+            std::fill (b.begin(), b.end(), 0.0);
+    };
     for (int done = 0; done < static_cast<int> (kPreRollSeconds * fs); done += kBlock)
     {
         if (aborted())
             return;
-        std::fill (block.begin(), block.end(), 0.0);
-        engine->process (channel, 1, kBlock, p, bands);
+        clear();
+        e.process (channels, numChannels, kBlock, p, bands);
     }
-    latency = engine->getLatencySamples();
+    latency = e.getLatencySamples();
+    const auto& block = blocks[0];
 
     response.clear();
     const auto maxLength = static_cast<std::size_t> (latency + kMaxSeconds * fs);
@@ -144,11 +147,12 @@ void BandReadouts::runImpulse (const engine::BandSettings& band, const engine::G
     {
         if (aborted())
             return;
-        std::fill (block.begin(), block.end(), 0.0);
+        clear();
         if (first)
-            block[0] = kImpulse;
+            for (auto& b : blocks)
+                b.front() = kImpulse;
         first = false;
-        engine->process (channel, 1, kBlock, p, bands);
+        e.process (channels, numChannels, kBlock, p, bands);
         for (const double v : block)
         {
             const double x = v / kImpulse;
@@ -163,20 +167,9 @@ void BandReadouts::runImpulse (const engine::BandSettings& band, const engine::G
     response.resize (std::min (response.size(), std::max (lastLoud + tail, static_cast<std::size_t> (latency) + 1)));
 }
 
-BandReadouts::Measurement BandReadouts::measure (const engine::BandSettings& band, const engine::GlobalParams& params)
+int BandReadouts::responseSpectra (int minimumSize)
 {
-    runImpulse (band, params);
-    Measurement m;
-    if (aborted())
-        return m;
-
-    // Ringing.
-    const auto rings = ringTimes (response, 60.0, static_cast<std::size_t> (latency));
-    m.preRingMs = static_cast<float> (1000.0 * rings.pre / fs);
-    m.postRingMs = static_cast<float> (1000.0 * rings.post / fs);
-
-    // Spectrum of h and of n·h (group delay).
-    const int n = std::clamp (nextPowerOfTwo (static_cast<int> (response.size()) * 2), 16384, 1 << 20);
+    const int n = std::clamp (nextPowerOfTwo (std::max (static_cast<int> (response.size()) * 2, minimumSize)), 16384, 1 << 20);
     if (fft.size() != n)
         fft.prepare (n);
     buffer.assign (static_cast<std::size_t> (n), 0.0f);
@@ -189,6 +182,31 @@ BandReadouts::Measurement BandReadouts::measure (const engine::BandSettings& ban
     for (std::size_t i = 0; i < length; ++i)
         buffer[i] = static_cast<float> (response[i] * static_cast<double> (i));
     fft.forward (buffer.data(), rampSpectrum.data());
+    return n;
+}
+
+BandReadouts::Measurement BandReadouts::measure (const engine::BandSettings& band, const engine::GlobalParams& params)
+{
+    engine::BandSettingsArray bands {};
+    auto& b = bands[0];
+    b = band;
+    b.used = b.active = true;
+    b.mode = BandMode::Static;
+    b.component = StereoComponent::All;
+    b.channelMask = ~std::uint64_t { 0 };
+    b.includeLfe = true;
+    runImpulse (*engine, 1, bands, params);
+    Measurement m;
+    if (aborted())
+        return m;
+
+    // Ringing.
+    const auto rings = ringTimes (response, 60.0, static_cast<std::size_t> (latency));
+    m.preRingMs = static_cast<float> (1000.0 * rings.pre / fs);
+    m.postRingMs = static_cast<float> (1000.0 * rings.post / fs);
+
+    // Spectrum of h and of n·h (group delay).
+    const int n = responseSpectra();
 
     const int bins = n / 2;
     auto at = [&] (const std::vector<float>& s, int k) {
@@ -252,6 +270,71 @@ BandReadouts::Measurement BandReadouts::measure (const engine::BandSettings& ban
     }
     m.meanPhaseDeg = weights > 0.0 ? static_cast<float> (weighted / weights * 180.0 / kPi) : 0.0f;
     return m;
+}
+
+ChainResponse BandReadouts::computeChain (const engine::BandSettingsArray& bands, const engine::GlobalParams& params,
+                                          const std::array<float, kNumBands>& dynamicGainsDb)
+{
+    ChainResponse r;
+    if (! engine)
+        return r;
+    if (! chainEngine)
+    {
+        chainEngine = std::make_unique<engine::Engine>();
+        engine::EngineConfig config;
+        config.sampleRate = fs;
+        config.maxBlockSize = kBlock;
+        config.numChannels = 2;
+        config.topology = engine::ChannelTopology::stereo();
+        chainEngine->prepare (config);
+    }
+
+    // The bands as heard now: Dynamic ones at their current gain, Spectral ones (zero-phase) out.
+    engine::BandSettingsArray chain = bands;
+    for (std::size_t b = 0; b < chain.size(); ++b)
+    {
+        auto& band = chain[b];
+        if (band.isSpectral())
+            band.active = false;
+        if (band.mode == BandMode::Dynamic)
+        {
+            if (shapeHasGain (band.shape.shape))
+                band.shape.gainDb += dynamicGainsDb[b];
+            band.mode = BandMode::Static;
+        }
+        band.channelMask = ~std::uint64_t { 0 };
+        band.includeLfe = true;
+    }
+    runImpulse (*chainEngine, 2, chain, params);
+    if (aborted())
+        return r;
+
+    // Zero-padded to ≤ 0.25 Hz per bin: finer than the log grid at 10 Hz.
+    const int n = responseSpectra (static_cast<int> (std::ceil (fs / 0.25)));
+    const int bins = n / 2;
+    auto at = [&] (const std::vector<float>& s, int k) {
+        return std::complex<double> (s[static_cast<std::size_t> (2 * k)], s[static_cast<std::size_t> (2 * k + 1)]);
+    };
+    const double top = std::min (30000.0, 0.49 * fs);
+    r.numPoints = ChainResponse::kMaxPoints;
+    for (int i = 0; i < r.numPoints; ++i)
+    {
+        const auto p = static_cast<std::size_t> (i);
+        const double hz = 10.0 * std::pow (top / 10.0, i / static_cast<double> (r.numPoints - 1));
+        const int k = std::clamp (static_cast<int> (std::lround (hz / fs * n)), 1, bins - 1);
+        const auto h = at (spectrum, k);
+        const auto excess = h * std::polar (1.0, kTwoPi * k * latency / n);
+        r.hz[p] = static_cast<float> (hz);
+        r.phaseDeg[p] = static_cast<float> (std::arg (excess) * 180.0 / kPi);
+        r.defined[p] = std::abs (h) >= 1.0e-3;
+        if (r.defined[p])
+        {
+            const double tau = (at (rampSpectrum, k) * std::conj (h)).real() / std::norm (h);
+            r.groupDelayMs[p] = static_cast<float> (1000.0 * (tau - latency) / fs);
+        }
+    }
+    r.valid = true;
+    return r;
 }
 
 BandReadout BandReadouts::compute (const engine::BandSettings& band, const engine::GlobalParams& params, double dynamicGainDb)

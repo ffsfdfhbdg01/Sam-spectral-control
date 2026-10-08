@@ -73,6 +73,7 @@ TEST_CASE ("Analyzer settings are saved with the state; invalid values fall back
     s.rangeDb = 120.0f;
     s.peakHold = true;
     s.glow = false;
+    s.phaseOverlay = plugin::PhaseOverlay::GroupDelay;
     plugin::writeAnalyzerSettings (a.getValueTreeState().state, s);
 
     juce::MemoryBlock data;
@@ -255,6 +256,68 @@ TEST_CASE ("Band readouts follow parameter changes within 100 ms (PR-2)", "[plug
     std::sort (delays.begin(), delays.end());
     std::printf ("[PR-2] readout delay after a change: median %.1f ms, max %.1f ms\n", delays[2], delays.back());
     CHECK (delays[2] <= 100.0);
+}
+
+TEST_CASE ("The readout thread measures the whole EQ while the phase overlay asks for it (PR-4)", "[plugin][PR-4]")
+{
+    JuceEnvironment env;
+    plugin::SscAudioProcessor p;
+    p.setPlayConfigDetails (2, 2, 48000.0, 512);
+    p.prepareToPlay (48000.0, 512);
+    auto& state = p.getValueTreeState();
+    auto set = [&state] (const char* paramId, float value) {
+        auto* param = state.getParameter (paramId);
+        REQUIRE (param != nullptr);
+        param->setValueNotifyingHost (param->convertTo0to1 (value));
+    };
+    set ("b01_used", 1.0f);
+    set ("b01_freq", 1000.0f);
+    set ("b01_gain", 6.0f);
+
+    auto& readouts = p.getReadouts();
+    readouts.addClient();
+    auto latest = [&readouts] {
+        auto& buffer = readouts.readouts();
+        buffer.update();
+        return buffer.read();
+    };
+    auto phaseAt = [] (const analysis::ChainResponse& chain, float hz) {
+        std::size_t best = 0;
+        for (std::size_t i = 0; i < static_cast<std::size_t> (chain.numPoints); ++i)
+            if (std::abs (std::log (chain.hz[i] / hz)) < std::abs (std::log (chain.hz[best] / hz)))
+                best = i;
+        return chain.phaseDeg[best];
+    };
+    auto waitFor = [&] (auto&& condition) {
+        const auto start = std::chrono::steady_clock::now();
+        while (std::chrono::steady_clock::now() - start < std::chrono::seconds (5))
+        {
+            if (condition (latest()))
+                return true;
+            std::this_thread::sleep_for (std::chrono::milliseconds (2));
+        }
+        return false;
+    };
+
+    // Without the overlay only the band readouts are measured.
+    REQUIRE (waitFor ([] (const plugin::ReadoutSnapshot& s) { return s.bands[0].valid; }));
+    std::this_thread::sleep_for (std::chrono::milliseconds (150));
+    CHECK_FALSE (latest().chain.valid);
+
+    // With it: a boost turns the phase up below the centre and down above it.
+    readouts.setChainWanted (true);
+    REQUIRE (waitFor ([] (const plugin::ReadoutSnapshot& s) { return s.chain.valid; }));
+    CHECK (phaseAt (latest().chain, 500.0f) > 5.0f);
+    CHECK (phaseAt (latest().chain, 2000.0f) < -5.0f);
+
+    // It follows the settings: a cut turns it the other way; on Side the band leaves a centred
+    // source's left channel alone.
+    set ("b01_gain", -6.0f);
+    CHECK (waitFor ([&] (const plugin::ReadoutSnapshot& s) { return s.chain.valid && phaseAt (s.chain, 500.0f) < -5.0f; }));
+    set ("b01_target", static_cast<float> (StereoComponent::Side));
+    CHECK (waitFor ([&] (const plugin::ReadoutSnapshot& s) { return s.chain.valid && std::abs (phaseAt (s.chain, 500.0f)) < 0.01f; }));
+    readouts.setChainWanted (false);
+    readouts.removeClient();
 }
 
 TEST_CASE ("Analyzer thread stops promptly while audio arrives faster than real time", "[plugin][ARC-4]")

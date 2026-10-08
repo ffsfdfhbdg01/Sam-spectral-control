@@ -1,7 +1,7 @@
 // Renders the plugin editor with live test audio and saves a PNG.
 // Usage: ssc_screenshot <output.png> [width height] [paramId=value ...] [select=<band 1-24>]
 //        [layout=stereo|5.1|7.1.4|9.1.6] [speakers=<band 1-24>:<roles hex>] [speakerpanel=<band 1-24>]
-//        [analyzer.mode|resolution|speed|tilt|range|peak|glow|freeze|hints=<value>] [profile=<frames>]
+//        [analyzer.mode|resolution|speed|tilt|range|peak|glow|freeze|hints|phase=<value>] [profile=<frames>]
 // profile paints the editor that many times while audio plays and prints the paint times (VIS-6);
 // seconds=<s> sets how long the test programme plays before the snapshot (default 3).
 // speakerpanel renders that band's loudspeaker panel instead of the editor.
@@ -113,6 +113,8 @@ int main (int argc, char** argv)
                 settings.freeze = choice != 0;
             else if (key == "hints")
                 settings.resonanceHints = choice != 0;
+            else if (key == "phase")
+                settings.phaseOverlay = static_cast<ssc::plugin::PhaseOverlay> (choice);
             ssc::plugin::writeAnalyzerSettings (state.state, settings);
         }
         else if (paramId == "speakers")

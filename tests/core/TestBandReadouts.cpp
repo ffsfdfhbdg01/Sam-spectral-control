@@ -1,6 +1,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <cmath>
 #include <complex>
 #include <cstdio>
@@ -165,4 +166,90 @@ TEST_CASE ("A readout measurement stops promptly when asked to (PR-2)", "[readou
 
     readouts.setAbortCheck ({});
     CHECK (readouts.compute (bandOf (Shape::Bell, 1000.0, 6.0, 1.0), paramsFor (PhaseMode::MinimumPhase), 0.0).valid);
+}
+
+TEST_CASE ("The response of the whole EQ: phase and group delay as heard (PR-4)", "[readouts][PR-4]")
+{
+    analysis::BandReadouts readouts;
+    readouts.prepare (kFs);
+    engine::BandSettingsArray bands {};
+    bands[0] = bandOf (Shape::Bell, 1000.0, 6.0, 1.0);
+    bands[3] = bandOf (Shape::HighShelf, 8000.0, -4.0, 0.7071);
+    const std::array<float, kNumBands> noChange {};
+
+    // Minimum Phase: the phase and group delay of the two digital designs.
+    const auto mp = readouts.computeChain (bands, paramsFor (PhaseMode::MinimumPhase), noChange);
+    REQUIRE (mp.valid);
+    REQUIRE (mp.numPoints == analysis::ChainResponse::kMaxPoints);
+    const auto bell = filters::designBand (bands[0].shape, kFs);
+    const auto shelf = filters::designBand (bands[3].shape, kFs);
+    double worstPhase = 0.0, worstDelay = 0.0, largestPhase = 0.0;
+    for (int i = 0; i < mp.numPoints; ++i)
+    {
+        const auto p = static_cast<std::size_t> (i);
+        const double hz = mp.hz[p];
+        if (hz < 20.0 || hz > 20000.0)
+            continue;
+        REQUIRE (mp.defined[p]);
+        const double phase = std::arg (bell.digitalResponse (hz, kFs) * shelf.digitalResponse (hz, kFs)) * 180.0 / kPi;
+        const double difference = std::abs (mp.phaseDeg[p] - phase);
+        worstPhase = std::max (worstPhase, std::min (difference, 360.0 - difference));
+        largestPhase = std::max (largestPhase, std::abs (phase));
+        const double omega = kTwoPi * hz / kFs;
+        const double delayMs = 1000.0 * (analyticGroupDelay (bell, omega) + analyticGroupDelay (shelf, omega)) / kFs;
+        worstDelay = std::max (worstDelay, std::abs (mp.groupDelayMs[p] - delayMs));
+    }
+    std::printf ("[PR-4] Minimum Phase chain: phase error %.3f deg (largest phase %.1f deg), group delay error %.4f ms\n", worstPhase,
+                 largestPhase, worstDelay);
+    CHECK (largestPhase > 10.0);
+    CHECK (worstPhase < 0.5);
+    CHECK (worstDelay < 0.01);
+
+    // Natural Phase: the phase and group delay of the analog prototypes (no cramping near Nyquist).
+    const auto np = readouts.computeChain (bands, paramsFor (PhaseMode::NaturalPhase, Quality::High), noChange);
+    REQUIRE (np.valid);
+    auto analogPhase = [&] (double hz) { return std::arg (bell.analogResponse (hz) * shelf.analogResponse (hz)); };
+    double npPhase = 0.0, npDelay = 0.0;
+    for (int i = 0; i < np.numPoints; ++i)
+    {
+        const auto p = static_cast<std::size_t> (i);
+        const double hz = np.hz[p];
+        if (hz < 100.0 || hz > 16000.0)
+            continue;
+        const double difference = std::abs (np.phaseDeg[p] - analogPhase (hz) * 180.0 / kPi);
+        npPhase = std::max (npPhase, std::min (difference, 360.0 - difference));
+        const double step = hz * 1.0e-4;
+        const double delayMs = -1000.0 * (analogPhase (hz + step) - analogPhase (hz - step)) / (kTwoPi * 2.0 * step);
+        npDelay = std::max (npDelay, std::abs (np.groupDelayMs[p] - delayMs));
+    }
+    std::printf ("[PR-4] Natural Phase chain vs analog prototypes: phase error %.3f deg, group delay error %.4f ms (100 Hz - 16 kHz)\n",
+                 npPhase, npDelay);
+    CHECK (npPhase < 1.0);
+    CHECK (npDelay < 0.02);
+
+    // The left channel of a centred source: a band on Right, or one on Side, does not act on it.
+    // (Together they would: the Right band makes a side signal for the Side band - a serial chain.)
+    for (const auto component : { StereoComponent::Right, StereoComponent::Side })
+    {
+        engine::BandSettingsArray elsewhere {};
+        elsewhere[0] = bandOf (Shape::Bell, 1000.0, 9.0, 1.0);
+        elsewhere[0].component = component;
+        const auto none = readouts.computeChain (elsewhere, paramsFor (PhaseMode::MinimumPhase), noChange);
+        REQUIRE (none.valid);
+        for (int i = 0; i < none.numPoints; ++i)
+            REQUIRE (std::abs (none.phaseDeg[static_cast<std::size_t> (i)]) < 1.0e-3f);
+    }
+
+    // Dynamic bands count with their current gain change.
+    engine::BandSettingsArray dynamic {};
+    dynamic[0] = bandOf (Shape::Bell, 1000.0, 0.0, 1.0);
+    dynamic[0].mode = BandMode::Dynamic;
+    std::array<float, kNumBands> change {};
+    change[0] = 6.0f;
+    engine::BandSettingsArray same {};
+    same[0] = bandOf (Shape::Bell, 1000.0, 6.0, 1.0);
+    const auto a = readouts.computeChain (dynamic, paramsFor (PhaseMode::MinimumPhase), change);
+    const auto b = readouts.computeChain (same, paramsFor (PhaseMode::MinimumPhase), noChange);
+    for (int i = 0; i < a.numPoints; ++i)
+        REQUIRE (a.phaseDeg[static_cast<std::size_t> (i)] == Approx (b.phaseDeg[static_cast<std::size_t> (i)]).margin (1.0e-3));
 }

@@ -38,6 +38,7 @@ void ReadoutService::addClient()
     if (clients++ == 0)
     {
         haveLast = false;
+        haveChain = false;
         startThread (juce::Thread::Priority::low);
     }
 }
@@ -60,6 +61,24 @@ bool ReadoutService::changed (int band, const engine::BandSettings& s, float dyn
     return false;
 }
 
+bool ReadoutService::chainChanged (const engine::GlobalParams& params, const engine::BandSettingsArray& bands,
+                                   const std::array<float, kNumBands>& dynamicGainsDb) const noexcept
+{
+    if (! haveChain || ! sameContext (params, chainParams))
+        return true;
+    for (std::size_t b = 0; b < bands.size(); ++b)
+    {
+        const auto& s = bands[b];
+        const auto& last = chainBands[b];
+        if (s.used != last.used || s.active != last.active || ! (s.shape == last.shape) || s.mode != last.mode
+            || s.component != last.component)
+            return true;
+        if (s.mode == BandMode::Dynamic && std::abs (dynamicGainsDb[b] - chainGains[b]) >= 0.5f)
+            return true;
+    }
+    return false;
+}
+
 void ReadoutService::run()
 {
     engine::GlobalParams params;
@@ -77,6 +96,7 @@ void ReadoutService::run()
             computer.prepare (sampleRate);
             preparedRate = sampleRate;
             haveLast = false;
+            haveChain = false;
         }
         if (haveLast && ! sameContext (params, lastParams))
             haveLast = false;
@@ -96,6 +116,21 @@ void ReadoutService::run()
         }
         lastParams = params;
         haveLast = true;
+
+        // The whole EQ (PR-4), only while the display shows it.
+        if (! chainWanted.load (std::memory_order_relaxed))
+            haveChain = false;
+        else if (chainChanged (params, bands, gains))
+        {
+            current.chain = computer.computeChain (bands, params, gains);
+            if (threadShouldExit())
+                return;
+            chainParams = params;
+            chainBands = bands;
+            chainGains = gains;
+            haveChain = true;
+            updated = true;
+        }
 
         if (updated)
         {

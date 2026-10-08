@@ -42,8 +42,16 @@ enum class HintSensitivity : int
     High
 };
 
+/** Overlay of the whole EQ's phase or group delay on the display (PR-4). */
+enum class PhaseOverlay : int
+{
+    Off,
+    Phase,
+    GroupDelay
+};
+
 /**
-    Analyzer and display settings (research §11c, VIS-1, VIS-2, VIS-4). They do not change the sound, so
+    Analyzer and display settings (research §11c, VIS-1, VIS-2, VIS-4, PR-4). They do not change the sound, so
     they are not host parameters: they are saved with the state in the "Analyzer" child of the
     state tree and are not part of Undo.
 */
@@ -61,6 +69,7 @@ struct AnalyzerSettings
     HintSensitivity hintSensitivity = HintSensitivity::Medium;
     float thdWarningDb = -40.0f;      ///< THD+N meter turns to the warning colour above this (MTR-4)
     float aliasingWarningDb = -80.0f; ///< aliasing meter turns to the warning colour above this (MTR-4)
+    PhaseOverlay phaseOverlay = PhaseOverlay::Off;
 
     bool operator== (const AnalyzerSettings& other) const noexcept
     {
@@ -68,7 +77,7 @@ struct AnalyzerSettings
         return mode == other.mode && resolution == other.resolution && speed == other.speed && same (tiltDbPerOctave, other.tiltDbPerOctave)
             && same (rangeDb, other.rangeDb) && peakHold == other.peakHold && freeze == other.freeze && glow == other.glow
             && resonanceHints == other.resonanceHints && hintSensitivity == other.hintSensitivity && same (thdWarningDb, other.thdWarningDb)
-            && same (aliasingWarningDb, other.aliasingWarningDb);
+            && same (aliasingWarningDb, other.aliasingWarningDb) && phaseOverlay == other.phaseOverlay;
     }
 
     bool showsPre() const noexcept { return mode == AnalyzerMode::PrePost || mode == AnalyzerMode::Pre; }

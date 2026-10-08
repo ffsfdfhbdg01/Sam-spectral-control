@@ -105,6 +105,19 @@ void EqDisplay::refreshFromAnalyzer()
             repaint();
         }
 
+    // Phase or group delay of the whole EQ (PR-4), computed by the readout thread.
+    if (analyzerSettings.phaseOverlay != plugin::PhaseOverlay::Off && chainProvider)
+    {
+        const auto& latest = chainProvider();
+        const bool same = latest.valid == chain.valid && latest.numPoints == chain.numPoints && latest.phaseDeg == chain.phaseDeg
+            && latest.groupDelayMs == chain.groupDelayMs && latest.hz == chain.hz && latest.defined == chain.defined;
+        if (! same)
+        {
+            chain = latest;
+            repaint();
+        }
+    }
+
     // Freeze keeps the last frame on screen (VIS-1).
     if (! analyzerSettings.freeze && analyzer.frames().update())
     {
@@ -755,6 +768,7 @@ void EqDisplay::paint (juce::Graphics& g)
     }
 
     paintBandCurves (g);
+    paintPhaseOverlay (g);
     paintGhost (g);
     paintComposite (g);
     paintNodes (g);
@@ -768,6 +782,67 @@ void EqDisplay::paint (juce::Graphics& g)
         g.setColour (colours::accent.withAlpha (0.6f));
         g.drawRect (lasso, 1.0f);
     }
+}
+
+void EqDisplay::paintPhaseOverlay (juce::Graphics& g) const
+{
+    const auto overlay = analyzerSettings.phaseOverlay;
+    if (overlay == plugin::PhaseOverlay::Off || ! chain.valid || chain.numPoints < 2)
+        return;
+    const bool phase = overlay == plugin::PhaseOverlay::Phase;
+    const auto n = static_cast<std::size_t> (chain.numPoints);
+
+    // Scale: ±180° for the phase; for the group delay the next round value above its extent.
+    float scale = 180.0f;
+    if (! phase)
+    {
+        float largest = 0.0f;
+        for (std::size_t i = 0; i < n; ++i)
+            if (chain.defined[i] && chain.hz[i] >= kMinHz && chain.hz[i] <= kMaxHz)
+                largest = juce::jmax (largest, std::abs (chain.groupDelayMs[i]));
+        constexpr float steps[] = { 0.1f, 0.2f, 0.5f, 1.0f, 2.0f, 5.0f, 10.0f, 20.0f, 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f };
+        scale = steps[std::size (steps) - 1];
+        for (const float step : steps)
+            if (step >= largest * 1.05f)
+            {
+                scale = step;
+                break;
+            }
+    }
+
+    const float mid = yForEqDb (0.0f);
+    const float half = 0.9f * (yForEqDb (-eqRangeDb) - mid);
+    juce::Path path;
+    bool penDown = false;
+    float last = 0.0f;
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        const float hz = chain.hz[i];
+        if (! chain.defined[i] || hz < kMinHz || hz > kMaxHz)
+        {
+            penDown = false; // no line through deep cuts, where phase and delay are undefined
+            continue;
+        }
+        const float value = phase ? chain.phaseDeg[i] : chain.groupDelayMs[i];
+        const float x = xForFrequency (hz);
+        const float y = mid - juce::jlimit (-1.0f, 1.0f, value / scale) * half;
+        if (phase && penDown && std::abs (value - last) > 180.0f)
+            penDown = false; // the phase wraps: start a new segment
+        if (penDown)
+            path.lineTo (x, y);
+        else
+            path.startNewSubPath (x, y);
+        penDown = true;
+        last = value;
+    }
+    g.setColour (colours::phaseOverlay.withAlpha (0.85f));
+    g.strokePath (path, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    const auto plusMinus = juce::String::fromUTF8 ("\xc2\xb1");
+    const auto label = phase ? "Phase " + plusMinus + "180" + juce::String::fromUTF8 ("\xc2\xb0")
+                             : "Group delay " + plusMinus + juce::String (scale, scale < 1.0f ? 1 : 0) + " ms";
+    g.setFont (uiFont (11.5f));
+    g.drawText (label + " (whole EQ)", juce::Rectangle<float> (10.0f, 6.0f, 260.0f, 16.0f), juce::Justification::centredLeft);
 }
 
 void EqDisplay::paintGrid (juce::Graphics& g) const

@@ -47,6 +47,11 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
             text << ", " << plugin::labels::bandModes()[static_cast<int> (v.mode)];
         return text;
     };
+    display.chainProvider = [this]() -> const analysis::ChainResponse& {
+        auto& readouts = sscProcessor.getReadouts().readouts();
+        readouts.update();
+        return readouts.read().chain;
+    };
     bandPanel.readoutProvider = [this] (int band) {
         auto& readouts = sscProcessor.getReadouts().readouts();
         readouts.update();
@@ -96,6 +101,7 @@ SscEditor::~SscEditor()
     // Solo is a monitoring aid tied to the open editor.
     sscProcessor.setSoloBand (-1);
     sscProcessor.getAnalyzer().removeClient();
+    sscProcessor.getReadouts().setChainWanted (false);
     sscProcessor.getReadouts().removeClient();
     sscProcessor.getMeters().removeClient();
     setLookAndFeel (nullptr);
@@ -123,6 +129,7 @@ void SscEditor::applyAnalyzerSettings (const plugin::AnalyzerSettings& settings,
     analyzerSettings = settings;
     sscProcessor.getAnalyzer().setSettings (settings);
     display.setAnalyzerSettings (settings);
+    sscProcessor.getReadouts().setChainWanted (settings.phaseOverlay != plugin::PhaseOverlay::Off);
     controlBar.getMeterView().setThresholds (settings.thdWarningDb, settings.aliasingWarningDb);
     analyzerButton.setToggleState (settings.freeze, juce::dontSendNotification);
     analyzerButton.setButtonText (settings.freeze ? "Frozen" : "Analyzer");
@@ -191,6 +198,13 @@ void SscEditor::showAnalyzerMenu()
         sensitivity.addItem (name, s.resonanceHints, s.hintSensitivity == value,
                              change ([v = value] (plugin::AnalyzerSettings& n) { n.hintSensitivity = v; }));
     menu.addSubMenu ("Hint sensitivity", sensitivity, s.resonanceHints);
+    juce::PopupMenu overlay;
+    const std::pair<plugin::PhaseOverlay, const char*> overlays[] = { { plugin::PhaseOverlay::Off, "Off" },
+                                                                      { plugin::PhaseOverlay::Phase, "Phase" },
+                                                                      { plugin::PhaseOverlay::GroupDelay, "Group delay" } };
+    for (const auto& [value, name] : overlays)
+        overlay.addItem (name, true, s.phaseOverlay == value, change ([v = value] (plugin::AnalyzerSettings& n) { n.phaseOverlay = v; }));
+    menu.addSubMenu ("EQ phase overlay", overlay);
 
     // Meter warning thresholds (MTR-4).
     menu.addSectionHeader ("Meters");

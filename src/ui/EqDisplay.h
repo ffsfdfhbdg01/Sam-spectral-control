@@ -8,6 +8,7 @@
 
 #include "plugin/AnalyzerService.h"
 #include "plugin/AnalyzerSettings.h"
+#include "ssc/analysis/BandReadouts.h"
 #include "ssc/spectral/SpectralEngine.h"
 #include "ui/BandLogic.h"
 #include "ui/BandModel.h"
@@ -63,6 +64,9 @@ public:
 
     /** Source of the live gain change of Spectral bands over frequency; polled on every frame. */
     std::function<const spectral::SpectralEngine::MaskView*()> spectralViewProvider;
+
+    /** Source of the phase and group delay of the whole EQ (PR-4); polled while the overlay is shown. */
+    std::function<const analysis::ChainResponse&()> chainProvider;
     void setChannelInfo (int numChannels, int numPairs);
 
     /** Analyzer display settings (mode, range, freeze, peak hold, glow). */
@@ -133,6 +137,7 @@ private:
     void paintComposite (juce::Graphics&) const;
     void paintGhost (juce::Graphics&) const;
     void paintNodes (juce::Graphics&) const;
+    void paintPhaseOverlay (juce::Graphics&) const;
     void paintHoverLabel (juce::Graphics&) const;
     void paintHint (juce::Graphics&) const;
     juce::Path curvePath (const std::vector<float>& db) const;
@@ -144,7 +149,8 @@ private:
     juce::VBlankAttachment vblank;
 
     plugin::AnalyzerSettings analyzerSettings;
-    juce::Image background; ///< gradient and grid (see paint())
+    analysis::ChainResponse chain; ///< the latest phase / group delay of the whole EQ (PR-4)
+    juce::Image background;        ///< gradient and grid (see paint())
     bool backgroundDirty = true;
     std::vector<float> glowActivity, glowScratch, glowLineY; ///< scratch of paintGlow()
 

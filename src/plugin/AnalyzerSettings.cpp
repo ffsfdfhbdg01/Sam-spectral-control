@@ -19,6 +19,7 @@ namespace
     const juce::Identifier kHintSensitivity { "hintSensitivity" };
     const juce::Identifier kThdWarning { "thdWarning" };
     const juce::Identifier kAliasingWarning { "aliasingWarning" };
+    const juce::Identifier kPhaseOverlay { "phaseOverlay" };
 
     template <typename Enum>
     Enum readChoice (const juce::ValueTree& tree, const juce::Identifier& id, Enum fallback, Enum last)
@@ -90,6 +91,7 @@ AnalyzerSettings readAnalyzerSettings (const juce::ValueTree& state)
     s.hintSensitivity = readChoice (tree, kHintSensitivity, s.hintSensitivity, HintSensitivity::High);
     s.thdWarningDb = readListed (tree, kThdWarning, kThdWarnings, s.thdWarningDb);
     s.aliasingWarningDb = readListed (tree, kAliasingWarning, kAliasingWarnings, s.aliasingWarningDb);
+    s.phaseOverlay = readChoice (tree, kPhaseOverlay, s.phaseOverlay, PhaseOverlay::GroupDelay);
     return s;
 }
 
@@ -108,5 +110,6 @@ void writeAnalyzerSettings (juce::ValueTree& state, const AnalyzerSettings& s)
     tree.setProperty (kHintSensitivity, static_cast<int> (s.hintSensitivity), nullptr);
     tree.setProperty (kThdWarning, s.thdWarningDb, nullptr);
     tree.setProperty (kAliasingWarning, s.aliasingWarningDb, nullptr);
+    tree.setProperty (kPhaseOverlay, static_cast<int> (s.phaseOverlay), nullptr);
 }
 } // namespace ssc::plugin
