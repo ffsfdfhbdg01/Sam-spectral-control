@@ -361,6 +361,8 @@ void BandPanel::updateFromModel()
             k->slider.setEnabled (shapeUsesQ (v.shape));
         if (k->param == BandParam::Selectivity)
             k->slider.setEnabled (v.mode == BandMode::Spectral); // the frequency resolution of the Spectral mask
+        if (k->param == BandParam::Lookahead)
+            k->slider.setEnabled (v.mode == BandMode::Dynamic); // a Spectral frame already sees ahead
     }
 
     for (auto& c : choices)

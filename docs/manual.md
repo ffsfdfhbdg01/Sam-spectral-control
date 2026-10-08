@@ -60,7 +60,7 @@ Uruchom host i — jeśli wtyczka się nie pojawia — wykonaj ponowne skanowani
 1. Wstaw wtyczkę na ścieżkę lub szynę. Widać analizator widma: szary — sygnał przed korekcją (*pre*), jasny — po korekcji (*post*).
 2. **Kliknij dwukrotnie** w wykres, żeby dodać pasmo Bell w tym miejscu (wysokość kliknięcia = wzmocnienie). Albo **złap krzywą** i przeciągnij — powstaje Bell lub półka.
 3. Przeciągaj **węzeł** pasma: w poziomie zmienia częstotliwość, w pionie wzmocnienie. **Kółko myszy** nad węzłem zmienia Q. Z *Shift* — precyzyjnie.
-4. Kliknięty węzeł otwiera **panel pasma** z wszystkimi parametrami. **Prawy przycisk** na węźle otwiera menu (kształt, nachylenie, tryb, cel, Character, Solo, kopiowanie…).
+4. Kliknięty węzeł otwiera **panel pasma** ze wszystkimi parametrami. **Prawy przycisk** na węźle otwiera menu (kształt, nachylenie, tryb, cel, Character, Solo, kopiowanie…).
 5. Żeby pasmo działało tylko wtedy, gdy trzeba, zmień jego tryb na **Dynamic** (np. de-esser) albo **Spectral** (tłumienie rezonansów).
 6. Wynik porównasz przyciskami **A/B**, zapiszesz jako preset (przycisk z nazwą presetu → *Save As…*), a zmiany cofniesz strzałkami **Undo/Redo** lub *Cmd/Ctrl+Z*.
 
@@ -143,7 +143,7 @@ Kliknięcie węzła pokazuje panel:
 
 - wiersz 1: kolor i numer pasma, **On**, **Solo**, **Shape**, **Slope** (gdy kształt go ma), **Delete**;
 - wiersz 2: pokrętła **Freq**, **Gain**, **Q**; listy **Target**, **Mode**, **Character**; przycisk **Auto Gain** (w układach surround także **Speakers**);
-- wiersz 3 (tylko Dynamic i Spectral): **Threshold**, **Ratio**, **Range**, **Knee**, **Attack**, **Release**, **Lookahead**, **Mix**, **Selectivity** oraz listy **Threshold Mode**, **Direction**, **Link**;
+- wiersz 3 (tylko Dynamic i Spectral): **Threshold**, **Ratio**, **Range**, **Knee**, **Attack**, **Release**, **Lookahead**, **Mix**, **Selectivity** oraz listy **Threshold Mode**, **Direction**, **Link**; pokrętła, których dany tryb nie używa (Lookahead w Spectral, Selectivity w Dynamic), są wyszarzone;
 - na dole: odczyty fazy, opóźnienia grupowego i ringingu ([rozdz. 12](#odczyty-pasma)).
 
 Pokrętła reagują na przeciąganie; **dwuklik** przywraca wartość domyślną; wartość pod pokrętłem można kliknąć i wpisać. Częstotliwość przyjmuje zapisy `1500`, `1.5k`, `1.5 kHz`; czasy — `12`, `12 ms`, `1.2 s`.
@@ -190,8 +190,8 @@ Dynamic i Spectral są dostępne dla kształtów ze wzmocnieniem (Bell, półki,
 | **Range** | 0–30 dB (12 dB) | największa zmiana wzmocnienia |
 | **Knee** | 0–24 dB (6 dB) | łagodność wejścia w działanie |
 | **Attack**, **Release** | 0,05–500 ms (5 ms), 1–5000 ms (100 ms) | stałe czasowe (63 % zmiany) |
-| **Lookahead** | 0–20 ms (0) | pasmo „widzi” sygnał z wyprzedzeniem |
-| **Mix** | 0–100 % (100 %) | ile działania dynamicznego trafia do wzmocnienia pasma (bez przesunięć fazy, bo miesza wzmocnienie, nie sygnały) |
+| **Lookahead** | 0–20 ms (0) | tylko Dynamic: pasmo „widzi” sygnał z wyprzedzeniem i reaguje przed transjentem |
+| **Mix** | 0–100 % (100 %) | ile działania dynamicznego trafia do wzmocnienia pasma (bez interferencji z sygnałem suchym, bo skaluje wzmocnienie, a nie miesza sygnały) |
 | **Selectivity** | 0–100 % (50 %) | tylko Spectral: jak wąsko w częstotliwości działa maska — wyżej = bardziej „chirurgicznie” |
 | **Link** | Independent / Pair / Group / All (Group) | czy kanały (lub składowe M/S) dzielą detekcję: wspólny poziom = maksimum poziomów w zbiorze |
 
@@ -204,7 +204,7 @@ Po przełączeniu pasma w tryb Spectral z nieruszonym progiem Dynamic (Absolute 
 
 ### Lookahead i Max Lookahead
 
-Tor główny jest opóźniony o globalny parametr **Max Lookahead** (0–20 ms, w ustawieniach parametrów hosta), a pasmo z Lookahead *L* czyta detekcję z wyprzedzeniem *L*. Ustawienie Lookahead pasma większego niż Max Lookahead automatycznie podnosi Max Lookahead — latencja wtyczki rośnie o tę wartość i host ją kompensuje. Max Lookahead się nie obniża sam: zmniejsz go ręcznie, gdy już nie jest potrzebny.
+Tor główny jest opóźniony o globalny parametr **Max Lookahead** (0–20 ms, w ustawieniach parametrów hosta), a pasmo Dynamic z Lookahead *L* czyta detekcję z wyprzedzeniem *L*. Ustawienie Lookahead pasma większego niż Max Lookahead automatycznie podnosi Max Lookahead — latencja wtyczki rośnie o tę wartość i host ją kompensuje. Max Lookahead się nie obniża sam: zmniejsz go ręcznie, gdy już nie jest potrzebny.
 
 ### Spectral
 
@@ -215,11 +215,11 @@ Pasma Spectral działają w silniku STFT: wszystkie pasma Spectral danego kanał
 | Latencja (44,1 kHz) | 46,4 ms | 92,9 ms | 185,8 ms | 185,8 ms |
 | Latencja (48–192 kHz) | 42,7 ms | 85,3 ms | 170,7 ms | 170,7 ms |
 
-Silne, szybkie działanie maski może dać krótkie **pre-echo** przed transjentami (rzędu połowy ramki); odczyt pasma pokazuje jego wielkość. Lookahead w Spectral jest zaokrąglany do kroku ramki.
+Silne, szybkie działanie maski może dać krótkie **pre-echo** przed transjentami (rzędu połowy ramki); odczyt pasma pokazuje jego wielkość. Lookahead jest w pasmach Spectral nieaktywny — ramka STFT i tak „widzi” sygnał z wyprzedzeniem.
 
 ### Auto Gain pasma
 
-Przycisk **Auto Gain** w panelu (lub w menu) pasma Dynamic albo Spectral oddaje średnią zmianę wzmocnienia tego pasma (ważoną energią sygnału) — pasmo zmienia brzmienie, ale nie średni poziom. W pasmie Static przycisk jest nieaktywny.
+Przycisk **Auto Gain** w panelu (lub w menu) pasma Dynamic albo Spectral oddaje średnią zmianę wzmocnienia tego pasma (ważoną energią sygnału) — pasmo zmienia brzmienie, ale nie średni poziom. W paśmie Static przycisk jest nieaktywny.
 
 ## 7. Character
 
@@ -234,6 +234,8 @@ Character pasma dodaje nasycenie zależne od działania pasma: pasmo z Gain 0 dB
 W cięciach Character działa tylko na rezonans (Q > 0,71); w Notch, Band Pass i All Pass nic nie zmienia. Nasycenie ma zabezpieczenie przed aliasingiem (ADAA); przy dużych podbiciach wysokich częstotliwości pomaga oversampling — miernik aliasingu pokaże, kiedy warto go włączyć.
 
 W trybie **Analog Feel** Character wybiera nasycenie modelu konsoli: Clear — same krzywe i faza modelu, Warm — wariant miękki, Sharp — wariant twardy.
+
+Pasma są przetwarzane po kolei, według numerów. Dla pasm bez nasycenia kolejność nie ma znaczenia; pasmo z nasyceniem działa na sygnale już zmienionym przez pasma o niższych numerach, więc przestawienie kolejności (np. przez skopiowanie ustawień do innego pasma) może minimalnie zmienić barwę zniekształceń.
 
 ## 8. Tryby fazy i Quality
 
@@ -358,7 +360,7 @@ Podpowiedź miernika wymienia pasma, które najbardziej się przyczyniają. Kolo
 - **Factory** — 15 presetów w kategoriach: General (Default — wszystko domyślnie), Vocal (Clarity, De-ess dynamiczny, Resonance Tamer spektralny), Drums (Kick, Snare), Instruments (Acoustic Guitar — Boom Control), Mix (Gentle Tilt w Natural Phase, Side Air / Mono Bass), Mastering (Analog N Warmth, Analog P Low-End Trick, Resonance Control spektralny), Post (Dialogue — tylko kanał centralny), Repair (Hum Removal 50 Hz i 60 Hz).
 - **User** — presety użytkownika: pliki `.sscpreset` w folderze `Dokumenty/Sam Spectral Control/Presets` (macOS: `~/Documents/Sam Spectral Control/Presets`). *Save As…* zapisuje bieżące ustawienia, *Delete* usuwa bieżący preset użytkownika, *Show Preset Folder* otwiera folder.
 
-Preset zawiera wszystkie parametry poza włącznikiem i Delta, oraz wybór głośników pasm. Nie zmienia ustawień analizatora ani rozmiaru okna. Wczytanie presetu to jeden krok Undo. Presety ze starszej wersji wtyczki są automatycznie migrowane.
+Preset zawiera wszystkie parametry (poza włącznikiem i Delta) oraz wybór głośników pasm. Nie zmienia ustawień analizatora ani rozmiaru okna. Wczytanie presetu to jeden krok Undo. Presety ze starszej wersji wtyczki są automatycznie migrowane.
 
 **A/B**: przyciski **A** i **B** przełączają między dwoma kompletami ustawień; pierwsze przełączenie kopiuje bieżące ustawienia do drugiego slotu. Przycisk **A→B** (albo **B→A**) kopiuje bieżący slot do drugiego. Oba sloty zapisują się z projektem; przełączenie i kopiowanie można cofnąć.
 
@@ -378,7 +380,7 @@ Lista **Target** pasma wybiera, na co pasmo działa:
 | **Left**, **Right** | lewy albo prawy kanał każdej pary |
 | **Mid**, **Side** | składowa środkowa albo boczna każdej pary (kodowanie M/S wewnątrz pasma) |
 
-W mono (i w kanałach bez pary) dostępne jest tylko All; dla pojedynczego kanału „Mid” to sam kanał, a „Side” nic nie robi.
+W mono dostępne jest tylko All. W układach wielokanałowych kanały bez pary (np. centralny) są przy celu Left, Right i Side pomijane, a przy Mid przetwarzane tak jak przy All.
 
 ### Układy
 
@@ -416,7 +418,8 @@ Zmierzone na jednym rdzeniu współdzielonego serwera Intel Xeon 2,8 GHz (48 kHz
 |---|---|
 | 8 pasm Static, Minimum Phase, Normal | 0,7 % |
 | 8 pasm Static, Natural Phase: Eco … Max | 0,8 – 1,6 % |
-| 8 pasm Static, Analog Feel (Warm): Eco / Normal … High / Max | 1,0 – 1,3 % … 3,1 – 6,9 % |
+| 8 pasm Static, Analog Feel (Warm): Eco / Normal | 1,3 / 1,0 % |
+| 8 pasm Static, Analog Feel (Warm): High / Max | 3,1 / 6,9 % |
 | 8 pasm Dynamic, Normal | 3,1 % |
 | 8 pasm Spectral, Normal | 4,1 % |
 | 8 pasm Static, oversampling 2× / 4× / 8× (Minimum Phase) | 1,6 / 3,1 / 6,2 % |

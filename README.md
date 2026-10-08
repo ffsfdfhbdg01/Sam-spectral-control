@@ -1,6 +1,8 @@
 # Sam Spectral Control
 
-Korektor parametryczny z pasmami statycznymi, dynamicznymi i spektralno-dynamicznymi, obsługą surround / Dolby Atmos, trybami fazy (Minimum Phase, Natural Phase, Analog Feel) oraz odczytami skutków ubocznych przetwarzania (faza, ringing, THD+N, aliasing). Formaty docelowe: VST3 (macOS, Windows), później AU i AAX.
+Korektor parametryczny z pasmami statycznymi, dynamicznymi i spektralno-dynamicznymi, obsługą surround / Dolby Atmos, trybami fazy (Minimum Phase, Natural Phase, Analog Feel) oraz odczytami skutków ubocznych przetwarzania (faza, ringing, THD+N, aliasing). Format: VST3 (macOS, Windows, Linux); Audio Unit — opcjonalnie na macOS.
+
+![Sam Spectral Control](docs/images/editor.png)
 
 ## Status
 
@@ -14,11 +16,15 @@ Korektor parametryczny z pasmami statycznymi, dynamicznymi i spektralno-dynamicz
 | M5 | Surround/Atmos: wybór głośników per pasmo (zapisywany po rolach Dolby, przenośny między układami), panel głośników, null testy 7.1.4 | ✅ |
 | M6 | Analog Feel N/P/S: krzywe modeli, nieliniowości per pasmo (Character wybiera wariant), kalibracja −18 dBFS = +4 dBu, wewnętrzny oversampling w High/Max | ✅ |
 | M7 | Analizator (ustawienia, peak hold), poświata aktywności, podpowiedzi rezonansów, odczyty fazy i ringingu pasm, mierniki THD+N i aliasingu z podpowiedzią oversamplingu | ✅ |
-| M8 | Wydanie: pomiary referencyjne, instalatory (pkg / Inno Setup), podpisy, manual, testy hostów | ⏳ |
+| M8 | Presety fabryczne i użytkownika, A/B, Undo/Redo w nagłówku, testy obciążeniowe, oversampling renderu offline, Delta, nakładka fazy całego EQ, korektor Minimum Phase High/Max, raporty pomiarów, instalatory (pkg / Inno Setup) i workflow wydania z podpisami, instrukcja (PL), licencje | ✅ |
+
+Wersja **1.0.0** jest gotowa do wydania, gdy zapadną decyzje właściciela projektu: licencja JUCE ([ADR-0002](docs/decisions/0002-licencja-juce.md)), identyfikatory wtyczki ([ADR-0016](docs/decisions/0016-identyfikatory-nazwy.md)), konta do podpisów (Apple Developer, Azure Artifact Signing) — i po ręcznych testach w hostach ([docs/testing.md](docs/testing.md), TST-3). Kroki: [docs/release.md](docs/release.md).
 
 Szczegółowy stan każdego wymagania: [docs/traceability.md](docs/traceability.md).
 
-## Obsługa pasm (M2)
+## Obsługa (skrót)
+
+Pełna instrukcja obsługi: [docs/manual.md](docs/manual.md).
 
 | Akcja | Gest |
 |---|---|
@@ -30,7 +36,7 @@ Szczegółowy stan każdego wymagania: [docs/traceability.md](docs/traceability.
 | Zaznaczanie wielu pasm | prostokąt na tle, Cmd/Ctrl + klik; zaznaczone pasma przesuwają się razem |
 | Menu pasma | prawy przycisk: kształt, slope / Q, tryb, cel (All/L/R/M/S), Character, Auto Gain, bypass, solo, kopiuj/wklej, reset, usuń |
 | Usuń, Undo, Redo, zaznacz wszystko | Delete, Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z (lub Ctrl+Y), Cmd/Ctrl+A |
-| Wpisanie wartości | podwójne kliknięcie pola wartości w panelu (np. „1.5k”, „-3 dB”, „1.2 s”) |
+| Wpisanie wartości | kliknięcie pola wartości pod pokrętłem (np. „1.5k”, „-3 dB”, „1.2 s”); podwójne kliknięcie pokrętła — wartość domyślna |
 
 ## Budowanie
 
@@ -44,37 +50,42 @@ cmake --build --preset release
 ctest --preset release
 ```
 
-Gotowa wtyczka: `build/release/src/SamSpectralControl_artefacts/Release/VST3/Sam Spectral Control.vst3`.
+Gotowa wtyczka: `build/release/src/SamSpectralControl_artefacts/Release/VST3/Sam Spectral Control.vst3` (na Linuksie skopiuj ją do `~/.vst3`). Instalatory macOS i Windows buduje workflow wydania ([docs/release.md](docs/release.md)).
 
 Inne presety: `dev` (Debug), `core-tests` (tylko rdzeń DSP, szybko), `sanitize` (rdzeń z ASan/UBSan), `rtsan` (testy rdzenia i wtyczki z RealtimeSanitizerem — wymaga Clang 20: `CC=clang-20 CXX=clang++-20 cmake --preset rtsan`).
 
-Styl kodu: `.clang-format` (clang-format 18, sprawdzany w CI). `-DSSC_WARNINGS_AS_ERRORS=ON` traktuje ostrzeżenia w kodzie projektu jak błędy (włączone w CI).
+Styl kodu: `.clang-format` (clang-format 18, sprawdzany w CI). `-DSSC_WARNINGS_AS_ERRORS=ON` traktuje ostrzeżenia w kodzie projektu jak błędy (włączone w CI). Wszystkie kontrole CI (format, licencje, build z `-Werror`, testy, pluginval, walidator VST3, RTSan, ASan/UBSan) uruchamia lokalnie `tools/ci/local-check.sh` — bez minut GitHub Actions.
 
 - **macOS (universal):** dodaj `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0`.
 - **Windows:** `cmake -B build -G "Visual Studio 17 2022" -A x64` i `cmake --build build --config Release`.
 - **Linux:** pakiety `libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libxi-dev libglu1-mesa-dev`.
-- **Narzędzia deweloperskie:** `-DSSC_BUILD_TOOLS=ON` buduje `ssc_screenshot` (zrzut edytora z sygnałem testowym, offscreen) i `ssc_benchmark` (obciążenie CPU konfiguracji z NFR-1, wyniki w [docs/benchmarks.md](docs/benchmarks.md); `ssc_benchmark 3 modes` — tabela CPU i latencji trybów fazy × Quality i oversamplingu, PH-2).
+- **Narzędzia deweloperskie:** `-DSSC_BUILD_TOOLS=ON` buduje `ssc_screenshot` (zrzut edytora z sygnałem testowym, offscreen), `ssc_benchmark` (obciążenie CPU konfiguracji z NFR-1, wyniki w [docs/benchmarks.md](docs/benchmarks.md); `ssc_benchmark 3 modes` — tabela CPU i latencji trybów fazy × Quality i oversamplingu, PH-2), `ssc_measure` (raporty pomiarów w [docs/measurements/](docs/measurements/README.md)) i `ssc_resonance_eval` (ewaluacja podpowiedzi rezonansów).
 
 ## Struktura
 
 ```
-src/core/      rdzeń DSP (bez GUI): filtry dopasowane, pasma, dynamika, silnik spektralny, głośność (Auto Gain), analizator
-src/plugin/    procesor JUCE, parametry, stan, usługa analizatora
-src/ui/        edytor: wyświetlacz (analizator, krzywe, węzły), panel pasma, model edycji z Undo, pasek sterowania
-tests/         testy Catch2 (rdzeń i procesor)
-tools/         narzędzia deweloperskie
-docs/          research, architektura, ADR, śledzenie wymagań, testy w hostach
+src/core/      rdzeń DSP (bez GUI i JUCE): filtry dopasowane, pasma, dynamika, silnik spektralny, korektor fazy,
+               oversampling, głośność (Auto Gain), analiza (analizator, rezonanse, odczyty, mierniki)
+src/plugin/    procesor JUCE, parametry, stan i migracja, presety, usługi wątków tła
+src/ui/        edytor: wyświetlacz (analizator, krzywe, węzły), panel pasma, panel głośników, presety i A/B,
+               pasek sterowania z miernikami
+tests/         testy Catch2: rdzeń (tests/core), procesor, UI i testy obciążeniowe (tests/plugin)
+tools/         narzędzia deweloperskie, generator THIRD-PARTY-NOTICES.txt, skrypty CI (tools/ci)
+packaging/     instalatory macOS (pkg) i Windows (Inno Setup), tymczasowe warunki licencji
+docs/          instrukcja, research, architektura, ADR, śledzenie wymagań, testy, pomiary, wydanie
 ```
 
 ## Dokumentacja
 
+- [docs/manual.md](docs/manual.md) — instrukcja obsługi (PL).
 - [PROMPT.md](PROMPT.md) — specyfikacja wymagań (z identyfikatorami wymagań).
 - [docs/architecture.md](docs/architecture.md) — tor sygnału, wątki, moduły, budowanie, testy, ryzyka.
 - [docs/research/](docs/research/) — research dla każdej funkcji: literatura, wtyczki referencyjne, wybrane podejście, kryteria akceptacji.
 - [docs/decisions/](docs/decisions/) — decyzje architektoniczne (ADR), w tym otwarte pytania do właściciela projektu.
 - [docs/testing.md](docs/testing.md) — checklista testów w hostach i testy obciążeniowe.
+- [docs/measurements/](docs/measurements/README.md) — raporty pomiarów: filtry, zniekształcenia, latencja, Auto Gain, rezonanse, CPU.
 - [docs/release.md](docs/release.md) — instalatory, podpisy, notaryzacja, workflow wydania; [CHANGELOG.md](CHANGELOG.md).
 
 ## Licencje komponentów
 
-JUCE 9 (AGPLv3 albo licencja komercyjna — decyzja otwarta, ADR-0002), VST3 SDK 3.8 (MIT, dołączony w JUCE), pffft (licencja BSD-podobna, FFTPACK), Catch2 (BSL-1.0, tylko testy).
+JUCE 9 (AGPLv3 albo licencja komercyjna — decyzja otwarta, ADR-0002), VST3 SDK 3.8 (MIT, dołączony w JUCE), pffft (licencja BSD-podobna, FFTPACK) oraz biblioteki wkompilowane przez moduły JUCE (zlib, HarfBuzz, SheenBidi, LunaSVG, PlutoVG, libpng, JPEG IJG). Pełne teksty: [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) (generowany przez `tools/third-party-notices.py`). Catch2 (BSL-1.0) — tylko testy, nie trafia do wtyczki.

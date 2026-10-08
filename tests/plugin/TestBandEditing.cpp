@@ -248,8 +248,17 @@ TEST_CASE ("Mode changes move default thresholds; band lookahead raises Max Look
     model.refresh();
     REQUIRE (model.band (cut).mode == BandMode::Static);
 
+    // The band is Spectral now: its STFT frame already sees ahead, so its lookahead adds no latency.
     auto* maxLookahead = processor.getValueTreeState().getParameter (plugin::id::maxLookahead);
     REQUIRE (maxLookahead->convertFrom0to1 (maxLookahead->getValue()) == Approx (0.0f));
+    {
+        BandModel::ScopedEdit edit (model, "Change Lookahead");
+        model.setValue (band, BandParam::Lookahead, 7.5f);
+    }
+    REQUIRE (maxLookahead->convertFrom0to1 (maxLookahead->getValue()) == Approx (0.0f));
+
+    // A Dynamic band's lookahead beyond Max Lookahead raises it.
+    model.setMode (band, BandMode::Dynamic);
     {
         BandModel::ScopedEdit edit (model, "Change Lookahead");
         model.setValue (band, BandParam::Lookahead, 7.5f);

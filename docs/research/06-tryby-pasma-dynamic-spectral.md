@@ -114,6 +114,8 @@ Kod: `ssc/dynamics/Dynamics.h` (komputer wzmocnienia, wygładzanie, detektor), `
 
 **Odstępstwa i dalsze kroki**: lookahead w trybie Spectral nie jest jeszcze kwantowany do hopu (ramka STFT i tak „widzi” transjent ~N/2 wcześniej); okienkowanie odpowiedzi impulsowej maski w Quality Max i tryb Low Latency (P1) — M4; zachowanie program-dependent (P1) — później.
 
+**Stan w wersji 1.0 (M8)**: Lookahead pasma Spectral nie jest używany — pokrętło jest w trybie Spectral wyłączone, a jego wartość nie podnosi Max Lookahead (dodałaby latencję bez efektu); ramka STFT wyprzedza transjent o ~N/2. Jawnego okienkowania odpowiedzi impulsowej maski nie dodano: Quality Max różni się od High gęstszym hopem (N/8), a wygładzenie maski na siatce ERB skraca jej odpowiedź impulsową. Low Latency i program-dependent (P1) — poza 1.0. Selectivity działa tylko w trybie Spectral (w Dynamic pokrętło jest wyłączone).
+
 ## d) Kryteria akceptacji
 
 | ID | Kryterium | Metoda |

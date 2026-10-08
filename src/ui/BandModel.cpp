@@ -290,8 +290,11 @@ void BandModel::setValue (int band, BandParam p, float plainValue)
     if (! juce::exactlyEqual (param.getValue(), normalised))
         param.setValueNotifyingHost (normalised);
 
-    // A band lookahead beyond the global Max Lookahead raises it (DYN-8); the latency follows.
-    if (p == BandParam::Lookahead)
+    // A Dynamic band's lookahead beyond the global Max Lookahead raises it (DYN-8); the latency
+    // follows. Spectral bands do not use it (their STFT frame already sees ahead).
+    auto& mode = parameter (band, BandParam::Mode);
+    const bool dynamic = static_cast<BandMode> (juce::roundToInt (mode.convertFrom0to1 (mode.getValue()))) == BandMode::Dynamic;
+    if (p == BandParam::Lookahead && dynamic)
         if (auto* maxLookahead = state.getParameter (plugin::id::maxLookahead))
             if (maxLookahead->convertFrom0to1 (maxLookahead->getValue()) < plainValue)
             {
