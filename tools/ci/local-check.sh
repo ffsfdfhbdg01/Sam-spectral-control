@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # The CI checks on this machine, without GitHub Actions minutes (docs/release.md):
-# clang-format, a release build with warnings as errors, every test with a 1 MB stack, pluginval
-# (strictness 10), Steinberg's VST3 validator and, where the compilers exist, the RealtimeSanitizer
-# (Clang 20) and ASan/UBSan builds. Linux or macOS.
+# clang-format, THIRD-PARTY-NOTICES.txt up to date, a release build with warnings as errors, every
+# test with a 1 MB stack, pluginval (strictness 10), Steinberg's VST3 validator and, where the
+# compilers exist, the RealtimeSanitizer (Clang 20) and ASan/UBSan builds. Linux or macOS.
 #
-#   tools/ci/local-check.sh [--quick]    --quick: format, build and tests only
+#   tools/ci/local-check.sh [--quick]    --quick: format, notices, build and tests only
 #
 # PLUGINVAL=<path> picks the pluginval binary (otherwise `pluginval` from PATH).
 set -uo pipefail
@@ -33,6 +33,13 @@ if command -v clang-format-18 > /dev/null; then
         | xargs clang-format-18 --style=file --dry-run --Werror"
 else
     skipped+=("clang-format (clang-format-18 not found)")
+fi
+
+step "Third-party notices"
+if command -v python3 > /dev/null; then
+    check "third-party notices" python3 -I tools/third-party-notices.py --check
+else
+    skipped+=("third-party notices (python3 not found)")
 fi
 
 step "Release build, warnings as errors"

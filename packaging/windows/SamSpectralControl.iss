@@ -48,17 +48,14 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 
 [Components]
 Name: "vst3"; Description: "VST3 plug-in (C:\Program Files\Common Files\VST3)"; Types: full custom; Flags: fixed
-Name: "docs"; Description: "User manual and licences"; Types: full
+Name: "docs"; Description: "User manual"; Types: full
 
 [Files]
 Source: "{#Artefacts}\VST3\{#AppName}.vst3\*"; DestDir: "{commoncf64}\VST3\{#AppName}.vst3"; Components: vst3; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
-#if FileExists(AddBackslash(SourcePath) + "..\..\THIRD-PARTY-NOTICES.txt")
-Source: "..\..\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Components: docs; Flags: ignoreversion
-#endif
-#if FileExists(AddBackslash(SourcePath) + "..\..\docs\manual.md")
+Source: "..\..\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\docs\manual.md"; DestDir: "{app}"; DestName: "Manual.md"; Components: docs; Flags: ignoreversion
-#endif
+Source: "..\..\docs\images\editor.png"; DestDir: "{app}\images"; Components: docs; Flags: ignoreversion
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{commoncf64}\VST3\{#AppName}.vst3"

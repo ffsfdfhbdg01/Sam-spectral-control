@@ -11,17 +11,19 @@ Pierwsze wydanie (etapy M0–M8). Data zostanie wpisana przy publikacji; publika
 ### Dodane
 - **Pasma**: 24 pasma — Bell, Low/High Shelf, Low/High Cut (6–96 dB/okt. i Brickwall), Notch, Band Pass, Tilt Shelf, Flat Tilt, All Pass; filtry dopasowane do prototypu analogowego (SVF-TPT), cel L/R/Mid/Side; edycja na wykresie (tworzenie kliknięciem, menu kontekstowe, Undo/Redo).
 - **Tryby pasma**: Static, Dynamic (próg bezwzględny lub względny, ratio 0,1–100, powyżej/poniżej progu, zakres, attack/release, lookahead, knee, mix, linkowanie detekcji) i Spectral (STFT/WOLA, selektywność); Auto Gain globalny i per pasmo.
-- **Faza i jakość**: Minimum Phase, Natural Phase (korektor FIR do prototypu analogowego, Brickwall z fazą liniową) i Analog Feel z modelami N/P/S (krzywe i nieliniowości); Quality Eco/Normal/High/Max; oversampling 2×/4×/8× (IIR polifazowy lub FIR z fazą liniową) i osobny oversampling renderu offline przy tej samej latencji.
+- **Faza i jakość**: Minimum Phase (w High i Max z minimalnofazowym korektorem amplitudy do prototypu analogowego, bez latencji), Natural Phase (korektor FIR do prototypu analogowego, Brickwall z fazą liniową) i Analog Feel z modelami N/P/S (krzywe i nieliniowości); Quality Eco/Normal/High/Max; oversampling 2×/4×/8× (IIR polifazowy lub FIR z fazą liniową) i osobny oversampling renderu offline przy tej samej latencji.
 - **Character** pasma: Clear, Warm, Sharp (nasycenie z antyaliasingiem ADAA).
 - **Surround i Atmos**: układy od mono do 9.1.6 i do 32 kanałów dyskretnych; wybór głośników pasma zapisywany semantycznie (przenośny między układami), LFE domyślnie pominięty; kanały poza pasmami przechodzą bit w bit.
-- **Wizualizacja**: analizator pre/post z peak hold i nachyleniem, poświata aktywności, świecące pasma dynamiczne, podpowiedzi rezonansów, odczyty fazy, opóźnienia grupowego i pre/post ringingu pasma, mierniki THD+N i aliasingu z podpowiedzią oversamplingu.
-- **Presety**: 16 presetów fabrycznych, presety użytkownika (pliki `.sscpreset`), porównanie A/B z kopiowaniem, każda zmiana jako krok Undo; migracja stanu między wersjami.
-- **Globalne**: Mix, Output, Bypass hosta z crossfade i stałą latencją, odsłuch pasma (Solo), Max Lookahead.
-- **Instalatory**: macOS `.pkg` (universal, wybór komponentów, deinstalator), Windows Inno Setup z deinstalatorem; podpisy i notaryzacja w workflow wydania.
+- **Wizualizacja**: analizator pre/post z peak hold i nachyleniem, poświata aktywności, świecące pasma dynamiczne, podpowiedzi rezonansów, nakładka fazy lub opóźnienia grupowego całego EQ, odczyty fazy, opóźnienia grupowego i pre/post ringingu pasma, mierniki THD+N i aliasingu z podpowiedzią oversamplingu.
+- **Presety**: 15 presetów fabrycznych, presety użytkownika (pliki `.sscpreset`), porównanie A/B z kopiowaniem, Undo/Redo w nagłówku i ze skrótów klawiszowych, każda zmiana jako krok Undo; migracja stanu między wersjami.
+- **Globalne**: Mix, Output, Bypass hosta z crossfade i stałą latencją, odsłuch pasma (Solo), odsłuch różnicy (Delta, bez korekcji Auto Gain), Max Lookahead.
+- **Instalatory**: macOS `.pkg` (universal, wybór komponentów, deinstalator), Windows Inno Setup z deinstalatorem; podpisy i notaryzacja w workflow wydania; zawsze instalowane licencje (`THIRD-PARTY-NOTICES.txt` generowany z plików licencji bibliotek) i instrukcja obsługi po polsku (`docs/manual.md`).
 
 ### Jakość
-- Testy rdzenia DSP i wtyczki (Catch2), testy obciążeniowe (20 układów kanałów, 44,1–384 kHz, bufory 1–8192, szybka automatyzacja), RealtimeSanitizer, ASan/UBSan, pluginval (strictness 10) i walidator VST3 Steinberga (tryb rozszerzony) w CI.
+- Testy rdzenia DSP i wtyczki (Catch2), testy obciążeniowe (20 układów kanałów, 44,1–384 kHz, bufory 1–8192, szybka automatyzacja), RealtimeSanitizer, ASan/UBSan, pluginval (strictness 10) i walidator VST3 Steinberga (tryb rozszerzony) w CI i lokalnie (`tools/ci/local-check.sh`).
+- Raporty pomiarów w `docs/measurements` (`ssc_measure`): filtry względem prototypów analogowych, zniekształcenia, latencja, Auto Gain, podpowiedzi rezonansów, CPU.
 
 ### Ograniczenia
 - Format VST3; Audio Unit (P1) jest budowany tylko na życzenie (`SSC_FORMAT_AU`), AAX i CLAP — poza zakresem 1.0.
+- Brak wejścia sidechain i trybu niskiej latencji dla pasm Spectral (latencja ramki 43–171 ms); ambisonia nie jest obsługiwana.
 - Testy w hostach (docs/testing.md, TST-3) wykonuje się ręcznie przed publikacją.

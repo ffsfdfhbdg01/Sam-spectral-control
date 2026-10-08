@@ -79,13 +79,10 @@ if [[ -d "$au" ]]; then
 fi
 cp "$here/uninstall.command" "$work/root-uninstaller/Uninstall $name.command"
 chmod 755 "$work/root-uninstaller/Uninstall $name.command"
-cp "$repo/packaging/LICENSE.txt" "$work/root-uninstaller/LICENSE.txt"
-if [[ -f "$repo/THIRD-PARTY-NOTICES.txt" ]]; then
-    cp "$repo/THIRD-PARTY-NOTICES.txt" "$work/root-uninstaller/THIRD-PARTY-NOTICES.txt"
-fi
-if [[ -f "$repo/docs/manual.md" ]]; then
-    cp "$repo/docs/manual.md" "$work/root-uninstaller/Manual.md"
-fi
+cp "$repo/packaging/LICENSE.txt" "$repo/THIRD-PARTY-NOTICES.txt" "$work/root-uninstaller/"
+cp "$repo/docs/manual.md" "$work/root-uninstaller/Manual.md"
+mkdir -p "$work/root-uninstaller/images"
+cp "$repo/docs/images/editor.png" "$work/root-uninstaller/images/"
 
 # Code signature of the bundles: Developer ID, hardened runtime, secure timestamp.
 for component in "${components[@]}"; do
@@ -154,7 +151,7 @@ EOF
 EOF
     fi
     cat << EOF
-    <choice id="uninstaller" title="Uninstaller and licences" description="Installs the uninstaller and the licence texts to $support." start_selected="true">
+    <choice id="uninstaller" title="Uninstaller, licences and manual" description="Installs the uninstaller, the licence texts and the user manual to $support. Always installed." start_selected="true" enabled="false">
         <pkg-ref id="$identifier.uninstaller"/>
     </choice>
     <pkg-ref id="$identifier.vst3" version="$version" onConclusion="none">vst3.pkg</pkg-ref>

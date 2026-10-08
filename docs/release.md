@@ -19,7 +19,7 @@ Dla tagu workflow odmawia wydania, dopóki:
 
 ## Kroki wydania
 
-1. Decyzje: ADR-0002 i ADR-0016 → „Zaakceptowana”; ostateczne warunki licencji w `packaging/LICENSE.txt` (bez linii `PROVISIONAL`).
+1. Decyzje: ADR-0002 i ADR-0016 → „Zaakceptowana”; ostateczne warunki licencji w `packaging/LICENSE.txt` (bez linii `PROVISIONAL`). Przy licencji AGPLv3 dla JUCE sekcja JUCE w `THIRD-PARTY-NOTICES.txt` (generator `tools/third-party-notices.py`) musi dodatkowo zawierać pełny tekst AGPLv3 i miejsce, skąd można pobrać kod źródłowy wtyczki.
 2. Testy w hostach według [testing.md](testing.md) (TST-3).
 3. Wersja w `CMakeLists.txt` i sekcja w `CHANGELOG.md` z datą: `## [X.Y.Z] - RRRR-MM-DD`.
 4. `git tag vX.Y.Z && git push origin vX.Y.Z` → workflow „Release” → szkic wydania na GitHubie → sprawdzenie instalatorów (instalacja, deinstalacja, `spctl`/właściwości pliku) → *Publish release*.
@@ -56,7 +56,7 @@ Microsoft Defender SmartScreen ocenia pobierane pliki według reputacji, którą
 ## Instalatory
 
 **macOS** — [`packaging/macos/build-pkg.sh`](../packaging/macos/build-pkg.sh) `<artefakty Release> <wersja> <katalog wyjściowy>`:
-- komponenty do wyboru (*Customize*): VST3 → `/Library/Audio/Plug-Ins/VST3`, Audio Unit (gdy zbudowany) → `/Library/Audio/Plug-Ins/Components`, „Uninstaller and licences” → `/Library/Application Support/Sam Spectral Control`;
+- komponenty (*Customize*): VST3 → `/Library/Audio/Plug-Ins/VST3`, Audio Unit (gdy zbudowany) → `/Library/Audio/Plug-Ins/Components` i zawsze instalowany „Uninstaller, licences and manual” → `/Library/Application Support/Sam Spectral Control`;
 - bundle nie są relokowalne (instalator zawsze pisze do folderów systemowych);
 - deinstalator: `Uninstall Sam Spectral Control.command` usuwa bundle, swój folder i paragony `pkgutil` (presety użytkownika w `~/Documents/Sam Spectral Control` zostają);
 - macOS 11+, Apple silicon i Intel (universal binary);
@@ -64,8 +64,21 @@ Microsoft Defender SmartScreen ocenia pobierane pliki według reputacji, którą
 
 **Windows** — [`packaging/windows/SamSpectralControl.iss`](../packaging/windows/SamSpectralControl.iss) (Inno Setup 6):
 - `iscc /DAppVersion=X.Y.Z /DArtefacts=<…\SamSpectralControl_artefacts\Release> /DOutputDir=<katalog> packaging\windows\SamSpectralControl.iss`;
-- VST3 → `C:\Program Files\Common Files\VST3\Sam Spectral Control.vst3` (komponent stały), licencje i instrukcja → `C:\Program Files\Sam Audio\Sam Spectral Control` (komponent do wyboru);
+- VST3 → `C:\Program Files\Common Files\VST3\Sam Spectral Control.vst3` (komponent stały), licencje → `C:\Program Files\Sam Audio\Sam Spectral Control` (zawsze), instrukcja obok (komponent do wyboru);
 - deinstalator w *Aplikacje i funkcje*; Windows 10/11 x64; `AppId` jest stały (ADR-0016).
+
+## Licencje zewnętrzne i instrukcja (REL-4)
+
+- `THIRD-PARTY-NOTICES.txt` w katalogu głównym generuje `python3 tools/third-party-notices.py` z plików licencji w `external/` (wersje z `external/JUCE/JUCE.spdx.json` i commitów submodułów). Lista odpowiada temu, co jest w binarce: JUCE, pffft, zlib, HarfBuzz, SheenBidi, LunaSVG, PlutoVG, libpng, biblioteka JPEG IJG, VST 3 SDK, rozszerzenia PreSonus (domena publiczna) i — tylko w komponencie Audio Unit — AudioUnitSDK. Nieużywane kodeki JUCE (FLAC, Ogg Vorbis, Opus, MP3) i WebP są wyłączone w `src/CMakeLists.txt`, więc ich kod nie trafia do wtyczki (sprawdzone `nm` na binarce).
+- Po aktualizacji JUCE lub pffft: `python3 tools/third-party-notices.py` i commit; `--check` (krok CI na Linuksie i `local-check.sh`) wykrywa nieaktualny plik.
+- Instalatory zawsze instalują `LICENSE.txt` i `THIRD-PARTY-NOTICES.txt`; instrukcja [manual.md](manual.md) trafia obok jako `Manual.md` razem z `images/editor.png`. Zrzut ekranu odświeża się po zmianach interfejsu (build z `-DSSC_BUILD_TOOLS=ON`, na Linuksie pod `xvfb-run -a`):
+
+```bash
+ssc_screenshot docs/images/editor.png 1100 660 b01_used=1 b01_shape=3 b01_freq=60 b01_slope=3 \
+    b02_used=1 b02_freq=250 b02_gain=-3 b02_q=1.2 b03_used=1 b03_freq=3000 b03_gain=3 b03_q=0.9 b03_mode=1 \
+    b03_threshold=-30 b04_used=1 b04_shape=2 b04_freq=10000 b04_gain=2.5 b05_used=1 b05_freq=6500 b05_q=2.5 \
+    b05_mode=2 b05_threshold=6 b05_thresholdmode=1 select=3
+```
 
 ## Walidacja (TST-2)
 
@@ -80,8 +93,8 @@ W repozytorium prywatnym minuty macOS liczą się ×10, a Windows ×2: pełne CI
 Te same kontrole działają lokalnie, bez minut:
 
 ```bash
-tools/ci/local-check.sh          # format, build z -Werror, testy (stos 1 MB), pluginval, walidator VST3, RTSan, ASan/UBSan
-tools/ci/local-check.sh --quick  # tylko format, build i testy
+tools/ci/local-check.sh          # format, licencje, build z -Werror, testy (stos 1 MB), pluginval, walidator VST3, RTSan, ASan/UBSan
+tools/ci/local-check.sh --quick  # tylko format, licencje, build i testy
 ```
 
-Skrypt pomija kroki, do których brakuje narzędzi (pluginval: zmienna `PLUGINVAL` lub `pluginval` w `PATH`; RTSan: `clang++-20`; ASan/UBSan: `clang++`), i podaje to w podsumowaniu. Na macOS i Windows (Visual Studio) build sprawdza się tylko na tych systemach — lokalnie albo w CI po odnowieniu limitu. Pliki workflow można sprawdzić bez uruchamiania [actionlint](https://github.com/rhysd/actionlint): `actionlint .github/workflows/*.yml`.
+Skrypt pomija kroki, do których brakuje narzędzi (licencje: `python3`; pluginval: zmienna `PLUGINVAL` lub `pluginval` w `PATH`; RTSan: `clang++-20`; ASan/UBSan: `clang++`), i podaje to w podsumowaniu. Na macOS i Windows (Visual Studio) build sprawdza się tylko na tych systemach — lokalnie albo w CI po odnowieniu limitu. Pliki workflow można sprawdzić bez uruchamiania [actionlint](https://github.com/rhysd/actionlint): `actionlint .github/workflows/*.yml`.
