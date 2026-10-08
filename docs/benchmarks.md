@@ -1,5 +1,7 @@
 # Wydajność (NFR-1)
 
+> Aktualny pomiar M8 (wersja 1.0.0, GCC 13, Xeon @ 2,8 GHz) i ocena NFR-1: [measurements/cpu.md](measurements/cpu.md). Niżej historia pomiarów i optymalizacji z etapów M3–M7.
+
 Pomiar: `ssc_benchmark 10` (narzędzie w `tools/`, buduje się z `-DSSC_BUILD_TOOLS=ON`). Silnik DSP bez GUI, różowy szum, bufor 128 próbek, pasma Bell rozłożone co 0,9 oktawy (±4 dB); dla Spectral próg Relative +6 dB. Wynik to czas przetwarzania w procentach czasu rzeczywistego jednego rdzenia.
 
 Maszyna referencyjna tego pomiaru: kontener CI/rozwojowy, Intel Xeon @ 2,1 GHz (jeden rdzeń), GCC 13, `-O3` (Release). Pomiary na Apple M1 i współczesnym x86-64 (referencja NFR-1) — M8.

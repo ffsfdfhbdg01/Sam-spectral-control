@@ -5,7 +5,7 @@
 
 ## Decyzja
 - **Testy jednostkowe**: Catch2 v3 dla rdzenia DSP (`src/core`) i testy integracyjne `AudioProcessor` (render bloków bez hosta).
-- **Testy pomiarowe**: narzędzie `ssc-measure` (CLI) — sygnały testowe, metryki (amplituda/faza vs prototyp, THD z analizy harmonicznych, aliasing jako składowe nieharmoniczne, głośność wg modelu i BS.1770, precision/recall detektora rezonansów). Raporty Markdown/CSV w `docs/measurements/`.
+- **Testy pomiarowe**: narzędzie `ssc-measure` (CLI) — sygnały testowe, metryki (amplituda/faza vs prototyp, THD z analizy harmonicznych, aliasing jako składowe nieharmoniczne, głośność wg modelu i BS.1770, precision/recall detektora rezonansów). Raporty Markdown/CSV w `docs/measurements/`. Zrealizowane w M8 jako `ssc_measure` (tools/Measure.cpp): raporty Markdown filters / distortion / latency / autogain / resonance, plus `cpu.md` z `ssc_benchmark`.
 - **Benchmarki**: `ssc-bench` — scenariusze NFR-1; wynik jako tabela.
 - **Walidacja wtyczki**: pluginval (strictness 10, headless) na trzech systemach; Steinberg VST3 validator (z vst3sdk na licencji MIT) budowany w CI; `auval` dla AU.
 - **Sanitizery**: ASan/UBSan (testy), TSan (komunikacja wątków), RealtimeSanitizer (ścieżka audio, Clang 20+; preset `rtsan`, zadanie CI „Real-time safety”).

@@ -59,9 +59,10 @@ using CorrectorBands = std::array<CorrectorBand, kNumBands>;
     host block size. prepare() allocates; everything else is real-time safe.
 
     Minimum-phase mode (Minimum Phase at Quality High and Max, PH-1): only the magnitude |T/A| is
-    corrected, by a minimum-phase FIR of D + 1 taps built from it through the real cepstrum, with
-    no latency. The bands then have the magnitude of their analog prototypes and stay minimum
-    phase; channels without corrected bands pass bit-exact.
+    corrected, by a minimum-phase FIR built from it through the real cepstrum (D + 1 taps of
+    48 kHz at any rate), with no latency. The bands then have the magnitude of their analog
+    prototypes and stay minimum phase. A channel whose correction stays below 0.02 dB up to
+    20 kHz (high sample rates) and channels without corrected bands pass bit-exact.
 */
 class PhaseCorrector
 {

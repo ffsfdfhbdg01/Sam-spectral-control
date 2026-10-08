@@ -10,11 +10,13 @@ namespace ssc::phase
 {
 namespace
 {
-    constexpr double kKaiserBeta = 4.0;       ///< chosen on the PH-1 reference set (4 … 8 tried)
-    constexpr double kBrickwallBeta = 8.0;    ///< ≈ 80 dB stopband for filters with a brickwall cut
-    constexpr double kCorrectionLimit = 0.95; ///< of Nyquist; the correction fades out above
-    constexpr double kMagnitudeFloor = 1e-4;  ///< −80 dB: below, a band's magnitude is not corrected
-    constexpr double kMaxCorrectionDb = 12.0; ///< limit of the magnitude correction of a channel
+    constexpr double kKaiserBeta = 4.0;         ///< chosen on the PH-1 reference set (4 … 8 tried)
+    constexpr double kBrickwallBeta = 8.0;      ///< ≈ 80 dB stopband for filters with a brickwall cut
+    constexpr double kCorrectionLimit = 0.95;   ///< of Nyquist; the correction fades out above
+    constexpr double kMagnitudeFloor = 1e-4;    ///< −80 dB: below, a band's magnitude is not corrected
+    constexpr double kMaxCorrectionDb = 12.0;   ///< limit of the magnitude correction of a channel
+    constexpr double kAudibleLimitHz = 20000.0; ///< minimum phase: the range checked for a correction worth doing …
+    constexpr double kNegligibleDb = 0.02;      ///< … and the largest error left uncorrected
 
     double besselI0 (double x) noexcept
     {
@@ -155,7 +157,10 @@ bool PhaseCorrector::setQuality (Quality q, bool minimum) noexcept
     quality = q;
     minimumPhase = minimum;
     delay = newDelay;
-    length = minimum ? d + 1 : 2 * d + 1;
+    // Minimum phase: the correction sits near the base Nyquist and is about as long in samples at
+    // any rate, so the taps are those of 48 kHz (not scaled up at high rates).
+    const int minimumTaps = correctorDelayFor (q, std::min (fs, 48000.0)) + 1;
+    length = minimum ? std::min (minimumTaps, d + 1) : 2 * d + 1;
     gridSize = gridSizes[static_cast<std::size_t> (qualityIndex (q))];
     numPoints = gridSize / 2 + 1;
 
@@ -166,10 +171,10 @@ bool PhaseCorrector::setQuality (Quality q, bool minimum) noexcept
         window[static_cast<std::size_t> (m)] = besselI0 (kKaiserBeta * x) / besselI0 (kKaiserBeta);
         brickwallWindow[static_cast<std::size_t> (m)] = besselI0 (kBrickwallBeta * x) / besselI0 (kBrickwallBeta);
     }
-    // Minimum phase: the right half of the Kaiser window over D + 1 taps (the energy is at the start).
-    for (int m = 0; m <= d; ++m)
+    // Minimum phase: the right half of a Kaiser window over the taps (the energy is at the start).
+    for (int m = 0; m < length && minimum; ++m)
     {
-        const double r = static_cast<double> (m) / (d + 1);
+        const double r = static_cast<double> (m) / length;
         minimumPhaseWindow[static_cast<std::size_t> (m)] =
             besselI0 (kKaiserBeta * std::sqrt (std::max (0.0, 1.0 - r * r))) / besselI0 (kKaiserBeta);
     }
@@ -284,6 +289,7 @@ bool PhaseCorrector::designTaps (std::uint32_t mask, std::vector<double>& revers
     const double limit = kCorrectionLimit * nyquist;
     const double hzPerPoint = fs / gridSize;
     const double minGain = dbToGain (-kMaxCorrectionDb), maxGain = dbToGain (kMaxCorrectionDb);
+    double largestAudibleDb = 0.0; // minimum phase: the largest correction up to 20 kHz
     for (int k = 0; k < numPoints; ++k)
     {
         std::complex<double> correction (1.0, 0.0);
@@ -317,7 +323,10 @@ bool PhaseCorrector::designTaps (std::uint32_t mask, std::vector<double>& revers
         if (minimumPhase)
         {
             // Magnitude only: its log, for the cepstrum.
-            spectrum[static_cast<std::size_t> (2 * k)] = static_cast<float> (std::log (magnitude * gain));
+            const double logGain = std::log (magnitude * gain);
+            if (hz <= kAudibleLimitHz)
+                largestAudibleDb = std::max (largestAudibleDb, std::abs (logGain) * 20.0 / std::log (10.0));
+            spectrum[static_cast<std::size_t> (2 * k)] = static_cast<float> (logGain);
             spectrum[static_cast<std::size_t> (2 * k + 1)] = 0.0f;
             continue;
         }
@@ -327,6 +336,10 @@ bool PhaseCorrector::designTaps (std::uint32_t mask, std::vector<double>& revers
     }
     if (minimumPhase)
     {
+        // Where the matched IIR is already exact in the audible range (high sample rates), nothing
+        // is filtered.
+        if (largestAudibleDb < kNegligibleDb)
+            return false;
         minimumPhaseTaps (reversed);
         return true;
     }

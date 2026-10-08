@@ -5,6 +5,13 @@ add_executable(ssc_benchmark Benchmark.cpp)
 target_include_directories(ssc_benchmark PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 target_link_libraries(ssc_benchmark PRIVATE ssc_core ssc_options)
 
+# Measurement reports in docs/measurements (ADR-0015): filters, distortion, latency, Auto Gain,
+# resonance hints.
+add_executable(ssc_measure Measure.cpp)
+target_include_directories(ssc_measure PRIVATE ${PROJECT_SOURCE_DIR}/tests)
+target_compile_definitions(ssc_measure PRIVATE SSC_MEASURE_VERSION="${PROJECT_VERSION}")
+target_link_libraries(ssc_measure PRIVATE ssc_core ssc_options)
+
 # Evaluation of the resonance hints on synthetic material (VIS-5).
 add_executable(ssc_resonance_eval ResonanceEval.cpp)
 target_include_directories(ssc_resonance_eval PRIVATE ${PROJECT_SOURCE_DIR}/tests)
