@@ -4,7 +4,7 @@
 
 | Workflow | Kiedy | Co robi |
 |---|---|---|
-| `ci.yml` | każdy push i pull request | build (Linux, macOS universal, Windows x64), testy, pluginval (strictness 10), walidator VST3 Steinberga (tryb rozszerzony), RealtimeSanitizer, ASan/UBSan, clang-format |
+| `ci.yml` | pull request, push do `main`/`master`, ręcznie (*Run workflow*: `all` albo `linux`); nie startuje dla zmian samej dokumentacji ani na pushach do gałęzi roboczych | build (Linux, macOS universal, Windows x64), testy, pluginval (strictness 10), walidator VST3 Steinberga (tryb rozszerzony), RealtimeSanitizer, ASan/UBSan, clang-format |
 | `release.yml` | tag `vX.Y.Z` albo ręcznie (*Run workflow*) | to samo dla macOS i Windows, potem instalatory: `SamSpectralControl-X.Y.Z-macOS.pkg` i `SamSpectralControl-X.Y.Z-Windows.exe`; przy tagu — szkic wydania GitHub z notatkami z CHANGELOG i sumami SHA-256 |
 
 Bez sekretów podpisu workflow wydania buduje **niepodpisane** instalatory — wyłącznie do testów wewnętrznych (macOS Gatekeeper je blokuje, Windows SmartScreen ostrzega).
@@ -73,6 +73,15 @@ Microsoft Defender SmartScreen ocenia pobierane pliki według reputacji, którą
 - **Walidator VST3 Steinberga** z VST3 SDK 3.8.1 (MIT): [`tools/ci/vst3-validator.sh`](../tools/ci/vst3-validator.sh) klonuje SDK, buduje tylko `validator` i uruchamia testy rozszerzone (`-e`) — lokalnie 537/537.
 - **auval** — gdy budowany jest Audio Unit (`SSC_FORMAT_AU`).
 
-## Minuty GitHub Actions
+## Minuty GitHub Actions i weryfikacja lokalna
 
-W repozytorium prywatnym minuty macOS liczą się ×10, a Windows ×2. Pełne CI to ok. 155 minut rozliczeniowych na push, workflow wydania — podobnie. Po wyczerpaniu limitu zadania nie startują (brak runnera). Możliwości: podnieść limit wydatków, upublicznić repozytorium albo ograniczyć zadania macOS/Windows w `ci.yml` do pull requestów i tagów.
+W repozytorium prywatnym minuty macOS liczą się ×10, a Windows ×2: pełne CI to ok. 155 minut rozliczeniowych, sam Linux (`platforms: linux`) — ok. 35. Po wyczerpaniu miesięcznego limitu zadania w ogóle nie startują. Dlatego `ci.yml` nie uruchamia się na pushach do gałęzi roboczych ani dla zmian samej dokumentacji, tylko dla pull requestów, pushy do `main`/`master` i ręcznie (Actions → CI → *Run workflow*, z wyborem `all` albo `linux`). Workflow wydania startuje tylko dla tagów i ręcznie.
+
+Te same kontrole działają lokalnie, bez minut:
+
+```bash
+tools/ci/local-check.sh          # format, build z -Werror, testy (stos 1 MB), pluginval, walidator VST3, RTSan, ASan/UBSan
+tools/ci/local-check.sh --quick  # tylko format, build i testy
+```
+
+Skrypt pomija kroki, do których brakuje narzędzi (pluginval: zmienna `PLUGINVAL` lub `pluginval` w `PATH`; RTSan: `clang++-20`; ASan/UBSan: `clang++`), i podaje to w podsumowaniu. Na macOS i Windows (Visual Studio) build sprawdza się tylko na tych systemach — lokalnie albo w CI po odnowieniu limitu. Pliki workflow można sprawdzić bez uruchamiania [actionlint](https://github.com/rhysd/actionlint): `actionlint .github/workflows/*.yml`.

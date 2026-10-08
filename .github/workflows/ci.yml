@@ -1,9 +1,24 @@
 name: CI
 
+# GitHub Actions minutes are limited (private repository: macOS minutes count x10, Windows x2), so
+# CI does not run on pushes to working branches. It runs for pull requests, for pushes to
+# main/master and by hand (Actions -> CI -> Run workflow), where "platforms: linux" leaves out
+# macOS and Windows. Changes to documentation alone do not start it. Every check also runs
+# locally: docs/testing.md, docs/release.md.
+
 on:
   push:
+    branches: [ main, master ]
+    paths-ignore: [ '**.md', 'docs/**' ]
   pull_request:
+    paths-ignore: [ '**.md', 'docs/**' ]
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'all = Linux, macOS and Windows; linux = only the Linux jobs (cheapest)'
+        type: choice
+        options: [ all, linux ]
+        default: all
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -11,6 +26,7 @@ concurrency:
 
 env:
   PLUGINVAL_VERSION: v1.0.4
+  ARTEFACTS: build/src/SamSpectralControl_artefacts/Release
 
 jobs:
   build:
@@ -20,22 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: Linux
-            os: ubuntu-24.04
-            configure: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSSC_WARNINGS_AS_ERRORS=ON
-            build-dir: build/src/SamSpectralControl_artefacts/Release
-            pluginval: xvfb-run -a ./pluginval
-          - name: macOS (universal)
-            os: macos-14
-            configure: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSSC_WARNINGS_AS_ERRORS=ON "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
-            build-dir: build/src/SamSpectralControl_artefacts/Release
-            pluginval: ./pluginval.app/Contents/MacOS/pluginval
-          - name: Windows x64
-            os: windows-2022
-            configure: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSSC_WARNINGS_AS_ERRORS=ON
-            build-dir: build/src/SamSpectralControl_artefacts/Release
-            pluginval: ./pluginval.exe
+        include: ${{ fromJSON(inputs.platforms == 'linux' && '[{"name":"Linux","os":"ubuntu-24.04"}]' || '[{"name":"Linux","os":"ubuntu-24.04"},{"name":"macOS (universal)","os":"macos-14"},{"name":"Windows x64","os":"windows-2022"}]') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +57,13 @@ jobs:
 
       - name: Configure
         shell: bash
-        run: ${{ matrix.configure }}
+        run: |
+          case "$RUNNER_OS" in
+            Linux) cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSSC_WARNINGS_AS_ERRORS=ON ;;
+            macOS) cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSSC_WARNINGS_AS_ERRORS=ON \
+                     "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 ;;
+            Windows) cmake -B build -G "Visual Studio 17 2022" -A x64 -DSSC_WARNINGS_AS_ERRORS=ON ;;
+          esac
 
       - name: Build
         shell: bash
@@ -66,30 +73,35 @@ jobs:
         shell: bash
         # Linux and macOS run the tests with a 1 MB stack, the Windows default, to catch large stack frames early.
         run: |
-          if [ "${{ runner.os }}" != "Windows" ]; then ulimit -s 1024; fi
+          if [ "$RUNNER_OS" != "Windows" ]; then ulimit -s 1024; fi
           ctest --test-dir build -C Release --output-on-failure
 
       - name: Download pluginval
         shell: bash
         run: |
-          curl -sSL -o pluginval.zip "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL_VERSION}/pluginval_${{ runner.os }}.zip"
+          curl -sSL -o pluginval.zip "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL_VERSION}/pluginval_${RUNNER_OS}.zip"
           7z x -y pluginval.zip > /dev/null
 
       - name: pluginval (strictness 10)
         shell: bash
         run: |
-          ${{ matrix.pluginval }} --strictness-level 10 --validate-in-process --output-dir pluginval-report \
-            "${{ matrix.build-dir }}/VST3/Sam Spectral Control.vst3"
+          case "$RUNNER_OS" in
+            Linux) pluginval=(xvfb-run -a ./pluginval) ;;
+            macOS) pluginval=(./pluginval.app/Contents/MacOS/pluginval) ;;
+            Windows) pluginval=(./pluginval.exe) ;;
+          esac
+          "${pluginval[@]}" --strictness-level 10 --validate-in-process --output-dir pluginval-report \
+            "$ARTEFACTS/VST3/Sam Spectral Control.vst3"
 
       - name: VST3 validator (Steinberg, extensive)
         shell: bash
-        run: bash tools/ci/vst3-validator.sh "${{ matrix.build-dir }}/VST3/Sam Spectral Control.vst3"
+        run: bash tools/ci/vst3-validator.sh "$ARTEFACTS/VST3/Sam Spectral Control.vst3"
 
       - name: Upload VST3
         uses: actions/upload-artifact@v4
         with:
           name: SamSpectralControl-VST3-${{ runner.os }}
-          path: ${{ matrix.build-dir }}/VST3
+          path: ${{ env.ARTEFACTS }}/VST3
           if-no-files-found: error
 
       - name: Upload pluginval report
