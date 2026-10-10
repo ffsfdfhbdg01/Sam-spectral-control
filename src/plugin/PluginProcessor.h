@@ -17,7 +17,10 @@ namespace ssc::plugin
 {
 inline constexpr const char* kPluginName = "Sam Spectral Control";
 
-class SscAudioProcessor final : public juce::AudioProcessor, private juce::Timer, private juce::ValueTree::Listener
+class SscAudioProcessor final : public juce::AudioProcessor,
+                                private juce::Timer,
+                                private juce::ValueTree::Listener,
+                                private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     SscAudioProcessor();
@@ -118,6 +121,10 @@ private:
     void valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTree& child) override;
     void valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueTree& child, int index) override;
     void valueTreeRedirected (juce::ValueTree& tree) override;
+
+    // Changes made on the message thread (the editor) wake the band readouts at once (PR-2).
+    void parameterChanged (const juce::String& parameterID, float newValue) override;
+    juce::Thread::ThreadID messageThread = nullptr;
 
     juce::UndoManager undoManager { 0, 100 };
     juce::AudioProcessorValueTreeState state;

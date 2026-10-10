@@ -20,12 +20,33 @@ SscAudioProcessor::SscAudioProcessor()
     state.state.addListener (this);
     refreshSpeakers();
     startTimerHz (10);
+
+    // Hosts create plug-ins on the message thread. Its ID is kept here because
+    // MessageManager::isThisTheMessageThread() takes a lock, and the parameter listener also runs on
+    // the audio thread (host automation). The listener belongs to the value tree state, which calls
+    // it after the raw values the readouts read have changed.
+    if (auto* messageManager = juce::MessageManager::getInstanceWithoutCreating())
+        messageThread = messageManager->getCurrentMessageThread();
+    for (auto* parameter : getParameters())
+        if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (parameter))
+            state.addParameterListener (withId->getParameterID(), this);
 }
 
 SscAudioProcessor::~SscAudioProcessor()
 {
+    for (auto* parameter : getParameters())
+        if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (parameter))
+            state.removeParameterListener (withId->getParameterID(), this);
     stopTimer();
     state.state.removeListener (this);
+}
+
+void SscAudioProcessor::parameterChanged (const juce::String&, float)
+{
+    // Waking a thread is not real-time safe, comparing thread IDs is: host automation on the audio
+    // thread leaves the readouts to their 50 ms poll.
+    if (messageThread != nullptr && juce::Thread::getCurrentThreadId() == messageThread)
+        readoutService.settingsChanged();
 }
 
 void SscAudioProcessor::refreshSpeakers()

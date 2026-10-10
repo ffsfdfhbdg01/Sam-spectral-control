@@ -248,7 +248,7 @@ TEST_CASE ("Band readouts follow parameter changes within 100 ms (PR-2)", "[plug
             buffer.update();
             if (condition (buffer.read().bands[0]))
                 return std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - start).count();
-            std::this_thread::sleep_for (std::chrono::milliseconds (1));
+            std::this_thread::yield(); // no timed sleep: its granularity would be measured too
         }
         return 1.0e9;
     };

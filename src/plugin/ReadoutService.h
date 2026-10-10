@@ -21,9 +21,10 @@ struct ReadoutSnapshot
 };
 
 /**
-    Band readouts on a background thread (research §12c, PR-1, PR-2): every 50 ms it reads the band
-    and global settings, recomputes the readouts of the bands whose settings changed (Dynamic
-    bands also when their gain moved by 0.5 dB or more) and publishes them. Nothing of this runs
+    Band readouts on a background thread (research §12c, PR-1, PR-2): every 50 ms, and at once when
+    settingsChanged() wakes it, it reads the band and global settings, recomputes the readouts of
+    the bands whose settings changed (Dynamic bands also when their gain moved by 0.5 dB or more)
+    and publishes them. Nothing of this runs
     on the audio thread; the work only happens while an editor is open.
 */
 class ReadoutService : private juce::Thread
@@ -39,6 +40,10 @@ public:
     // Message thread
     void addClient();
     void removeClient();
+
+    /** Wakes the thread to read the settings now rather than at its next poll (PR-2). It signals an
+        event, which is not real-time safe: not from the audio thread. */
+    void settingsChanged() { notify(); }
 
     /** Computes the phase and group delay of the whole EQ too (the display overlay, PR-4); any thread. */
     void setChainWanted (bool wanted) noexcept { chainWanted.store (wanted, std::memory_order_relaxed); }
