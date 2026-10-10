@@ -108,7 +108,7 @@ flowchart TB
     subgraph Audio["Wątek audio (host)"]
         P[processBlock: DSP, Auto Gain,<br/>dynamika, nagrywanie wejść<br/>nieliniowości w oknach]
     end
-    subgraph Analysis["Wątki tła (własne, niski priorytet)"]
+    subgraph Analysis["Wątki tła (własne; odczyty: priorytet normalny, reszta: niski)"]
         A1[Analizator widma<br/>i detektor rezonansów]
         A3[Odczyty pasm:<br/>faza, ringing]
         A4[Mierniki THD+N<br/>i aliasingu]
@@ -128,6 +128,7 @@ flowchart TB
 
 - FIFO: jednoproducentowe/jednokonsumenckie, prealokowane; przy przepełnieniu producent zapisuje tylko to, co się mieści, a resztę (najnowsze próbki) odrzuca (wizualizacja może zgubić fragment — audio nigdy nie czeka).
 - Telemetria dużych tablic (maski spektralne) — decymowana do ≤ 512 punktów i przekazywana przez triple buffer.
+- Odczyty pasm (`ReadoutService`) mają priorytet normalny, pozostałe wątki tła — niski: użytkownik czeka na odczyty, kręcąc pokrętłem (PR-2, do 100 ms), a na macOS niski priorytet to klasa QoS *utility*, której oczekiwania system może odkładać (na maszynie CI macOS: mediana 144 ms zamiast ok. 50 ms).
 - Wątki tła działają tylko przy otwartym edytorze (klienci `AnalyzerService`, `ReadoutService`, `MeterService`); bez edytora wątek audio nie nagrywa też migawek mierników (`Engine::setDistortionMetering`).
 - Mierniki (§13e): wątek audio podłącza rejestratory pasm tylko na okno na końcu każdego 125-milisekundowego okresu i publikuje migawkę przez triple buffer; analiza (replika ADAA i cień bez próbkowania) działa w `MeterService`.
 

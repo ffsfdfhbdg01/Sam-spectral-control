@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -251,9 +252,23 @@ TEST_CASE ("TST-4: the allocation counter sees allocations on its own thread onl
     const test::ScopedAllocationCounter counter;
     std::vector<int> v (100, 1);
     CHECK (counter.count() == 1);
-    std::thread other ([] { std::vector<int> w (10, 2); });
+
+    // Starting a std::thread allocates on this thread (once in libstdc++, more in libc++), so the
+    // other thread allocates only after the count has been taken.
+    std::atomic<bool> go { false };
+    std::atomic<bool> done { false };
+    std::thread other ([&go, &done] {
+        while (! go.load())
+            std::this_thread::yield();
+        std::vector<int> w (10, 2);
+        done = w[9] == 2;
+    });
+    const auto started = counter.count();
+    go = true;
+    while (! done.load())
+        std::this_thread::yield();
+    CHECK (counter.count() == started); // the other thread's vector does not count here
     other.join();
-    CHECK (counter.count() <= 2); // the thread object itself may allocate here, its vector does not count
     CHECK (v[99] == 1);
 }
 

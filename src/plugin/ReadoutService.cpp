@@ -39,7 +39,9 @@ void ReadoutService::addClient()
     {
         haveLast = false;
         haveChain = false;
-        startThread (juce::Thread::Priority::low);
+        // Normal, not low: the readouts follow the knob the user is turning (PR-2: within 100 ms),
+        // and on macOS a low priority is the utility QoS class, whose waits the system may defer.
+        startThread (juce::Thread::Priority::normal);
     }
 }
 
