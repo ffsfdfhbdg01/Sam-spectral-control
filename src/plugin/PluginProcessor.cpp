@@ -1,5 +1,7 @@
 #include "plugin/PluginProcessor.h"
 
+#include <optional>
+
 #include "plugin/ChannelLayout.h"
 #include "plugin/SpeakerState.h"
 #include "plugin/StateMigration.h"
@@ -254,7 +256,10 @@ template <typename Sample>
 void SscAudioProcessor::processImpl (juce::AudioBuffer<Sample>& buffer, bool forceBypass) noexcept SSC_REALTIME
 {
     juce::ScopedNoDenormals noDenormals;
-    juce::AudioProcessLoadMeasurer::ScopedTimer timer (loadMeasurer, buffer.getNumSamples());
+    // Hosts may send empty blocks (e.g. to flush parameter changes); JUCE's load timer asserts on them.
+    std::optional<juce::AudioProcessLoadMeasurer::ScopedTimer> timer;
+    if (buffer.getNumSamples() > 0)
+        timer.emplace (loadMeasurer, buffer.getNumSamples());
 
     for (int ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
         buffer.clear (ch, 0, buffer.getNumSamples());
