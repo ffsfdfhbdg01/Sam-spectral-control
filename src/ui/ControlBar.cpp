@@ -271,7 +271,7 @@ GlobalAdvancedPanel::GlobalAdvancedPanel (juce::AudioProcessorValueTreeState& s)
     weighting.setTooltip ("Auto Gain weighting: Fletcher (equal-loudness) or Digital (flat)");
     speed.setTooltip ("Auto Gain speed: how fast the correction follows the material");
     setOversamplingHint (0, 0.0f);
-    setOpaque (true);
+    // Not opaque: it fades while it slides, so what lies behind must still be painted.
 }
 
 void GlobalAdvancedPanel::setOversamplingHint (int factor, float aliasingDb)

@@ -8,11 +8,13 @@
 #include "plugin/Parameters.h"
 #include "plugin/PluginProcessor.h"
 #include "plugin/Presets.h"
+#include "plugin/StateMigration.h"
 #include "ui/BandModel.h"
 #include "ui/BandPanel.h"
 #include "ui/Controls.h"
 #include "ui/Motion.h"
 #include "ui/PanelLayout.h"
+#include "ui/PluginEditor.h"
 #include "ui/Theme.h"
 
 // Interface rules of research §15 (acceptance criteria E3, E6, E7 and the information levels).
@@ -395,4 +397,60 @@ TEST_CASE ("Segmented control: one option at a time, disabled options are skippe
 
     // Click targets of the buttons are at least 24 x 24 px (WCAG 2.2, 2.5.8; E4).
     CHECK (control.getSegmentBounds (0).getHeight() + 4.0f >= static_cast<float> (metrics::targetSize));
+}
+
+TEST_CASE ("The editor docks its panels clear of each other and closes while they move (research 15 d6-d8)", "[ui][UX]")
+{
+    JuceEnvironment env;
+    plugin::SscAudioProcessor processor;
+    processor.setPlayConfigDetails (2, 2, 48000.0, 512);
+    processor.prepareToPlay (48000.0, 512);
+    {
+        std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
+        auto* ssc = dynamic_cast<SscEditor*> (editor.get());
+        REQUIRE (ssc != nullptr);
+        ssc->setMotionLevel (motion::Level::Off); // every layout is final at once
+        editor->setSize (SscEditor::kDefaultWidth, SscEditor::kDefaultHeight);
+        const int barTop = SscEditor::kDefaultHeight - SscEditor::kControlBarHeight;
+
+        auto& model = ssc->getBandModel();
+        const auto& panel = ssc->getBandPanel();
+        const auto& flyout = ssc->getBandAdvancedPanel();
+        CHECK_FALSE (panel.isVisible());
+        const int band = model.createBand (Shape::Bell, 1000.0f, 3.0f);
+        REQUIRE (band >= 0);
+        CHECK (panel.isVisible());
+        CHECK (panel.getWidth() == panel.getPreferredSize().x);
+        CHECK (panel.getHeight() == BandPanel::kStaticHeight);
+        CHECK (panel.getBottom() <= barTop);
+
+        model.setMode (band, BandMode::Dynamic);
+        CHECK (panel.getHeight() == BandPanel::kDynamicHeight);
+        ssc->setBandAdvancedOpen (true);
+        CHECK (ssc->isBandAdvancedOpen());
+        CHECK (flyout.isVisible());
+        CHECK_FALSE (flyout.getBounds().intersects (panel.getBounds()));
+        CHECK (flyout.getHeight() >= panel.getHeight());
+
+        // The global panel slides up from the bottom bar; the band panel docks above it.
+        ssc->setGlobalAdvancedOpen (true);
+        CHECK (panel.getBottom() <= barTop - GlobalAdvancedPanel::kHeight);
+        CHECK (flyout.getBottom() <= barTop - GlobalAdvancedPanel::kHeight);
+
+        model.clearSelection();
+        CHECK_FALSE (panel.isVisible());
+        CHECK_FALSE (flyout.isVisible());
+
+        // With motion on, the panels start moving; closing the editor meanwhile is safe.
+        ssc->setMotionLevel (motion::Level::Full);
+        model.select (band, false);
+        ssc->setGlobalAdvancedOpen (false);
+    }
+
+    // The interface state stays with the processor (saved with the session).
+    const auto& state = processor.getValueTreeState().state;
+    CHECK (static_cast<bool> (state[plugin::kUiBandAdvanced]));
+    CHECK_FALSE (static_cast<bool> (state[plugin::kUiGlobalAdvanced]));
+    CHECK (static_cast<int> (state[plugin::kUiMotion]) == static_cast<int> (motion::Level::Full));
+    processor.releaseResources();
 }
