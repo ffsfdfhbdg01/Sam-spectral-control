@@ -1,10 +1,16 @@
-# §15 UX/UI: grupowanie, hierarchia, przyciski i animacje (propozycja po M8)
+# §15 UX/UI: grupowanie, hierarchia, przyciski i animacje
 
-Status: **propozycja do akceptacji**. Dotyczy wyłącznie interfejsu: bez zmian w DSP, ID parametrów, stanie i presetach (więc bez migracji). Po akceptacji zostanie z niej ADR i etapy wdrożenia z §f.
+Status: **przyjęta z poprawkami (§d0) i wdrożona** w etapach U1–U4 (§f); U5 w backlogu. Dotyczy wyłącznie interfejsu: bez zmian w DSP, ID parametrów, presetach i układzie stanu — doszły tylko właściwości interfejsu w stanie (otwarte panele Advanced, poziom animacji), więc bez migracji.
 
 Pytanie: jak ułożyć interfejs Sam Spectral Control tak, żeby był dobrze pogrupowany, żeby na pierwszym planie było to, czego używa się najczęściej, jakie subtelne animacje (np. wysuwanie panelu) pomagają, jak podzielić przyciski i sekcje — z inspiracją rozwiązaniami FabFilter.
 
+Poprawki po przeglądzie pierwszej wersji: rzadziej używane panele nie są widoczne od razu (trzy poziomy informacji, §d2); pokrętła panelu pasma zależą od tego, czy pasmo jest statyczne, dynamiczne czy spektralne (§d5); ustawienia specjalistyczne są w wysuwanych panelach **Advanced** — pasma, z boku jego panelu (§d6), i globalnym, z dolnego paska (§d8).
+
 Makiety „przed / po” (interaktywna), system przycisków, stany panelu pasma, animacje z podglądem na żywo i oba paski: canvas [Sam Spectral Control UI](https://claude.ai/artifact/WZ3NfP5hCXpi74GYGdsSvx) (strona prywatna właściciela projektu).
+
+![Wdrożenie: pasmo Dynamic, panele Advanced zamknięte](../images/editor.png)
+
+![Wdrożenie: otwarte panele Advanced pasma i globalny](../images/editor-advanced.png)
 
 ## a) Literatura i normy
 
@@ -48,13 +54,13 @@ Makiety „przed / po” (interaktywna), system przycisków, stany panelu pasma,
 | F11 | **Gałki**: Shift = precyzyjnie, kółko myszy, Ctrl/Cmd-klik = reset, dwuklik = wpisanie wartości („1k”, „2x”, „50%”) | Pro-Q 4 [Knobs](https://www.fabfilter.com/help/pro-q/using/knobs) | wspólne zachowanie wszystkich gałek |
 | F12 | **Filozofia**: „expose the features you need, when you need them”; odejście od kopiowania sprzętu; jakość zamiast liczby funkcji | [About FabFilter](https://www.fabfilter.com/about); F. Slijkerman w [MusicRadar](https://musicradar.com/news/tech/meet-the-programmers-fabfilter-574996) | zasada nadrzędna tej propozycji |
 
-Animacje FabFilter (płynne pojawianie się panelu pasma, przenikania) nie są opisane w dokumentacji `[niezweryfikowane]` — parametry ruchu w §d9 wynikają z wytycznych z §a, nie z pomiaru ich wtyczek.
+Animacje FabFilter (płynne pojawianie się panelu pasma, przenikania) nie są opisane w dokumentacji `[niezweryfikowane]` — parametry ruchu w §d11 wynikają z wytycznych z §a, nie z pomiaru ich wtyczek.
 
-## c) Audyt obecnego interfejsu (wersja 1.0)
+## c) Audyt interfejsu 1.0 (przed zmianą)
 
-![Obecny interfejs, pasmo Dynamic](../images/editor.png)
+![Interfejs 1.0, pasmo Dynamic](../images/ui-1.0-editor.png)
 
-![Okno minimalne 860 × 480](../images/editor-860x480.png)
+![Interfejs 1.0, okno minimalne 860 × 480](../images/ui-1.0-860x480.png)
 
 | # | Problem | Fakty | Zasada |
 |---|---|---|---|
@@ -73,231 +79,244 @@ Animacje FabFilter (płynne pojawianie się panelu pasma, przenikania) nie są o
 | A13 | Brak wskaźnika zmienionego presetu, strzałek poprzedni/następny, nieaktywnego „A→B” przy równych stanach | — | F8 |
 | A14 | Brak przycisku pomocy i ustawień interfejsu (rozmiar, animacje) | — | F8, F9 |
 
-## d) Propozycja
+## d) Propozycja (po poprawkach) i jej wdrożenie
+
+### d0. Poprawki po przeglądzie (2026-10-09)
+
+| # | Pierwsza wersja | Po poprawce | Powód |
+|---|---|---|---|
+| P1 | dwa plany zawsze widoczne, trzeci w rozwijanej sekcji panelu i w szufladzie ⚙ | trzy poziomy (§d2): **zawsze** · **na żądanie** (panel wybranego pasma) · **zaawansowane** (za przyciskiem Advanced) | rzadziej używane panele nie zajmują miejsca, dopóki nie są potrzebne |
+| P2 | sekcja Dynamics z pięcioma gałkami, Selectivity zamiast Lookahead w trybie Spectral | zestaw gałek zależy od trybu pasma: Static — tylko EQ; Dynamic — Threshold, Ratio, Range, Attack, Release; Spectral — Threshold, Selectivity, Range, Attack, Release (§d5) | każdy tryb pokazuje to, czym się go ustawia |
+| P3 | sekcja Advanced rozwijana wewnątrz panelu (panel rośnie) | **wysuwany panel Advanced pasma** obok panelu: Threshold Mode, Direction, Knee, Lookahead (Dynamic) albo Ratio (Spectral), Mix, Link i odczyty (§d6) | panel pasma ma dwie stałe wysokości; szczegóły tylko na żądanie |
+| P4 | Quality i Oversampling w dolnym pasku, Offline i Max Lookahead w szufladzie ⚙, mierniki w pasku | **globalny panel Advanced** wysuwany z dolnego paska: Quality, Oversampling, Offline, Max Lookahead, Auto Gain (ważenie, szybkość), mierniki THD+N i aliasingu (§d8) | to ustawienia „raz na sesję”; w pasku zostaje to, co zmienia się często |
+| P5 | odczyty pasma w stopce panelu | odczyty w panelu Advanced pasma; ostrzeżenie (słyszalny ringing) zostawia kropkę na przycisku Advanced | informacja specjalistyczna, a ostrzeżenie nadal widać |
+| P6 | ⚙ = szuflada z ustawieniami przetwarzania i interfejsu | ⚙ = tylko interfejs (animacje, rozmiar okna); ? = instrukcja, mysz i klawiatura, informacje o wtyczce | jedno miejsce na każdy rodzaj ustawień |
 
 ### d1. Zasady
 
 1. **Wykres jest interfejsem.** Największa powierzchnia i najwyższy kontrast należą do krzywej i węzłów; wszystko inne jej służy i zasłania ją jak najmniej.
-2. **Trzy poziomy ważności.** *Pierwszy plan* (zawsze widoczny, najsilniejszy kontrast): krzywa, węzły, Freq/Gain/Q zaznaczonego pasma, tryb pasma, bypass globalny, Output. *Drugi plan* (widoczny, spokojniejszy): kształt, nachylenie, cel, Character, tryb fazy, Quality, oversampling, Auto Gain, Mix, presety, A/B. *Trzeci plan* (odsłaniany): Knee, Lookahead, Mix pasma, Link, oversampling offline, Max Lookahead, progi mierników, szczegóły analizatora.
-3. **Grupy przez odstęp, kontener tylko dla warstwy.** Grupy w paskach oddziela odstęp 16–24 px i cienka linia; ramkę ma tylko to, co leży nad wykresem (panel, popover, szuflada).
-4. **Edycja przy obiekcie.** Kontrolki pasma pojawiają się pod jego węzłem; popover wyrasta z przycisku, który go otworzył.
-5. **Jeden przycisk = jeden typ.** Sześć typów przycisków (§d7) o stałym wyglądzie; ten sam stan wygląda wszędzie tak samo.
-6. **Ruch tylko dla ciągłości i informacji zwrotnej.** 80–250 ms, bez odbić, zawsze przerywalny; nic nie czeka na animację; krzywa nigdy nie „goni” dźwięku.
-7. **Widać, że coś odbiega od domyślnego.** Ukryte ustawienie różne od domyślnego zostawia kropkę na przycisku, który je odsłania (F5).
+2. **Trzy poziomy informacji** (§d2): to, czego używa się w każdej sesji, jest widoczne; to, co dotyczy jednego pasma, pojawia się przy nim, gdy się je wybierze; ustawienia specjalistyczne czekają za jawnie podpisanym przyciskiem **Advanced**.
+3. **Treść zależna od kontekstu.** Panel pasma pokazuje tylko kontrolki, które w trybie pasma coś robią (żadnych wyszarzonych gałek Lookahead w Spectral czy Selectivity w Dynamic).
+4. **Grupy przez odstęp, kontener tylko dla warstwy.** Grupy w paskach oddziela odstęp 16–24 px i cienka linia; ramkę ma tylko to, co leży nad wykresem (panel pasma, panel Advanced, menu).
+5. **Edycja przy obiekcie.** Panel pasma pojawia się pod jego węzłem, a jego Advanced tuż obok; menu wyrasta z przycisku, który je otworzył.
+6. **Jeden przycisk = jeden typ** (§d9); ten sam stan wygląda wszędzie tak samo.
+7. **Ruch tylko dla ciągłości i informacji zwrotnej** (§d11): 110–200 ms, bez odbić, zawsze przerywalny; krzywa nigdy nie „goni” dźwięku.
+8. **Widać, że coś odbiega od domyślnego.** Ukryte ustawienie różne od domyślnego, podpowiedź albo ostrzeżenie zostawia kropkę na przycisku, który je odsłania (F5).
 
-### d2. Strefy okna
+### d2. Poziomy informacji
+
+| Poziom | Kiedy widoczny | Zawartość |
+|---|---|---|
+| 1. Zawsze | cały czas | nagłówek: presety `‹ nazwa • ›`, `A \| B`, kopiowanie, Undo/Redo, latencja i CPU, Analyzer, ⚙, ?; wykres z węzłami i zakresem skali; dolny pasek: ⏻, Phase (+ Model w Analog Feel), Advanced, Delta, Auto Gain, Mix, Output |
+| 2. Na żądanie | po wybraniu pasma | panel pasma pod węzłem: tryb, kształt, nachylenie, Freq, Gain, Q, Target, Character (Speakers w surround), bypass, solo, menu ⋯; w trybach Dynamic i Spectral rząd dynamiki zależny od trybu i Auto Gain pasma |
+| 3. Zaawansowane | po kliknięciu **Advanced** | panel Advanced pasma (z boku panelu pasma), globalny panel Advanced (nad dolnym paskiem), menu ⚙ |
+
+Stan otwarcia obu paneli Advanced i poziom animacji zapisują się z sesją (`uiBandAdvanced`, `uiGlobalAdvanced`, `uiMotion` w stanie, jak rozmiar okna) — kto używa paneli Advanced, nie musi ich otwierać za każdym razem.
+
+### d3. Strefy okna
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────────────────┐
-│ Sam Spectral Control 1.0 │ ‹ Default • › │ A|B ⧉ │ ↶ ↷ │      85,3 ms · CPU 3 % │ Analyzer▾ ⚙ ? │  nagłówek 40 px
+│ Sam Spectral Control v1.0 │ ‹ Default • › │ A|B ⧉ │ ↶ ↷ │  Latency 85,3 ms · CPU 3 % │ Analyzer▾ ⚙ ? │  nagłówek 40 px
 ├───────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                              ±12 dB ▾     │  zakres przy skali (F10)
-│                                     ●3                                                    │
-│                          ●2        /  \                                           ●4     │  wykres: krzywa, węzły,
-│ ●1 ───────────\________/          \________________________________/                   │  analizator, poświata
-│                                  ╭────────────────────────────╮                          │
-│                                  │ panel pasma pod węzłem 3   │                          │  panel zakotwiczony w
-│                                  ╰────────────────────────────╯                          │  poziomie przy węźle
-│ 20     50    100    200     500    1k     2k      5k     10k    20k                       │
+│                                                                             ±12 dB ▾      │  zakres przy skali (F10)
+│                          ●2        ●3                                              ●4     │
+│     ╭ ● Band 3 [Static|Dynamic|Spectral] Advanced › ⏻ 🎧 ⋯ ╮ ╭ Threshold   Direction ╮      │  panel pasma pod węzłem;
+│     │ Shape   ◯Freq ◯Gain ◯Q    Target                    │ │ ◦Knee ◦Lookahead ◦Mix  │      │  Advanced pasma wysuwa
+│     │ Slope                     Character                 │ │ Link ▾                 │      │  się spod jego krawędzi
+│     │ DYNAMICS ─────────────────────────────── [Auto Gain] │ │ odczyty                │      │
+│     │ ◯Threshold ◯Ratio ◯Range ◯Attack ◯Release           │ ╰────────────────────────╯      │
+│     ╰─────────────────────────────────────────────────────╯                                 │
+├───────────────────────────────────────────────────────────────────────────────────────────┤  ↑ globalny Advanced 84 px:
+│ PROCESSING Quality Oversampling Offline ◯Max Lookahead │ AUTO GAIN Weighting Speed │ METERS │    wysuwa się zza paska
 ├───────────────────────────────────────────────────────────────────────────────────────────┤
-│ ⏻ │ Phase       Quality   Oversampling │          THD+N −71 dB │ Delta  Auto Gain▾  Mix  Output │  dolny pasek 56 px
-│   │ Minimum ▾   Normal ▾  Off ▾        │          Alias <−120  │                 ◯100%  ◯0,0 dB │
+│ ⏻ │ Phase ▾ (Model ▾) │ Advanced ▴•          Delta  Auto Gain −1,2 dB │ ◯ Mix   ◯ Output │  dolny pasek 56 px
 └───────────────────────────────────────────────────────────────────────────────────────────┘
-   przetwarzanie                           pomiary                  odsłuch i wyjście
 ```
 
-### d3. Nagłówek (40 px)
+### d4. Nagłówek (40 px)
 
-Od lewej, cztery grupy oddzielone odstępem 16 px i linią 1 px:
+Od lewej, grupy oddzielone odstępem 16 px i linią 1 px:
 
-1. **Tożsamość**: nazwa (15 px, półgruba) i wersja (11 px, trzeci plan). Przy oknie < 1000 px — sama nazwa.
-2. **Presety**: `‹` *Nazwa presetu* `›`. Kropka po nazwie i przygaszenie, gdy ustawienia różnią się od wczytanego presetu (F8). Kliknięcie nazwy — dotychczasowe menu (Factory / User / Save As… / Delete / Show Preset Folder).
-3. **Porównanie i historia**: segmented `A | B`, ikona kopiowania `⧉` (podpowiedź „Copy A to B”, nieaktywna, gdy stany są równe), `↶ ↷` (nieaktywne, gdy nie ma czego cofnąć — jak teraz).
-4. **Status i widok** (do prawej): *chip statusu* „85,3 ms · CPU 3 %” (drugi plan; krótki puls koloru przy zmianie latencji, jak teraz), split button **Analyzer ▾**, ikona **⚙** (szuflada ustawień), ikona **?** (instrukcja i „podpowiedzi”).
+1. **Tożsamość**: nazwa (15 px, półgruba) i wersja (11,5 px, podpis); przy oknie < 1000 px sama nazwa.
+2. **Presety**: `‹` *pole z nazwą* `›`. Strzałki wczytują poprzedni / następny preset w kolejności menu (fabryczne, potem użytkownika). Gdy ustawienia różnią się od wczytanego presetu, nazwa przygasa i dostaje bursztynową kropkę (F8; porównanie wszystkich parametrów brzmienia i głośników 4 razy na sekundę, bez Bypass i Delta). Kliknięcie pola — menu presetów jak w 1.0.
+3. **Porównanie i historia**: segmented `A | B`, ikona kopiowania `⧉` (nieaktywna, gdy oba stany są równe — także przed pierwszym przełączeniem, bo B zaczyna jako kopia A), `↶ ↷` (nieaktywne, gdy nie ma czego cofnąć; w podpowiedzi nazwa kroku).
+4. **Status i widok** (do prawej): chip „Latency 85,3 ms · CPU 2,7 %” (przy < 1000 px „85,3 ms · 2,7 %”; w podpowiedzi latencja w próbkach i współczynnik oversamplingu; przy zmianie latencji chip świeci na bursztynowo przez 3 s), split button **Analyzer ▾** (lewa część włącza i wyłącza widmo, ▾ otwiera jego ustawienia), **⚙** (animacje Full / Reduced / Off, rozmiary okna Small 860 × 480 … Extra Large 1800 × 1080), **?** (instrukcja — zainstalowany `Manual.md`, mysz i klawiatura, informacje o wtyczce).
 
-Zakres skali EQ przenosimy z nagłówka do prawego górnego rogu wykresu, nad skalę dB (F10): to ustawienie widoku wykresu, więc powinno być przy nim.
+Zakres skali EQ jest w prawym górnym rogu wykresu, obok skali dB (F10). Progi ostrzeżeń mierników przeszły z menu Analyzer do kliknięcia w mierniki (§d8).
 
-### d4. Panel pasma
+### d5. Panel pasma: pokrętła zależne od trybu
 
-**Położenie (F1).** Panel ma stałą wysokość dokowania: u dołu wykresu, 12 px nad skalą częstotliwości; w poziomie środek panelu = x węzła (dla zaznaczenia wielu pasm — środek zaznaczenia), przycięty do 8 px od krawędzi. Gdy węzeł leży w pasie zasłanianym przez panel, panel dokuje u góry wykresu. Podczas przeciągania węzła panel stoi; po puszczeniu przesuwa się do nowej pozycji (§d9, poz. 5–6), więc cel nie ucieka spod kursora. Mały trójkątny „ogonek” (8 px) na krawędzi panelu wskazuje węzeł.
-
-**Wymiary.** Stała szerokość 560 px — dziś panel ma 482 px w trybie Static i 684 px w Dynamic, więc przy zmianie trybu skacze też w poziomie. Wysokość: Static ok. 140 px, Dynamic ok. 230 px, z Advanced ok. 290 px. Panel Static zajmuje ok. 12 % pola wykresu (dziś ok. 11 %, ale tryb jest w nim widoczny na stałe), Dynamic ok. 21 % (dziś ok. 25 %).
-
-**Układ (od góry):**
-
-```
-╭───────────────────────────────────────────────────────────────────────╮
-│ ● Band 3    [◠ Bell ▾]      [ Static | Dynamic | Spectral ]   ⏻  🎧  ⋯ │  nagłówek: tożsamość · kształt · TRYB · stan
-│                                                                       │
-│   ◯ Freq      ◯ Gain      ◯ Q            Target  Stereo ▾             │  EQ: trzy duże gałki w kolorze pasma
-│   3,00 kHz    +3,0 dB     0,90           Character  Clear ▾          │  + wartości drugiego planu
-│ ── Dynamics ─────────────────────────────────────── [Auto Gain] ───── │  sekcja tylko w Dynamic / Spectral
-│   ◯ Threshold   ◯ Ratio     ◯ Range   ◯ Attack   ◯ Release   Advanced ▸• │
-│   −30 dB        2,0:1       12 dB     5 ms       100 ms              │
-│   [Abs|Rel]     [Above|Below]                                         │  mini segmented pod gałkami
-│ ── Advanced (rozwijane) ─────────────────────────────────────────── │
-│   ◦ Knee 6 dB   ◦ Lookahead 0 ms   ◦ Mix 100 %   Link  Group ▾        │  trzeci plan: małe gałki
-│ ⓘ Δφ 2° · τg 0,01 ms · pre 0,0 ms · post 0,4 ms                       │  odczyty — stopka, trzeci plan
-╰───────────────────────────────────────────────────────────────────────╯
-```
-
-- **Nagłówek panelu**: kropka i „Band 3” w kolorze pasma; przycisk kształtu z miniaturą krzywej (popover z siatką kształtów z ikonami zamiast listy tekstowej); **segmented Static | Dynamic | Spectral** — tryb widoczny zawsze, jedno kliknięcie zamiast otwierania listy (segmenty Dynamic i Spectral nieaktywne dla kształtów bez wzmocnienia, z podpowiedzią dlaczego); po prawej ikony: **bypass** z lampką (F2), **solo** ze słuchawkami — przytrzymanie = chwilowo, kliknięcie = zatrzaśnięte (F3) — i **⋯** (Copy, Paste, Reset, Delete; Delete czerwonym tekstem, nadal z klawiszem Delete). Znika duży przycisk „Delete” i „On/Off” z napisem.
-- **EQ**: Freq, Gain, Q jako gałki 48 px z łukiem w kolorze pasma (podobieństwo z węzłem, A8). Slope pojawia się obok kształtu dla cięć i półek; dla kształtów bez Q gałka Q jest przygaszona (jak teraz). Target i Character jako *value buttons* z podpisem (A6); w surround obok Target — „Speakers: All ▾”.
-- **Dynamics** (rozwija się przy przełączeniu trybu, §d9 poz. 7): nagłówek sekcji z cienką linią i przełącznikiem **Auto Gain** (dla pasm Dynamic/Spectral). Pięć gałek 40 px: Threshold (z mini-segmented Abs | Rel pod spodem; docelowo z łukiem poziomu detekcji wewnątrz, jak próg w Pro-C 3 i Pro-Q 4 — wymaga telemetrii poziomu z silnika), Ratio (z Above | Below), Range, Attack, Release. W trybie Spectral zamiast Lookahead (nieużywany) w pierwszym rzędzie pojawia się **Selectivity**.
-- **Advanced ▸** (F6): Knee, Lookahead (tylko Dynamic), Mix pasma, Link — gałki 32 px i value button. Kropka na „Advanced”, gdy któreś ma wartość niedomyślną (F5). Stan rozwinięcia zapamiętany w ustawieniach interfejsu.
-- **Gałka Gain pasma dynamicznego** pokazuje cienkim wewnętrznym łukiem bieżącą zmianę wzmocnienia (dziś widać ją tylko na krzywej) — informacja zwrotna tam, gdzie patrzy użytkownik (jak żółty pasek w pierścieniu Pro-Q 4).
-- **Odczyty** (Δφ, τg, pre/post ring) — stopka 11 px z ikoną ⓘ; kolor ostrzegawczy jak teraz. Opcja w ustawieniach: ukryj odczyty.
-
-### d5. Dolny pasek (56 px)
-
-Grupy od lewej: **⏻** | **Przetwarzanie**: Phase, Model (tylko w Analog Feel — pojawia się animowany, §d9 poz. 15), Quality, Oversampling | odstęp | **Pomiary**: THD+N, Alias | **Odsłuch i wyjście**: Delta, Auto Gain ▾, Mix, Output.
-
-- Phase, Model, Quality, Oversampling jako *value buttons*: podpis 11 px nad wartością, ▾ widoczne po najechaniu, bez ramki (mniej szumu niż dziś przy pięciu obramowanych listach). Kolejność od najważniejszego.
-- **Offline** przechodzi do szuflady ustawień; gdy różny od „Same”, przycisk Oversampling pokazuje to w wartości: „Off · 8x offline”.
-- **Mix** i **Output**: gałki 32 px z wartością bezpośrednio pod (Fitts, A3); Output z małym wskaźnikiem poziomu wyjścia (P2).
-- **Delta** obok Mix — oba dotyczą tego, co słychać; Delta włączona: wypełnienie akcentem (bursztyn) i obwódka, bez migania.
-- **Responsywność** (A2): przy szerokości < 1000 px podpisy znikają (zostają w podpowiedziach), Phase pokazuje krótkie nazwy (Min / Natural / Analog), mierniki zwijają się do jednego wskaźnika „THD” z kolorem stanu i szczegółami w podpowiedzi; przy 860 px żadna etykieta nie jest ucięta.
-
-### d6. Szuflada ustawień, pomoc, popover analizatora
-
-- **⚙ Szuflada** (wysuwana z prawej, 300 px, nad wykresem z przyciemnieniem 40 %): *Processing* — Offline oversampling, Max Lookahead (dziś niedostępny w interfejsie, A11); *Auto Gain* — Weighting, Speed (zostają też w menu ▾ przy przycisku); *Meters* — progi ostrzeżeń THD+N i aliasingu; *Interface* — rozmiar (S / M / L / XL, jak w F9, obok swobodnego skalowania), animacje (Full / Reduced / Off), odczyty w panelu (wł./wył.), podpowiedzi rozszerzone (wł./wył.). Każde ustawienie ma jednozdaniowy opis. Kropka na ⚙, gdy Offline ≠ Same albo Max Lookahead > 0.
-- **? Pomoc**: otwiera instrukcję (zainstalowany `Manual.md` lub wersję online) i przełącza *podpowiedzi rozszerzone* — dłuższe opisy w tooltipach (odpowiednik „interactive help hints” FabFilter).
-- **Analyzer ▾** jako split button: lewa część włącza/wyłącza widmo, prawa otwiera *popover* zamiast menu z podmenu. Sekcje: *Spectrum* (Pre / Post jako przełączniki, Freeze), *Display* (Resolution, Speed, Tilt, Range jako segmented), *Overlays* (Activity glow, Resonance hints + czułość, EQ phase overlay). Wszystkie opcje widać naraz — mniej kliknięć niż w podmenu (Hick, Fitts).
-
-### d7. System przycisków
-
-| Typ | Kiedy | Wygląd | Przykłady |
+| | Static | Dynamic | Spectral |
 |---|---|---|---|
-| **Toggle** (przełącznik funkcji) | włącza/wyłącza funkcję | etykieta na neutralnym tle; *on*: wypełnienie kolorem semantycznym | Auto Gain, Delta, podpowiedzi |
-| **Ikona stanu** | stan elementu, często przełączany | 28 × 28 px, ikona 16 px, lampka/kolor w stanie aktywnym | bypass pasma (czerwona lampka), solo (bursztyn), ⏻ globalny (zielony) |
-| **Segmented** | 2–4 wykluczające się opcje zmieniane często | wspólny kontener, przesuwany wskaźnik | A/B, Static/Dynamic/Spectral, Abs/Rel, Above/Below, sekcje popovera |
-| **Value button** | wybór z listy, zmieniany rzadziej | wartość + ▾ (▾ widoczny na hover), podpis nad, bez ramki | Phase, Quality, Oversampling, Model, Shape, Slope, Target, Character, Link |
-| **Ikona akcji** (ghost) | akcje pomocnicze | 28 × 28 px, tło tylko na hover | ↶ ↷, ‹ ›, ⧉, ⚙, ?, ⋯ |
-| **Split button** | funkcja + jej ustawienia | toggle po lewej, ▾ po prawej, wspólny obrys | Analyzer, Auto Gain |
-| **Destrukcyjny** | usuwanie | tylko w menu ⋯ (czerwony tekst) i klawiszem Delete | Delete band, Delete preset |
-| **Główna akcja** | jedna w oknie dialogowym | wypełniony akcentem | Save w oknie zapisu presetu |
+| Nagłówek | kropka w kolorze pasma i „Band *n*”; tryb **Static \| Dynamic \| Spectral**; **Advanced ›**; ⏻ (czerwona lampka, gdy pasmo wyłączone); 🎧 (klik — zatrzaśnięcie, przytrzymanie — chwilowo); ⋯ (Copy, Paste, Reset, Delete) | jak Static | jak Static |
+| Rząd EQ | Shape, Slope (cięcia, półki, Band Pass), **Freq**, **Gain**, **Q**, Target, Character; w surround Speakers | jak Static | jak Static |
+| Rząd dynamiki | — | **Threshold**, **Ratio**, **Range**, **Attack**, **Release** + Auto Gain pasma | **Threshold**, **Selectivity**, **Range**, **Attack**, **Release** + Auto Gain pasma |
+| Advanced pasma (§d6) | odczyty: faza nadmiarowa, opóźnienie grupowe, ringing | Threshold Mode, Direction, Knee, **Lookahead**, Mix, Link; odczyty (także przy pełnym Range) | Threshold Mode, Direction, Knee, **Ratio**, Mix, Link; pre-echo STFT |
 
-**Stany** (wszystkie typy): domyślny; hover (+6 % jasności tła, 90 ms); wciśnięty (−4 %); fokus klawiatury (pierścień 2 px, ≥ 3:1); nieaktywny (krycie 38 %, bez hover, podpowiedź wyjaśnia dlaczego); aktywny/on (wypełnienie); *niedomyślny* (kropka 6 px w prawym górnym rogu).
+- **Wymiary**: szerokość 488 px (600 px w surround, z Speakers), wysokość 132 px (Static) albo 232 px (Dynamic, Spectral). Przy zmianie trybu panel zmienia tylko wysokość, nigdy szerokości (w 1.0 skakał z 482 na 684 px).
+- **Gałki**: EQ ok. 46 px, dynamika ok. 38 px, Advanced ok. 32 px; łuk w kolorze pasma (podobieństwo z węzłem, A8), Gain od 0 dB w obie strony; podpis nad gałką, wartość pod nią (kliknięcie — wpisanie wartości, dwuklik — wartość domyślna).
+- **Tryb**: segmenty Dynamic i Spectral są nieaktywne dla kształtów bez wzmocnienia (podpowiedź mówi dlaczego). Przełączenie na Spectral z nieruszonym progiem Dynamic ustawia Relative +6 dB i odwrotnie (DYN-4, bez zmian).
+- **Liczba kontrolek parametrów**: Static 8 (w 1.0: 11–12 kontrolek, w tym 3 listy bez podpisu), Dynamic i Spectral 14 (w 1.0: 23–24). Test `TestInterface` sprawdza, które parametry ma każdy tryb.
 
-**Rozmiary**: cel kliknięcia ≥ 24 × 24 px (WCAG 2.2 2.5.8), w paskach wysokość 28 px; gałki 48 px (pierwszy plan), 40 px (drugi), 32 px (trzeci); wszystkie gałki mają to samo zachowanie (F11: Shift, kółko, Ctrl/Cmd-klik = reset, dwuklik = wpisanie).
+### d6. Wysuwany panel Advanced pasma
 
-**Kolory semantyczne**: *kolor pasma* = tożsamość pasma (węzeł, ramka panelu, łuki gałek w panelu); *bursztyn* `#f5a524` = „słyszysz coś innego niż normalny tor” i uwaga (Solo, Delta, podpowiedź oversamplingu, zmiana latencji) — przestaje być kolorem każdej gałki; *zielony* = przetwarzanie włączone; *czerwony* = pasmo wyłączone (lampka), ostrzeżenia mierników; *cyjan* = nakładki informacyjne (faza). Kolor zawsze idzie w parze z kształtem lub tekstem (nie tylko barwa).
+- Otwiera go przycisk **Advanced ›** w nagłówku panelu pasma (ten sam przycisk, teraz **‹**, zamyka). Szerokość 248 px, wysokość jak panel pasma, warstwa 2 (`#232831`), obrys w kolorze pasma.
+- **Ruch**: wysuwa się spod krawędzi panelu pasma (160–180 ms, krzywa wejścia lub standard, przenikanie 140 ms), chowa się pod nią z powrotem (140 ms, wyjście). *Reduced*: samo przenikanie ≤ 100 ms; *Off*: natychmiast.
+- **Strona**: domyślnie z prawej; jeśli tam zasłaniałby węzeł, otwiera się z lewej (§d7).
+- **Zawartość** wg trybu (§d5). Odczyty w dwóch kolumnach (nazwa — wartość); wartości ringingu i pre-echo bursztynowe, gdy mogą być słyszalne (post > 50 ms albo pre > 5 ms przy −60 dB, §12c). Pasmo Static widzi same odczyty i notkę, że ustawienia detektora mają pasma Dynamic i Spectral.
+- **Kropka na Advanced** (bursztynowa, F5): ustawienie detektora różne od domyślnego **dla trybu pasma** (Threshold Mode: Absolute w Dynamic, Relative w Spectral; Lookahead liczy się tylko w Dynamic, Ratio w panelu Advanced — tylko w Spectral) albo odczyt ostrzegający przed ringingiem. Podpowiedź przycisku mówi, co jest przyczyną.
 
-### d8. Tokeny wizualne
+### d7. Dokowanie panelu pasma
 
-| Token | Wartość | Kontrast (do panelu `#1b1f26`) |
-|---|---|---|
-| tło okna | `#0f1115` | — |
-| wykres | `#13161c` → `#0c0e12` | — |
-| panel (warstwa 1) | `#1b1f26` + cień `0 8 24 rgba(0,0,0,.45)` | — |
-| popover, szuflada (warstwa 2) | `#232831` | — |
-| tekst główny | `#e6ebf0` | 13,8:1 |
-| tekst drugiego planu, wartości | `#a3adb8` | 7,3:1 |
-| podpisy (tylko na tle i panelu) | `#7f8995` | 4,7:1 |
-| tor gałki | `#3b424d` → docelowo ≥ 2:1 | 1,6:1 (dziś 1,24:1) |
-| linie podziału | `#2b313b` | dekoracyjne |
-| akcent | `#f5a524` | 8,1:1 |
+Czysta funkcja `dockBandPanel` (`ui/PanelLayout`, test E6) sprawdza kandydatów w kolejności:
 
-- **Typografia**: jedna rodzina w trzech rozmiarach (11 / 12,5 / 15 px) i cyfry o stałej szerokości dla wartości (wartości nie „skaczą” przy zmianie). Propozycja: IBM Plex Sans i IBM Plex Mono (licencja SIL OFL 1.1), osadzone w binarce — ten sam wygląd na macOS, Windows i Linuksie (dziś czcionka systemowa); wymaga dopisania do `THIRD-PARTY-NOTICES.txt`.
-- **Siatka**: 4 px; odstępy 8 / 12 / 16 / 24; promienie 6 px (kontrolki), 10 px (panel, popover).
+1. u dołu wykresu (nad skalą częstotliwości albo nad otwartym globalnym panelem Advanced), środek panelu = x węzła, Advanced z prawej;
+2. to samo z Advanced z lewej;
+3. u góry wykresu (Advanced z prawej, potem z lewej);
+4. obok węzła — para panel + Advanced w całości na prawo albo na lewo od niego;
+5. gdy nic nie odsłania węzła (wysoki panel w niskim oknie) — pozycja, która zasłania go najmniej.
 
-### d9. Animacje
+Margines 8 px od krawędzi wykresu, węzeł co najmniej 12 px od panelu. Podczas przeciągania węzła panel stoi; po puszczeniu przesuwa się w nowe miejsce (180 ms). W oknie 1100 × 660 węzeł nie jest zasłonięty w żadnym położeniu (test: siatka 41 × 31 położeń, panel Static i Dynamic, z Advanced pasma i bez, z globalnym Advanced bez Advanced pasma). W oknie minimalnym 860 × 480 pasmo Dynamic na 0 dB w środku wykresu z otwartym Advanced pasma bywa zasłonięte — panel staje wtedy tam, gdzie zasłania najmniej.
 
-Krzywe: *wejście* `cubic-bezier(0, 0, 0.2, 1)`, *wyjście* `cubic-bezier(0.4, 0, 1, 1)`, *standard* (przesunięcie w obrębie ekranu) `cubic-bezier(0.2, 0, 0, 1)`.
+### d8. Dolny pasek i globalny panel Advanced
 
-| # | Zdarzenie | Animacja | Czas | Krzywa | „Ogranicz ruch” |
-|---|---|---|---|---|---|
-| 1 | najechanie na przycisk, węzeł, gałkę | kolor tła / obrysu; węzeł: promień ×1,15 i poświata | 90 ms (powrót 140 ms) | wejście | tylko kolor |
-| 2 | wciśnięcie | przyciemnienie, bez skalowania | natychmiast | — | bez zmian |
-| 3 | pojawienie się panelu pasma | przenikanie + przesunięcie 8 px od strony węzła | 160 ms | wejście | przenikanie 100 ms |
-| 4 | zniknięcie panelu | przenikanie + 4 px | 110 ms | wyjście | przenikanie 80 ms |
-| 5 | przejście panelu do innego pasma | przesunięcie w poziomie + przenikanie treści | 160 ms (treść 90 ms) | standard | skok + przenikanie treści |
-| 6 | przeniesienie panelu dół ↔ góra | przesunięcie | 180 ms | standard | przenikanie 120 ms |
-| 7 | rozwinięcie Dynamics / Advanced | wysokość panelu + przenikanie treści (opóźnione o 40 ms) | 180 ms (zwinięcie 140 ms) | standard | natychmiast |
-| 8 | segmented (A/B, tryb pasma) | przesunięcie wskaźnika | 140 ms | standard | natychmiast |
-| 9 | szuflada ustawień | wjazd 24 px z prawej + przenikanie; przyciemnienie tła do 40 % | 200 ms / zamknięcie 150 ms | wejście / wyjście | przenikanie |
-| 10 | popover (analizator, kształt, głośniki) | skala 0,97 → 1 + przenikanie, z punktu przycisku | 130 ms / 90 ms | wejście / wyjście | przenikanie |
-| 11 | podpowiedź | przenikanie po 600 ms zwłoki (bez zwłoki, gdy inna jest już widoczna) | 100 ms | liniowa | bez zmian |
-| 12 | wartość przy przeciąganiu węzła | przenikanie; znika 400 ms po puszczeniu | 80 ms | — | bez zmian |
-| 13 | zmiana latencji | jeden puls koloru chipu statusu | 600 ms | wyjście | zmiana koloru bez pulsu |
-| 14 | podpowiedź oversamplingu ▴ | jeden puls przy pojawieniu się | 600 ms | wyjście | bez pulsu |
-| 15 | kontrolka Model (Analog Feel) | szerokość + przenikanie | 160 ms | standard | natychmiast |
-| 16 | Solo / Delta włączone | kolor i obwódka (bez migania) | 120 ms | wejście | bez zmian |
-| 17 | (opcjonalnie) wczytanie presetu, A/B, Undo | krzywa i węzły przechodzą do nowego stanu | 120 ms | standard | natychmiast |
+**Dolny pasek** (56 px), grupy: **⏻** | **Phase** (+ **Model** tylko w Analog Feel) | **Advanced ▴** | … | **Delta**, **Auto Gain** | **Mix**, **Output**.
 
-Reguły:
-- **Krzywa nie goni dźwięku.** Zmiany parametrów (przeciąganie, automatyzacja) rysujemy natychmiast; animowana jest tylko „rama” interfejsu. Wyjątek nr 17 jest krótszy od wygładzania zmian w silniku i można go wyłączyć.
-- **Przerywalność.** Każda animacja startuje od bieżącej wartości (nie od początku); kliknięcie w trakcie trafia w docelowy układ — nic nie blokuje wejścia.
-- **Bez pętli i odbić.** Żadnej animacji w kółko poza danymi (analizator, mierniki, poświata), żadnego „przestrzelenia” (tłumienie 100 %, §a).
-- **Ogranicz ruch.** Ustawienie *Animations: Full / Reduced / Off*; domyślnie z systemu, tam gdzie da się to odczytać (macOS: `NSWorkspace.accessibilityDisplayShouldReduceMotion`; Windows: `SystemParametersInfo(SPI_GETCLIENTAREAANIMATION)`; Linux: brak standardu — Full). *Reduced* = tylko przenikania ≤ 100 ms; *Off* = natychmiast.
-- **Koszt.** Animacje taktowane odświeżaniem monitora (`VBlankAttachment`), odrysowywany tylko animowany obszar; przesunięcia przez `Component::setTransform`, przenikanie krótko (≤ 160 ms), bo `setAlpha` rysuje przez warstwę pośrednią; bez animacji — zero wywołań na klatkę.
+- Phase i Model to *value buttons* (podpis nad wartością, ▾ tuż za wartością); przy < 1000 px krótkie nazwy (Minimum / Natural / Analog). Koszt trybów w podpowiedzi (PH-2).
+- **Advanced ▴** przełącza globalny panel. Kropka: bursztynowa — ustawienie różne od domyślnego (lista w podpowiedzi, np. „Quality High, Offline 8x”) albo podpowiedź oversamplingu (OS-5); czerwona — miernik ponad progiem ostrzeżenia (MTR-4). Ostrzeżenia nie giną więc, gdy panel jest zamknięty.
+- **Delta** w stanie włączonym bursztynowa (słyszysz coś innego niż normalny tor). **Auto Gain** zielony, gdy włączony, z bieżącą korekcją na przycisku („Auto Gain −1,2 dB”; dawniej w linii stanu).
+- **Mix** i **Output**: gałka 36 px z podpisem i wartością obok (Fitts, A3); Output od 0 dB w obie strony.
 
-### d10. Gdzie trafia każdy obecny element
+**Globalny panel Advanced** (84 px, na całą szerokość okna) wysuwa się zza dolnego paska (200 ms, krzywa wejścia; chowa się w 150 ms); panel pasma dokuje wtedy nad nim, a skala częstotliwości wykresu przesuwa się nad jego krawędź.
 
-| Obecnie | Proponowane miejsce |
+| Grupa | Kontrolki |
 |---|---|
-| Preset (nagłówek) | nagłówek: `‹` nazwa `›` + kropka „zmieniony” |
-| A, B, A→B | segmented `A \| B` + ikona `⧉` (nieaktywna przy równych stanach) |
-| Undo, Redo | bez zmian (ikony), grupa „historia” |
-| Linia statusu (latencja, CPU) | chip statusu po prawej stronie nagłówka |
-| Analyzer (menu z podmenu) | split button + popover z sekcjami |
-| Zakres EQ (nagłówek) | prawy górny róg wykresu, przy skali dB |
-| On / Off pasma | ikona bypass z lampką w nagłówku panelu |
-| Solo pasma | ikona słuchawek (przytrzymanie / zatrzaśnięcie) |
-| Delete pasma | menu ⋯ i klawisz Delete |
-| Shape (lista) | przycisk z miniaturą kształtu + popover z ikonami |
-| Mode (lista) | segmented Static / Dynamic / Spectral w nagłówku panelu |
-| Target, Character (listy bez podpisu) | value buttons z podpisem obok gałek EQ |
-| Auto Gain pasma | przełącznik w nagłówku sekcji Dynamics |
-| Threshold Mode, Direction (listy) | mini segmented pod Threshold i Ratio |
-| Knee, Lookahead, Mix, Link | sekcja Advanced (rozwijana, z kropką „zmienione”) |
-| Selectivity | pierwszy rząd dynamiki tylko w trybie Spectral |
-| Odczyty pasma | stopka panelu z ⓘ |
-| Phase, Model, Quality, Oversampling | grupa „Przetwarzanie” w dolnym pasku, value buttons; Model tylko w Analog Feel |
-| Offline | szuflada ⚙ + wskaźnik w wartości Oversampling |
-| Auto Gain ▾ | split button w grupie „Odsłuch i wyjście” |
-| Mierniki | grupa „Pomiary” (bez zmian w treści) |
-| Delta | obok Mix |
-| Mix, Output | większe gałki z wartością pod spodem |
-| Max Lookahead (tylko w hoście) | szuflada ⚙ |
-| Progi mierników (menu Analyzer) | szuflada ⚙ |
+| Processing | **Quality** (koszt i latencja w podpowiedzi), **Oversampling** (przy podpowiedzi OS-5 bursztynowy podpis „Oversampling ▴” i powód), **Offline** (render), **Max Lookahead** (gałka; dotąd tylko parametr hosta, A11) |
+| Auto Gain | **Weighting**, **Speed** (dotąd menu ▾ przy przycisku Auto Gain) |
+| Meters | THD+N i aliasing (MTR-1, MTR-4); kliknięcie — progi ostrzeżeń (dotąd w menu Analyzer) |
 
-## e) Kryteria akceptacji
+Odczyty mierników odświeżają się także przy zamkniętym panelu (kropka na Advanced).
 
-| # | Kryterium | Sprawdzenie |
+### d9. System przycisków
+
+| Typ (klasa) | Kiedy | Wygląd | Przykłady |
+|---|---|---|---|
+| **Chip** (`ChipButton`) | włącza / wyłącza funkcję albo panel | obrys; *on*: wypełnienie w kolorze semantycznym; może mieć ikonę (›, ▴) i kropkę | Auto Gain, Delta, Analyzer, Advanced |
+| **Ikona** (`IconButton`) | akcje i stany elementu | 28 × 28 px, tło tylko na hover; *on*: ikona i tło w kolorze stanu; lampka/kropka w rogu | ‹ ›, ⧉, ↶ ↷, ⚙, ?, ⋯, ⏻ pasma (czerwona lampka), 🎧 (bursztyn) |
+| **Segmented** (`SegmentedControl`) | 2–3 wykluczające się opcje | wspólny kontener, przesuwany wskaźnik (140 ms), strzałki ← → z klawiatury, nieaktywne segmenty pomijane | A \| B, Static \| Dynamic \| Spectral, Absolute \| Relative, Above \| Below |
+| **Value button** (`ValueButton`, `ChoiceParameterButton`, `BandChoiceButton`) | wybór z listy, zmieniany rzadziej | podpis 11 px nad wartością, ▾ tuż za wartością, bez ramki; menu pod przyciskiem | Phase, Model, Quality, Oversampling, Offline, Weighting, Speed, Shape, Slope, Target, Character, Link, zakres EQ |
+| **Split button** | funkcja + jej ustawienia | dwa chipy połączone krawędzią | Analyzer ▾ |
+| **Pole presetu** (`PresetNameButton`) | nazwa i menu presetów | pole z obrysem, kropka „zmieniony” | Default • |
+| **Destrukcyjny** | usuwanie | tylko w menu (czerwony tekst) i klawiszem Delete | Delete Band, Delete preset |
+
+**Stany** (wszystkie typy): domyślny; hover (tło +6 % jasności tekstu); wciśnięty (+12 %); fokus klawiatury (pierścień 2 px; kliknięcie myszą nie zabiera fokusu wykresowi, więc jego skróty działają dalej); nieaktywny (krycie ok. 40 %, bez hover, podpowiedź wyjaśnia dlaczego); *on* (wypełnienie); *niedomyślny / uwaga* (kropka 7 px w prawym górnym rogu).
+
+**Kolory semantyczne**: kolor pasma = tożsamość pasma (kropka, obrys paneli, łuki gałek); bursztyn `#f5a524` = słyszysz coś innego niż normalny tor albo uwaga (Solo, Delta, kropki, podpowiedź oversamplingu, zmiana latencji); zielony = przetwarzanie włączone (⏻, Auto Gain); czerwony = pasmo wyłączone (lampka), miernik ponad progiem; neutralny jasny = panel otwarty / widmo włączone. Kolor zawsze idzie w parze z kształtem lub tekstem.
+
+### d10. Tokeny wizualne
+
+| Token | Wartość | Kontrast do panelu `#1b1f26` / warstwy 2 `#232831` |
 |---|---|---|
-| E1 | Grupy w paskach oddzielone ≥ 16 px albo linią; każda sekcja panelu ma podpis | przegląd zrzutów `ssc_screenshot` |
-| E2 | Panel Static: ≤ 11 widocznych kontrolek; Dynamic (Advanced zwinięte): ≤ 19, w tym 5 gałek dynamiki zamiast 9 i żadnej listy bez podpisu (dziś 11–12 i 23–24) | liczenie na zrzutach |
-| E3 | Tekst ≥ 4,5:1 do swojej warstwy; wskaźniki stanu kontrolek ≥ 3:1 (WCAG 1.4.11); tor gałki ≥ 2:1 | test jednostkowy tokenów kolorów (kontrast liczony jak w WCAG) |
-| E4 | Cele kliknięcia ≥ 24 × 24 px przy skali 100 %; gałki ≥ 32 px | test układu (rozmiary komponentów) |
-| E5 | Przy 860 × 480 żadna etykieta nie jest ucięta | zrzut + test układu |
-| E6 | Panel nigdy nie zasłania zaznaczonego węzła; środek panelu w poziomie = x węzła (± przycięcie do krawędzi) | test czystej funkcji położenia panelu (jak `BandLogic`) |
-| E7 | Animacje „ramy” 80–250 ms, przerywalne, bez blokowania wejścia; *Reduced* i *Off* działają; ustawienie systemowe odczytane na macOS i Windows | testy zegara animacji (wstrzykiwany czas), zrzuty w t = 0 / 50 % / 100 % |
-| E8 | CPU interfejsu (`ssc_screenshot profile=`) nie wyższe niż dziś o > 10 %; bez animacji brak wywołań na klatkę | pomiar przed/po |
-| E9 | Max Lookahead i Offline oversampling osiągalne w ≤ 2 kliknięciach | przegląd |
-| E10 | Kolejność Tab zgodna z grupami (nagłówek → wykres → panel → dolny pasek), widoczny pierścień fokusu | test ręczny |
+| tło okna, nagłówek | `#0f1115` | — |
+| wykres | `#151820` → `#0c0e12` | — |
+| panel, dolny pasek, globalny Advanced (warstwa 1) | `#1b1f26` | — |
+| Advanced pasma, menu, podpowiedzi (warstwa 2) | `#232831` | — |
+| wybrany segment, korpus gałki | `#323945` | dekoracyjny |
+| linie podziału | `#2b313b` | dekoracyjne |
+| obrysy kontrolek, tor gałki | `#4f5864` | 2,29 / 2,05 (dawniej 1,24) |
+| tekst | `#e6ebf0` | 13,8 / 12,3 |
+| wartości | `#a3adb8` | 7,3 / 6,5 |
+| podpisy | `#8a94a0` | 5,4 / 4,8 (dawniej 4,5 na granicy AA) |
+| akcent (bursztyn) | `#f5a524` | 8,1 / 7,3 |
+| lampka bypass | `#ff5c5c` | 5,5 / 4,9 |
+| kolory pasm (łuki gałek) | HSL (złoty kąt, 72 %, 62 %) | ≥ 3,17 (24 kolory) |
 
-## f) Plan wdrożenia
+Kontrasty liczy funkcja `contrastRatio` (wzór WCAG), a test E3 pilnuje progów. Typografia: czcionka systemowa (pytanie g3 otwarte), rozmiary 10,5 / 11 / 12 / 13 / 15 px. Siatka 4 px; promienie 5 px (kontrolki) i 9 px (panele).
 
-Bez zmian w parametrach, ID i stanie (ustawienia interfejsu w dziecku stanu jak ustawienia analizatora) — presety i sesje bez migracji.
+### d11. Animacje
 
-| Etap | Zakres | Ryzyko |
+Krzywe: *wejście* `cubic-bezier(0, 0, 0.2, 1)`, *wyjście* `cubic-bezier(0.4, 0, 1, 1)`, *standard* `cubic-bezier(0.2, 0, 0, 1)`.
+
+| # | Zdarzenie | Animacja | Czas | Krzywa | *Reduced* |
+|---|---|---|---|---|---|
+| 1 | pojawienie się panelu pasma | przenikanie + 8 px od strony węzła | 160 ms | wejście | przenikanie 100 ms |
+| 2 | zniknięcie panelu pasma (i jego Advanced) | przenikanie | 110 ms | wyjście | przenikanie 100 ms |
+| 3 | inne pasmo, dół ↔ góra, zmiana trybu (wysokość) | przesunięcie i rozmiar | 180 ms | standard | natychmiast |
+| 4 | Advanced pasma: otwarcie / zamknięcie | wysunięcie spod panelu + przenikanie | 160–180 ms (przenikanie 140 ms) / 140 ms | wejście, standard / wyjście | przenikanie ≤ 100 ms |
+| 5 | globalny Advanced: otwarcie / zamknięcie | wysunięcie zza dolnego paska + przenikanie | 200 ms (przenikanie 120 ms) / 150 ms | wejście / wyjście | przenikanie ≤ 100 ms |
+| 6 | segmented (tryb, A/B, Abs/Rel, Above/Below) | przesunięcie wskaźnika | 140 ms | standard | natychmiast |
+| 7 | zmiana latencji | bursztynowy chip statusu przez 3 s | — | — | bez zmian |
+
+*Off* = wszystko natychmiast. Reguły z pierwszej wersji zostają: krzywa i wartości nigdy nie są animowane (rysowane od razu), każda animacja startuje od bieżącej wartości i nie blokuje wejścia, bez odbić i pętli.
+
+**Implementacja** (`ui/Motion`): własna krzywa Béziera (Newton z bisekcją, kilkadziesiąt linii, bez kodu zewnętrznego — `juce_animation` wniósłby kod Chromium `cubic_bezier` na licencji BSD-3), `Tween` z przerwaniem w dowolnej chwili i `ComponentMotion` (pozycja, rozmiar, krycie) taktowany zegarem 60 Hz **tylko w trakcie ruchu** — bez ruchu zero wywołań na klatkę. Zegar zamiast `VBlankAttachment`, bo działa też bez okna na ekranie (`ssc_screenshot`, testy); przy 60 Hz różnica jest niezauważalna. Poziom (Full / Reduced / Off) wybiera się w ⚙ i zapisuje w stanie; odczyt systemowego „ogranicz ruch” (macOS, Windows) — backlog (g6).
+
+### d12. Gdzie trafił każdy element 1.0
+
+| W 1.0 | Teraz | Poziom |
 |---|---|---|
-| U1 Tokeny i przyciski | tokeny kolorów i typografii (§d8), komponenty: segmented, value button, ikona stanu, split button, kropka „zmienione”; pierścień fokusu; test kontrastu tokenów | niskie |
-| U2 Paski i szuflada | regrupowanie nagłówka i dolnego paska, zakres EQ przy wykresie, strzałki i znacznik presetu, nieaktywne Copy, szuflada ⚙ (Offline, Max Lookahead, progi, interfejs), przycisk ?, reguły responsywne | niskie |
-| U3 Panel pasma | zakotwiczenie przy węźle (czysta funkcja + test), nowy nagłówek z trybem, ⋯, sekcje Dynamics/Advanced, value buttons, łuk dynamicznej zmiany na Gain, popover kształtów | średnie (najwięcej zmian w `BandPanel`) |
-| U4 Ruch | pomocnik `ui/Motion` na `VBlankAttachment` z własną krzywą Béziera (ok. 60 linii, bez kodu zewnętrznego) zamiast `juce_animation` — ten wniósłby kod Chromium `cubic_bezier` (BSD-3) do `THIRD-PARTY-NOTICES.txt`; animacje z §d9, *Reduced/Off*, odczyt ustawienia systemowego (`.mm` na macOS); `ssc_screenshot motion=<ms>` do zrzutów w trakcie animacji | średnie (koszt rysowania programowego — pomiar E8) |
-| U5 Popovery | popover analizatora, popover kształtów, animowany panel głośników; łuk poziomu detekcji przy Threshold (nowa telemetria z silnika, atomics jak dla wzmocnienia dynamicznego) | średnie |
+| Preset (nagłówek) | `‹` nazwa `•` `›` | 1 |
+| A, B, A→B | `A \| B` + `⧉` (nieaktywny przy równych stanach) | 1 |
+| Undo, Redo | ikony | 1 |
+| Linia statusu (Auto Gain, OS, latencja, CPU) | chip „Latency · CPU” (próbki i OS w podpowiedzi); korekcja Auto Gain na przycisku Auto Gain | 1 |
+| Analyzer (menu z podmenu) | split button: przełącznik + menu ▾ | 1 |
+| Zakres EQ (nagłówek) | prawy górny róg wykresu | 1 |
+| On / Off, Solo, Delete pasma | ⏻ z lampką, 🎧, menu ⋯ (i klawisz Delete) | 2 |
+| Shape, Slope (listy) | value buttons z podpisem w rzędzie EQ | 2 |
+| Mode (lista) | segmented w nagłówku panelu | 2 |
+| Target, Character (listy bez podpisu) | value buttons z podpisem | 2 |
+| Auto Gain pasma | przełącznik w nagłówku sekcji dynamiki | 2 |
+| Threshold, Range, Attack, Release | rząd dynamiki | 2 |
+| Ratio | rząd dynamiki w Dynamic; Advanced pasma w Spectral | 2 / 3 |
+| Selectivity | rząd dynamiki tylko w Spectral | 2 |
+| Threshold Mode, Direction, Knee, Mix, Link | Advanced pasma | 3 |
+| Lookahead | Advanced pasma, tylko w Dynamic | 3 |
+| Odczyty pasma | Advanced pasma (ostrzeżenie: kropka na Advanced) | 3 |
+| Phase, Model | dolny pasek (Model tylko w Analog Feel) | 1 |
+| Quality, Oversampling, Offline | globalny Advanced | 3 |
+| Auto Gain ▾ (ważenie, szybkość) | globalny Advanced | 3 |
+| Mierniki THD+N i aliasingu | globalny Advanced (ostrzeżenie: kropka na Advanced) | 3 |
+| Progi mierników (menu Analyzer) | kliknięcie w mierniki | 3 |
+| Max Lookahead (tylko w hoście) | globalny Advanced | 3 |
+| Delta, Mix, Output | dolny pasek | 1 |
+| — | ⚙ (animacje, rozmiar okna), ? (instrukcja, mysz i klawiatura, informacje) | 3 / 1 |
 
-Po każdym etapie: zrzuty do `docs/images`, aktualizacja instrukcji (rozdz. 3, 4, 11, 12), `tools/ci/local-check.sh`.
+## e) Kryteria akceptacji i wyniki
 
-## g) Pytania do decyzji
+| # | Kryterium | Sprawdzenie | Wynik |
+|---|---|---|---|
+| E1 | Grupy w paskach oddzielone ≥ 16 px i linią; sekcje paneli podpisane | zrzuty `ssc_screenshot` | spełnione (`editor.png`, `editor-advanced.png`) |
+| E2 | Panel pasma pokazuje tylko parametry swojego trybu: Static ≤ 11, Dynamic i Spectral ≤ 14 kontrolek parametrów; żadnej listy bez podpisu | test `TestInterface` | spełnione: 8 i 14 |
+| E3 | Tekst ≥ 4,5:1 do swojej warstwy; wskaźniki stanu ≥ 3:1; tor gałki ≥ 2:1 | test tokenów (`contrastRatio`) | spełnione (§d10) |
+| E4 | Cele kliknięcia ≥ 24 × 24 px | przegląd, test segmentów | przyciski 28 × 28, segmenty i chipy wysokie na 26–28 px |
+| E5 | Przy 860 × 480 żadna etykieta nie jest ucięta | zrzut `editor-860x480.png` | spełnione (krótkie nazwy trybów fazy, zwarty chip statusu) |
+| E6 | Panel nigdy nie zasłania zaznaczonego węzła; środek panelu = x węzła (± przycięcie) | test `dockBandPanel` (siatka położeń) | spełnione w oknie 1100 × 660; wyjątek okna minimalnego opisany w §d7 |
+| E7 | Animacje „ramy” 110–200 ms, przerywalne, bez blokowania wejścia; *Reduced* i *Off* działają | testy krzywych (zgodność z próbkowaniem Béziera do 2·10⁻⁴), `Tween`, `ComponentMotion` | spełnione; ustawienie systemowe — backlog (g6) |
+| E8 | Koszt rysowania nie wyższy niż w 1.0 o > 10 %; bez animacji brak wywołań na klatkę | `ssc_screenshot profile=` przed/po | spełnione: mediana z 3 przebiegów po 300 klatek (1100 × 660, pasmo Dynamic, analizator Pre + Post): 1.0 — 9,0 ms (p95 13,0 ms); teraz, panele Advanced zamknięte — 8,1 ms (p95 11,7 ms, −10 %); oba panele Advanced otwarte — 9,8 ms (p95 14,1 ms, +9 %). Zegar ruchu działa tylko w trakcie animacji |
+| E9 | Max Lookahead i Offline osiągalne w ≤ 2 kliknięciach | przegląd | spełnione: Advanced ▴ → kontrolka (i jedno więcej na wybór z listy) |
+| E10 | Fokus klawiatury widoczny; kliknięcie nie zabiera fokusu wykresowi | przegląd | pierścień fokusu w nowych kontrolkach; pełna kolejność Tab — test ręczny w hostach (TST-3) |
 
-1. **Skróty jak w FabFilter?** Dziś Alt + przytrzymanie węzła = Solo. FabFilter: Alt-klik = bypass pasma, solo przyciskiem ze słuchawkami. Zgodność ułatwi życie użytkownikom Pro-Q; zmiana wymaga nowej wersji instrukcji. Rekomendacja: przejść na konwencję FabFilter.
-2. **Rozmiar okna**: zostawić swobodne skalowanie i dodać rozmiary S/M/L/XL (rekomendacja), czy tylko rozmiary stałe jak w FabFilter.
-3. **Czcionka**: osadzić IBM Plex (OFL, spójny wygląd na wszystkich systemach) czy zostać przy systemowej.
-4. **Odczyty w panelu**: widoczne domyślnie (jak teraz — wyróżnik wtyczki) czy dopiero po kliknięciu ⓘ.
-5. **Pierścień zakresu wokół Gain** (dosłownie jak Pro-Q 4) zamiast osobnej gałki Range: zwarte, ale inny model (u nas Range jest wielkością, kierunek wynika z Ratio i Direction). Rekomendacja: zostać przy gałce Range, dodać łuk bieżącej zmiany na Gain.
+## f) Wdrożenie
+
+| Etap | Zakres | Stan |
+|---|---|---|
+| U1 Tokeny i przyciski | tokeny (§d10), `ChipButton`, `IconButton`, `SegmentedControl`, `ValueButton`, kropki, pierścień fokusu, test kontrastu | zrobione |
+| U2 Paski | nagłówek (presety ‹ › i kropka, A \| B, nieaktywne kopiowanie, chip statusu, split Analyzer, ⚙, ?), zakres EQ przy wykresie, dolny pasek, **globalny Advanced** | zrobione |
+| U3 Panel pasma | tryb w nagłówku, **pokrętła zależne od trybu**, **Advanced pasma**, dokowanie przy węźle (`dockBandPanel` + test), menu ⋯, solo klik / przytrzymanie | zrobione |
+| U4 Ruch | `ui/Motion`, animacje z §d11, *Full / Reduced / Off* | zrobione (bez odczytu ustawienia systemowego) |
+| U5 Popovery i informacja zwrotna | popover analizatora zamiast menu, popover kształtów z ikonami, łuk poziomu detekcji przy Threshold (telemetria z silnika), łuk bieżącej zmiany na gałce Gain, przejścia krzywej przy presecie / A/B | backlog |
+
+Kod: `src/ui/Motion`, `Controls`, `PanelLayout` (nowe), `BandPanel` (`BandKnob`, `BandChoiceButton`, `BandPanel`, `BandAdvancedPanel`), `ControlBar` (`ControlBar`, `GlobalAdvancedPanel`, `ParameterKnob`), `PresetBar`, `PluginEditor`; `plugin/Presets` (`PresetComparison`, `otherComparePreset`). Testy: `tests/plugin/TestInterface.cpp`. Zrzuty: `ssc_screenshot … advanced=1 globaladvanced=1 motion=0|1|2`.
+
+## g) Decyzje i pytania
+
+1. **Skróty jak w FabFilter?** Bez zmian: Alt + przytrzymanie węzła = Solo, dwuklik = bypass. Przycisk 🎧 w panelu działa jak w FabFilter (klik zatrzaskuje, przytrzymanie — chwilowo). Otwarte: Alt-klik = bypass.
+2. **Rozmiar okna**: zostaje swobodne skalowanie; doszły rozmiary Small / Medium / Large / Extra Large w ⚙. Rozstrzygnięte.
+3. **Czcionka**: zostaje systemowa. Otwarte (IBM Plex wymagałby wpisu w `THIRD-PARTY-NOTICES.txt`).
+4. **Odczyty w panelu**: rozstrzygnięte — w panelu Advanced pasma (poziom 3), ostrzeżenie jako kropka na przycisku.
+5. **Pierścień zakresu wokół Gain**: zostaje gałka Range; łuk bieżącej zmiany na Gain w backlogu (U5).
+6. **Systemowe „ogranicz ruch”** (macOS `accessibilityDisplayShouldReduceMotion`, Windows `SPI_GETCLIENTAREAANIMATION`): backlog; do tego czasu wybór w ⚙.
 
 ## Źródła
 

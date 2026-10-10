@@ -60,24 +60,36 @@ Uruchom host i — jeśli wtyczka się nie pojawia — wykonaj ponowne skanowani
 1. Wstaw wtyczkę na ścieżkę lub szynę. Widać analizator widma: szary — sygnał przed korekcją (*pre*), jasny — po korekcji (*post*).
 2. **Kliknij dwukrotnie** w wykres, żeby dodać pasmo Bell w tym miejscu (wysokość kliknięcia = wzmocnienie). Albo **złap krzywą** i przeciągnij — powstaje Bell lub półka.
 3. Przeciągaj **węzeł** pasma: w poziomie zmienia częstotliwość, w pionie wzmocnienie. **Kółko myszy** nad węzłem zmienia Q. Z *Shift* — precyzyjnie.
-4. Kliknięty węzeł otwiera **panel pasma** ze wszystkimi parametrami. **Prawy przycisk** na węźle otwiera menu (kształt, nachylenie, tryb, cel, Character, Solo, kopiowanie…).
-5. Żeby pasmo działało tylko wtedy, gdy trzeba, zmień jego tryb na **Dynamic** (np. de-esser) albo **Spectral** (tłumienie rezonansów).
-6. Wynik porównasz przyciskami **A/B**, zapiszesz jako preset (przycisk z nazwą presetu → *Save As…*), a zmiany cofniesz strzałkami **Undo/Redo** lub *Cmd/Ctrl+Z*.
+4. Kliknięty węzeł otwiera pod sobą **panel pasma** z parametrami jego trybu. **Prawy przycisk** na węźle otwiera menu (kształt, nachylenie, tryb, cel, Character, Solo, kopiowanie…).
+5. Żeby pasmo działało tylko wtedy, gdy trzeba, przełącz je w panelu na **Dynamic** (np. de-esser) albo **Spectral** (tłumienie rezonansów) — pojawią się pokrętła dynamiki. Ustawienia specjalistyczne (detektor, odczyty) są pod przyciskiem **Advanced ›**.
+6. Wynik porównasz przełącznikiem **A | B**, zapiszesz jako preset (pole z nazwą presetu → *Save As…*), a zmiany cofniesz strzałkami **Undo/Redo** lub *Cmd/Ctrl+Z*.
 
 ## 3. Okno wtyczki
 
+Okno ma trzy poziomy: to, czego używa się w każdej sesji, jest zawsze widoczne; **panel pasma** pojawia się po wybraniu pasma i pokazuje tylko parametry jego trybu; ustawienia specjalistyczne czekają za przyciskami **Advanced** — pasma i globalnym.
+
 | Obszar | Zawartość |
 |---|---|
-| Nagłówek (od lewej) | nazwa i wersja; przycisk presetów; **A**, **B** i kopiowanie A→B / B→A; **Undo** i **Redo**; linia stanu; przycisk **Analyzer**; zakres skali EQ |
-| Wykres | analizator, krzywe pasm i krzywa sumaryczna, węzły pasm, poświata aktywności, podpowiedzi rezonansów, nakładka fazy |
-| Panel pasma | parametry zaznaczonego pasma; zadokowany u dołu wykresu, przesuwa się do góry, gdy zasłaniałby swój węzeł |
-| Pasek dolny | włącznik wtyczki, **Phase**, **Model**, **Quality**, **Oversampling**, **Offline**, **Auto Gain** (z menu ▾), mierniki THD+N i aliasingu, **Delta**, **Mix**, **Output** |
+| Nagłówek (od lewej) | nazwa i wersja; presety: `‹` pole z nazwą `›`; **A \| B** i kopiowanie; **Undo** i **Redo**; latencja i obciążenie procesora; **Analyzer** (lewa część włącza i wyłącza widmo, ▾ otwiera jego ustawienia); **⚙** (animacje, rozmiar okna); **?** (pomoc) |
+| Wykres | analizator, krzywe pasm i krzywa sumaryczna, węzły pasm, poświata aktywności, podpowiedzi rezonansów, nakładka fazy; w prawym górnym rogu zakres skali EQ |
+| Panel pasma | parametry wybranego pasma, pod jego węzłem ([rozdz. 4](#panel-pasma)) |
+| Advanced pasma | wysuwa się z boku panelu pasma: ustawienia detektora pasm Dynamic i Spectral, odczyty fazy i ringingu |
+| Pasek dolny | włącznik wtyczki, **Phase** (i **Model** w trybie Analog Feel), **Advanced**, **Delta**, **Auto Gain**, **Mix**, **Output** |
+| Globalny Advanced | wysuwa się z paska dolnego: **Quality**, **Oversampling**, **Offline**, **Max Lookahead**, ważenie i szybkość Auto Gain, mierniki THD+N i aliasingu |
 
-**Linia stanu** pokazuje bieżącą korekcję Auto Gain (gdy jest włączony), współczynnik oversamplingu, całkowitą latencję w milisekundach i próbkach oraz obciążenie procesora przez wtyczkę. Gdy latencja się zmienia, linia na chwilę podświetla się.
+![Otwarte panele Advanced: pasma (z prawej) i globalny (nad paskiem dolnym)](images/editor-advanced.png)
 
-**Rozmiar okna** zmienia się, ciągnąc za prawy dolny róg (od 860 × 480 do 2600 × 1600 pikseli). Rozmiar zapisuje się w projekcie.
+**Kropka** na przycisku oznacza, że coś schowanego odbiega od ustawień domyślnych albo wymaga uwagi — podpowiedź przycisku mówi co. Bursztynowa: zmienione ustawienie (np. Quality High), podpowiedź oversamplingu, preset zmieniony od wczytania; czerwona: miernik ponad progiem ostrzeżenia.
 
-**Skala EQ** (lista w prawym górnym rogu): ±3, ±6, ±12 (domyślnie), ±18 lub ±30 dB — zmienia tylko widok, nie dźwięk.
+**Status** (w nagłówku): całkowita latencja i obciążenie procesora przez wtyczkę; w podpowiedzi latencja w próbkach i współczynnik oversamplingu. Gdy latencja się zmienia, status na chwilę świeci na bursztynowo. Bieżącą korekcję Auto Gain pokazuje przycisk **Auto Gain**.
+
+**Rozmiar okna** zmienia się, ciągnąc za prawy dolny róg (od 860 × 480 do 2600 × 1600 pikseli), albo w menu **⚙ → Window Size**: Small 860 × 480, Medium 1100 × 660, Large 1400 × 840, Extra Large 1800 × 1080. Rozmiar, otwarte panele Advanced i animacje zapisują się w projekcie.
+
+**Animacje** (**⚙ → Animations**): *Full* — panele wysuwają się i przesuwają płynnie (110–200 ms); *Reduced* — tylko krótkie przenikania; *Off* — bez ruchu. Animowana jest tylko rama interfejsu: krzywe i wartości zmieniają się zawsze od razu.
+
+**Skala EQ** (prawy górny róg wykresu): ±3, ±6, ±12 (domyślnie), ±18 lub ±30 dB — zmienia tylko widok, nie dźwięk.
+
+**Pomoc** (**?**): *User Manual* otwiera zainstalowaną instrukcję (`Manual.md`), *Mouse and Keyboard* — ściągę gestów i skrótów, *About* — wersję i informacje o licencjach.
 
 Większość elementów ma podpowiedzi (*tooltips*) po najechaniu kursorem — m.in. koszt trybów fazy i Quality, opis modeli Analog Feel i szczegóły mierników.
 
@@ -131,7 +143,7 @@ Przeciąganie lub kółko myszy na węźle należącym do zaznaczenia zmienia **
 | *Cmd/Ctrl+A* | zaznacz wszystkie pasma |
 | *Esc* | wyczyść zaznaczenie |
 
-Niektóre hosty przechwytują skróty klawiszowe; wtedy użyj przycisków Undo/Redo w nagłówku albo menu pasma.
+Niektóre hosty przechwytują skróty klawiszowe; wtedy użyj przycisków Undo/Redo w nagłówku albo menu pasma. Kliknięcie przycisków wtyczki nie zabiera wykresowi klawiatury, więc skróty działają dalej. Ściągę gestów i skrótów pokazuje też **? → Mouse and Keyboard**.
 
 ### Menu pasma (prawy przycisk)
 
@@ -139,14 +151,18 @@ Niektóre hosty przechwytują skróty klawiszowe; wtedy użyj przycisków Undo/R
 
 ### Panel pasma
 
-Kliknięcie węzła pokazuje panel:
+Kliknięcie węzła pokazuje panel pasma pod węzłem (gdy zasłaniałby węzeł — u góry wykresu albo obok niego). Panel pokazuje tylko to, co w trybie pasma działa:
 
-- wiersz 1: kolor i numer pasma, **On**, **Solo**, **Shape**, **Slope** (gdy kształt go ma), **Delete**;
-- wiersz 2: pokrętła **Freq**, **Gain**, **Q**; listy **Target**, **Mode**, **Character**; przycisk **Auto Gain** (w układach surround także **Speakers**);
-- wiersz 3 (tylko Dynamic i Spectral): **Threshold**, **Ratio**, **Range**, **Knee**, **Attack**, **Release**, **Lookahead**, **Mix**, **Selectivity** oraz listy **Threshold Mode**, **Direction**, **Link**; pokrętła, których dany tryb nie używa (Lookahead w Spectral, Selectivity w Dynamic), są wyszarzone;
-- na dole: odczyty fazy, opóźnienia grupowego i ringingu ([rozdz. 12](#odczyty-pasma)).
+| | Static | Dynamic | Spectral |
+|---|---|---|---|
+| Nagłówek | kolor i numer pasma; tryb **Static \| Dynamic \| Spectral**; **Advanced ›**; ⏻ — włączenie / wyłączenie pasma (czerwona lampka: wyłączone); 🎧 — Solo (kliknięcie: zostaje włączone, przytrzymanie: tylko na czas trzymania); ⋯ — *Copy*, *Paste*, *Reset*, *Delete* | jak Static | jak Static |
+| Rząd EQ | **Shape**, **Slope** (cięcia, półki, Band Pass), **Freq**, **Gain**, **Q**, **Target**, **Character** (w surround także **Speakers**) | jak Static | jak Static |
+| Rząd dynamiki | — | **Threshold**, **Ratio**, **Range**, **Attack**, **Release** i przycisk **Auto Gain** | **Threshold**, **Selectivity**, **Range**, **Attack**, **Release** i przycisk **Auto Gain** |
+| Panel **Advanced** pasma | odczyty | **Threshold Mode**, **Direction**, **Knee**, **Lookahead**, **Mix**, **Link**, odczyty | **Threshold Mode**, **Direction**, **Knee**, **Ratio**, **Mix**, **Link**, odczyty |
 
-Pokrętła reagują na przeciąganie; **dwuklik** przywraca wartość domyślną; wartość pod pokrętłem można kliknąć i wpisać. Częstotliwość przyjmuje zapisy `1500`, `1.5k`, `1.5 kHz`; czasy — `12`, `12 ms`, `1.2 s`.
+Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem. **Advanced ›** wysuwa panel z boku panelu pasma — zwykle z prawej, z lewej, gdy z prawej zasłaniałby węzeł — i zostaje otwarty także dla kolejnych pasm, aż się go zamknie (**‹**). Kropka na **Advanced** oznacza ustawienie detektora inne niż domyślne dla trybu pasma (np. Threshold Mode Absolute w paśmie Spectral) albo ostrzeżenie o słyszalnym ringingu ([rozdz. 12](#odczyty-pasma)).
+
+Pokrętła reagują na przeciąganie (z *Shift* — precyzyjnie); **dwuklik** przywraca wartość domyślną; wartość pod pokrętłem można kliknąć i wpisać. Częstotliwość przyjmuje zapisy `1500`, `1.5k`, `1.5 kHz`; czasy — `12`, `12 ms`, `1.2 s`.
 
 ## 5. Kształty i parametry pasma
 
@@ -177,6 +193,8 @@ Filtry są projektowane tak, by ich amplituda odpowiadała prototypom analogowym
 
 Dynamic i Spectral są dostępne dla kształtów ze wzmocnieniem (Bell, półki, Tilt Shelf, Flat Tilt). Pasmo dynamiczne pokazuje na wykresie bieżące wzmocnienie, a jego obszar świeci, gdy pracuje.
 
+W panelu pasma rząd dynamiki zawiera to, czym ustawia się dany tryb (Dynamic: Threshold, Ratio, Range, Attack, Release; Spectral: Threshold, Selectivity, Range, Attack, Release), a pozostałe parametry z tabeli niżej są w panelu **Advanced** pasma ([rozdz. 4](#panel-pasma)).
+
 **Wzmocnienie pasma = Gain + część dynamiczna** (w granicach ±Range, pomnożona przez Mix pasma). Gain 0 dB i Range 6 dB to pasmo, które samo w sobie nic nie robi, a tłumi lub podbija do 6 dB tylko wtedy, gdy zadziała próg.
 
 ### Parametry dynamiki
@@ -204,7 +222,7 @@ Po przełączeniu pasma w tryb Spectral z nieruszonym progiem Dynamic (Absolute 
 
 ### Lookahead i Max Lookahead
 
-Tor główny jest opóźniony o globalny parametr **Max Lookahead** (0–20 ms, w ustawieniach parametrów hosta), a pasmo Dynamic z Lookahead *L* czyta detekcję z wyprzedzeniem *L*. Ustawienie Lookahead pasma większego niż Max Lookahead automatycznie podnosi Max Lookahead — latencja wtyczki rośnie o tę wartość i host ją kompensuje. Max Lookahead się nie obniża sam: zmniejsz go ręcznie, gdy już nie jest potrzebny.
+Tor główny jest opóźniony o globalny parametr **Max Lookahead** (0–20 ms, w globalnym panelu **Advanced** i w parametrach hosta), a pasmo Dynamic z Lookahead *L* czyta detekcję z wyprzedzeniem *L*. Ustawienie Lookahead pasma większego niż Max Lookahead automatycznie podnosi Max Lookahead — latencja wtyczki rośnie o tę wartość i host ją kompensuje. Max Lookahead się nie obniża sam: zmniejsz go ręcznie, gdy już nie jest potrzebny.
 
 ### Spectral
 
@@ -219,7 +237,7 @@ Silne, szybkie działanie maski może dać krótkie **pre-echo** przed transjent
 
 ### Auto Gain pasma
 
-Przycisk **Auto Gain** w panelu (lub w menu) pasma Dynamic albo Spectral oddaje średnią zmianę wzmocnienia tego pasma (ważoną energią sygnału) — pasmo zmienia brzmienie, ale nie średni poziom. W paśmie Static przycisk jest nieaktywny.
+Przycisk **Auto Gain** w rzędzie dynamiki panelu (lub w menu) pasma Dynamic albo Spectral oddaje średnią zmianę wzmocnienia tego pasma (ważoną energią sygnału) — pasmo zmienia brzmienie, ale nie średni poziom. Pasmo Static go nie ma (w menu pozycja jest nieaktywna).
 
 ## 7. Character
 
@@ -247,6 +265,8 @@ Pasma są przetwarzane po kolei, według numerów. Dla pasm bez nasycenia kolejn
 
 Latencja Natural Phase w milisekundach jest taka sama przy każdej częstotliwości próbkowania.
 
+**Phase** jest na pasku dolnym (lista **Model** pojawia się obok tylko w trybie Analog Feel), **Quality** — w globalnym panelu **Advanced**. Koszt każdego połączenia podają podpowiedzi obu list.
+
 **Quality** (Eco, Normal, High, Max) podnosi dokładność kosztem procesora lub latencji: długość korektora Natural Phase, jakość filtrów oversamplingu (Eco 0,420·fs / 80 dB … Max 0,454·fs / 120 dB), rozmiar ramki Spectral, korektor amplitudy Minimum Phase (High, Max) i oversampling Analog Feel.
 
 **Modele Analog Feel** (bez znaków towarowych — opis brzmienia, nie kopia urządzenia):
@@ -261,6 +281,8 @@ Zmiana trybu fazy lub Quality może zmienić latencję, dlatego tych parametrów
 
 ## 9. Oversampling i render offline
 
+**Oversampling** i **Offline** są w globalnym panelu **Advanced** (przycisk **Advanced ▴** na pasku dolnym).
+
 **Oversampling** (Off, 2x, 4x, 8x) przetwarza pasma z wyższą częstotliwością próbkowania. Pomaga przy nasyceniu (Character, Analog Feel) — ogranicza aliasing — i przy bardzo szybkiej dynamice. Dla czystego EQ w trybie Clear zwykle nie jest potrzebny.
 
 - W Minimum Phase używa minimalnofazowych filtrów IIR (latencja 4–5 próbek), w Natural Phase i Analog Feel — filtrów o fazie liniowej.
@@ -272,13 +294,13 @@ Zmiana trybu fazy lub Quality może zmienić latencję, dlatego tych parametrów
 | Minimum Phase (IIR) | 4 smp (0,08 ms) | 4 smp (0,08 ms) | 5 smp (0,10 ms) |
 | Natural Phase (FIR, razem z korektorem) | 75 smp (1,56 ms) | 81 smp (1,69 ms) | 83 smp (1,73 ms) |
 
-Gdy miernik aliasingu przekracza −80 dB, etykieta **Oversampling ▴** podświetla się i podpowiada współczynnik, który by pomógł.
+Gdy miernik aliasingu przekracza −80 dB, podpis **Oversampling ▴** podświetla się i podpowiada współczynnik, który by pomógł; przycisk **Advanced** na pasku dolnym dostaje bursztynową kropkę, więc podpowiedź widać także przy zamkniętym panelu. Wtyczka nigdy nie zmienia oversamplingu sama.
 
 **Offline** — oversampling renderu offline (eksport, bounce): **Same** (jak w czasie rzeczywistym), albo osobne Off / 2x / 4x / 8x. Można np. słuchać przy 1× (mało CPU) i renderować przy 8×. Latencja nie zmienia się między odsłuchem a renderem: krótszy tor jest dopełniany opóźnieniem do dłuższego, więc host kompensuje ją poprawnie w obu przypadkach. Działa, gdy host zgłasza render jako *offline*; render „w czasie rzeczywistym” (online bounce) używa ustawienia **Oversampling**.
 
 ## 10. Auto Gain
 
-Globalny **Auto Gain** (przycisk na pasku dolnym) utrzymuje głośność po korekcji równą głośności przed nią — ocenisz brzmienie, a nie to, że jest głośniej. Korekcję pokazuje linia stanu. Menu ▾ obok przycisku:
+Globalny **Auto Gain** (przycisk na pasku dolnym) utrzymuje głośność po korekcji równą głośności przed nią — ocenisz brzmienie, a nie to, że jest głośniej. Włączony świeci na zielono i pokazuje bieżącą korekcję (np. *Auto Gain −1.2 dB*). Ustawienia — w globalnym panelu **Advanced**, grupa *Auto Gain*:
 
 **Weighting** — jak liczona jest głośność:
 - **Fletcher** (domyślnie) — model percepcyjny: krzywe równej głośności ISO 226 w pasmach ERB, suma w sonach;
@@ -304,14 +326,14 @@ Auto Gain mierzy tylko kanały objęte co najmniej jednym pasmem, ogranicza kore
 | **Output** | −24…+24 dB, na końcu toru |
 | **Mix** | 0–100 %, proporcja sygnału przetworzonego i suchego (wyrównanego w czasie); patrz uwaga niżej |
 | **Delta** | odsłuch tylko tego, co wtyczka zmienia: wejście minus wyjście (bez korekcji Auto Gain). Pomaga usłyszeć, co dokładnie wycina pasmo Dynamic lub Spectral. Nie jest zapisywany w presetach ani w A/B |
-| **Solo** pasma | odsłuch obszaru, na którym pracuje pasmo (filtr pasmowy w jego miejscu); przycisk w panelu, pozycja w menu albo *Alt/Option* + przytrzymanie węzła. Solo wyłącza się po zamknięciu okna wtyczki |
-| **Max Lookahead** | parametr hosta, 0–20 ms; patrz [rozdz. 6](#lookahead-i-max-lookahead) |
+| **Solo** pasma | odsłuch obszaru, na którym pracuje pasmo (filtr pasmowy w jego miejscu); przycisk 🎧 w panelu (kliknięcie: zostaje włączone, przytrzymanie: tylko na czas trzymania), pozycja w menu albo *Alt/Option* + przytrzymanie węzła. Solo wyłącza się po zamknięciu okna wtyczki |
+| **Max Lookahead** | 0–20 ms, w globalnym panelu **Advanced** (i w parametrach hosta); patrz [rozdz. 6](#lookahead-i-max-lookahead) |
 
 **Uwaga o Mix**: globalny Mix miesza sygnały, a filtry (we wszystkich trybach fazy) przesuwają fazę w obszarze pasm. Dlatego Mix poniżej 100 % nie daje „tej samej krzywej z mniejszym wzmocnieniem”: przy zboczach cięć, stromych półkach i All Pass mogą powstać dodatkowe wcięcia. Do łagodzenia działania pasm Dynamic i Spectral lepiej używać **Mix pasma** (miesza wzmocnienie, nie sygnały), a pasm Static — zmniejszyć ich Gain.
 
 ## 12. Analizator i wizualizacja
 
-Menu **Analyzer** w nagłówku (ustawienia zapisują się z projektem, nie wpływają na dźwięk i nie trafiają do Undo):
+Przycisk **Analyzer** w nagłówku włącza i wyłącza widmo; strzałka **▾** obok otwiera jego ustawienia (zapisują się z projektem, nie wpływają na dźwięk i nie trafiają do Undo):
 
 | Pozycja | Opcje (domyślnie) |
 |---|---|
@@ -326,8 +348,8 @@ Menu **Analyzer** w nagłówku (ustawienia zapisują się z projektem, nie wpły
 | Resonance hints | **włączone** — podpowiedzi rezonansów |
 | Hint sensitivity | Low (12 dB), **Medium (9 dB)**, High (6 dB) — o ile rezonans musi wystawać ponad otoczenie |
 | EQ phase overlay | **Off**, Phase, Group delay — faza lub opóźnienie grupowe całego EQ na wykresie |
-| THD+N warning above | −20…−60 dB (**−40 dB**) |
-| Aliasing warning above | −60…−100 dB (**−80 dB**) |
+
+Progi ostrzeżeń mierników ustawia się kliknięciem w mierniki ([rozdz. 13](#13-mierniki-thdn-i-aliasingu)).
 
 ### Podpowiedzi rezonansów
 
@@ -339,30 +361,30 @@ Fioletowa poświata z kółkiem nad szczytem oznacza rezonans: wąski szczyt, kt
 
 ### Odczyty pasma
 
-Pod panelem pasma:
+W panelu **Advanced** pasma:
 
-- **Δφ** — średnia faza nadmiarowa pasma w jego obszarze,
-- **τg** — opóźnienie grupowe na częstotliwości pasma,
-- **Pre** / **Post** — czas ringingu przed i po impulsie do poziomu −60 dB (dla pasm dynamicznych także w skrajnych położeniach zakresu, *range*).
+- **Excess phase** — średnia faza nadmiarowa pasma w jego obszarze,
+- **Group delay** — opóźnienie grupowe na częstotliwości pasma,
+- **Ringing** — czas ringingu przed (*pre*) i po (*post*) impulsie do poziomu −60 dB; pasmo Dynamic ma też wiersz **At full Range** (to samo przy pełnym zakresie działania).
 
-Odczyt zmienia kolor na ostrzegawczy, gdy ringing może być słyszalny: post-ring dłuższy niż 50 ms albo pre-ring dłuższy niż 5 ms. Pasmo Spectral pokazuje zamiast tego pre-echo ramki STFT.
+Wartość ringingu zmienia kolor na bursztynowy, gdy może być słyszalny: post-ring dłuższy niż 50 ms albo pre-ring dłuższy niż 5 ms — wtedy także przycisk **Advanced** w panelu pasma dostaje kropkę. Pasmo Spectral pokazuje zamiast tego **STFT pre-echo**, rozmycie transjentów przez ramkę STFT (ok. pół ramki w każdą stronę).
 
 ## 13. Mierniki THD+N i aliasingu
 
-Dwa wiersze na pasku dolnym pokazują zniekształcenia (**THD+N**, także w %) i **aliasing** wytworzone przez wtyczkę, względem poziomu wyjścia, uśrednione z 300 ms. Mierzone jest to, co dodają nieliniowe etapy (Character, Analog Feel) i zbyt szybka modulacja pasm dynamicznych — a nie harmoniczne obecne już w materiale. Wartości poniżej −120 dB wyświetlają się jako „< −120 dB”.
+Dwa wiersze w globalnym panelu **Advanced** (grupa *Meters*) pokazują zniekształcenia (**THD+N**, także w %) i **aliasing** wytworzone przez wtyczkę, względem poziomu wyjścia, uśrednione z 300 ms. Mierzone jest to, co dodają nieliniowe etapy (Character, Analog Feel) i zbyt szybka modulacja pasm dynamicznych — a nie harmoniczne obecne już w materiale. Wartości poniżej −120 dB wyświetlają się jako „< −120 dB”.
 
-Podpowiedź miernika wymienia pasma, które najbardziej się przyczyniają. Kolor ostrzegawczy pojawia się powyżej progów z menu Analyzer, a przy aliasingu powyżej −80 dB wtyczka podpowiada oversampling ([rozdz. 9](#9-oversampling-i-render-offline)).
+Podpowiedź miernika wymienia pasma, które najbardziej się przyczyniają. Kolor ostrzegawczy pojawia się powyżej progów, które ustawia się **kliknięciem w mierniki** (THD+N: −20…−60 dB, domyślnie −40 dB; aliasing: −60…−100 dB, domyślnie −80 dB). Mierniki pracują także przy zamkniętym panelu: miernik ponad progiem zostawia czerwoną kropkę na przycisku **Advanced** paska dolnego. Przy aliasingu powyżej −80 dB wtyczka podpowiada oversampling ([rozdz. 9](#9-oversampling-i-render-offline)).
 
 ## 14. Presety, A/B, Undo
 
-**Presety**: przycisk z nazwą presetu w nagłówku otwiera menu.
+**Presety**: pole z nazwą presetu w nagłówku otwiera menu, a strzałki **‹ ›** obok wczytują poprzedni i następny preset (fabryczne, potem użytkownika — w kolejności menu). Gdy ustawienia różnią się od wczytanego presetu, nazwa przygasa i dostaje bursztynową kropkę.
 
 - **Factory** — 15 presetów w kategoriach: General (Default — wszystko domyślnie), Vocal (Clarity, De-ess dynamiczny, Resonance Tamer spektralny), Drums (Kick, Snare), Instruments (Acoustic Guitar — Boom Control), Mix (Gentle Tilt w Natural Phase, Side Air / Mono Bass), Mastering (Analog N Warmth, Analog P Low-End Trick, Resonance Control spektralny), Post (Dialogue — tylko kanał centralny), Repair (Hum Removal 50 Hz i 60 Hz).
 - **User** — presety użytkownika: pliki `.sscpreset` w folderze `Dokumenty/Sam Spectral Control/Presets` (macOS: `~/Documents/Sam Spectral Control/Presets`). *Save As…* zapisuje bieżące ustawienia, *Delete* usuwa bieżący preset użytkownika, *Show Preset Folder* otwiera folder.
 
 Preset zawiera wszystkie parametry (poza włącznikiem i Delta) oraz wybór głośników pasm. Nie zmienia ustawień analizatora ani rozmiaru okna. Wczytanie presetu to jeden krok Undo. Presety ze starszej wersji wtyczki są automatycznie migrowane.
 
-**A/B**: przyciski **A** i **B** przełączają między dwoma kompletami ustawień; pierwsze przełączenie kopiuje bieżące ustawienia do drugiego slotu. Przycisk **A→B** (albo **B→A**) kopiuje bieżący slot do drugiego. Oba sloty zapisują się z projektem; przełączenie i kopiowanie można cofnąć.
+**A/B**: przełącznik **A | B** przełącza między dwoma kompletami ustawień; pierwsze przełączenie kopiuje bieżące ustawienia do drugiego slotu. Przycisk kopiowania (⧉) obok kopiuje bieżący slot do drugiego (podpowiedź: *Copy A to B* albo *Copy B to A*); jest nieaktywny, gdy oba sloty są takie same. Oba sloty zapisują się z projektem; przełączenie i kopiowanie można cofnąć.
 
 **Undo/Redo**: strzałki w nagłówku (podpowiedź mówi, co zostanie cofnięte) i skróty *Cmd/Ctrl+Z*, *Cmd/Ctrl+Shift+Z*. Jeden ruch myszą, jedna zmiana z panelu lub z menu to jeden krok.
 
@@ -397,7 +419,7 @@ W układach wielokanałowych panel pasma ma przycisk **Speakers: …**, który o
 
 ## 16. Latencja i automatyzacja
 
-Całkowitą latencję pokazuje linia stanu; wtyczka zgłasza ją hostowi, który ją kompensuje. Składniki:
+Całkowitą latencję pokazuje status w nagłówku (w podpowiedzi także w próbkach); wtyczka zgłasza ją hostowi, który ją kompensuje. Składniki:
 
 | Źródło | Latencja (48 kHz) |
 |---|---|
@@ -435,7 +457,9 @@ Najwięcej kosztują: liczba kanałów, oversampling, pasma Dynamic i Spectral o
 - Podpowiedzi rezonansów są rzadkie poniżej ok. 400 Hz.
 - Modele Analog Feel to interpretacje charakteru klas urządzeń, nie emulacje konkretnych produktów.
 - Ambisonia nie jest obsługiwana.
-- Linux: brak instalatora (kompilacja ze źródeł).
+- Linux: brak instalatora (kompilacja ze źródeł); **? → User Manual** wskazuje wtedy `docs/manual.md` w źródłach.
+- W oknie minimalnym (860 × 480) panel pasma Dynamic lub Spectral z otwartym **Advanced** może zasłonić węzeł leżący na środku wykresu — wtedy staje tam, gdzie zasłania go najmniej; pomaga większe okno albo zamknięcie Advanced.
+- Ustawienie animacji wybiera się w **⚙**; systemowe „ogranicz ruch” (macOS, Windows) nie jest jeszcze odczytywane.
 
 ## 19. Rozwiązywanie problemów
 

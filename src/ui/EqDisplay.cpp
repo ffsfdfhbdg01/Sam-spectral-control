@@ -161,6 +161,15 @@ void EqDisplay::setChannelInfo (int channels, int pairs)
     numPairs = pairs;
 }
 
+void EqDisplay::setScaleInset (int pixels)
+{
+    if (pixels == scaleInset)
+        return;
+    scaleInset = pixels;
+    backgroundDirty = true;
+    repaint();
+}
+
 void EqDisplay::setEqRange (float rangeDb)
 {
     eqRangeDb = juce::jlimit (1.0f, 60.0f, rangeDb);
@@ -866,7 +875,8 @@ void EqDisplay::paintGrid (juce::Graphics& g) const
                                                                 { 20000.0f, "20k" } };
     g.setColour (colours::textDim);
     for (const auto& [hz, text] : labels)
-        g.drawText (text, juce::Rectangle<float> (xForFrequency (hz) - 20.0f, h - 16.0f, 40.0f, 14.0f), juce::Justification::centred);
+        g.drawText (text, juce::Rectangle<float> (xForFrequency (hz) - 20.0f, h - 16.0f - static_cast<float> (scaleInset), 40.0f, 14.0f),
+                    juce::Justification::centred);
 
     const int range = juce::roundToInt (eqRangeDb);
     const int step = gridStepFor (eqRangeDb);

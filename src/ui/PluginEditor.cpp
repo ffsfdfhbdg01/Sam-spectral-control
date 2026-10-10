@@ -450,8 +450,9 @@ void SscEditor::layoutPanels (bool animate)
     const auto bar = controlBar.getBounds();
     const auto area = display.getBounds();
 
-    // Global Advanced: slides up from behind the bottom bar.
+    // Global Advanced: slides up from behind the bottom bar; the frequency scale moves above it.
     const bool globalOpen = controlBar.isAdvancedOpen();
+    display.setScaleInset (globalOpen ? GlobalAdvancedPanel::kHeight : 0);
     const juce::Rectangle<int> globalShown (0, bar.getY() - GlobalAdvancedPanel::kHeight, getWidth(), GlobalAdvancedPanel::kHeight);
     const auto globalHidden = globalShown.withY (bar.getY());
     if (globalOpen)

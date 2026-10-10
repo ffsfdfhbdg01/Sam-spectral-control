@@ -17,6 +17,7 @@ Korektor parametryczny z pasmami statycznymi, dynamicznymi i spektralno-dynamicz
 | M6 | Analog Feel N/P/S: krzywe modeli, nieliniowości per pasmo (Character wybiera wariant), kalibracja −18 dBFS = +4 dBu, wewnętrzny oversampling w High/Max | ✅ |
 | M7 | Analizator (ustawienia, peak hold), poświata aktywności, podpowiedzi rezonansów, odczyty fazy i ringingu pasm, mierniki THD+N i aliasingu z podpowiedzią oversamplingu | ✅ |
 | M8 | Presety fabryczne i użytkownika, A/B, Undo/Redo w nagłówku, testy obciążeniowe, oversampling renderu offline, Delta, nakładka fazy całego EQ, korektor Minimum Phase High/Max, raporty pomiarów, instalatory (pkg / Inno Setup) i workflow wydania z podpisami, instrukcja (PL), licencje | ✅ |
+| UX | Przebudowa interfejsu ([research §15](docs/research/15-ux-ui.md)): trzy poziomy informacji, panel pasma pod węzłem z pokrętłami zależnymi od trybu, wysuwane panele Advanced (pasma i globalny), presety ‹ › ze znacznikiem zmian, animacje Full / Reduced / Off | ✅ |
 
 Wersja **1.0.0** jest gotowa do wydania, gdy zapadną decyzje właściciela projektu: licencja JUCE ([ADR-0002](docs/decisions/0002-licencja-juce.md)), identyfikatory wtyczki ([ADR-0016](docs/decisions/0016-identyfikatory-nazwy.md)), konta do podpisów (Apple Developer, Azure Artifact Signing) — i po ręcznych testach w hostach ([docs/testing.md](docs/testing.md), TST-3). Kroki: [docs/release.md](docs/release.md).
 
@@ -32,7 +33,9 @@ Pełna instrukcja obsługi: [docs/manual.md](docs/manual.md).
 | Częstotliwość / gain | przeciąganie węzła (Shift — precyzyjnie); dla kształtów bez gain pion zmienia Q |
 | Q | kółko myszy nad węzłem |
 | Włącz / wyłącz pasmo | podwójne kliknięcie węzła |
-| Solo (odsłuch obszaru pasma) | Alt/Option + przytrzymanie węzła albo przycisk Solo w panelu |
+| Solo (odsłuch obszaru pasma) | Alt/Option + przytrzymanie węzła albo 🎧 w panelu pasma (klik — zatrzaśnięcie, przytrzymanie — chwilowo) |
+| Tryb pasma | przełącznik Static \| Dynamic \| Spectral w panelu pasma; pokrętła dynamiki pojawiają się w trybach Dynamic i Spectral |
+| Ustawienia specjalistyczne | **Advanced ›** w panelu pasma (detektor, odczyty) i **Advanced ▴** na pasku dolnym (Quality, oversampling, Max Lookahead, Auto Gain, mierniki) |
 | Zaznaczanie wielu pasm | prostokąt na tle, Cmd/Ctrl + klik; zaznaczone pasma przesuwają się razem |
 | Menu pasma | prawy przycisk: kształt, slope / Q, tryb, cel (All/L/R/M/S), Character, Auto Gain, bypass, solo, kopiuj/wklej, reset, usuń |
 | Usuń, Undo, Redo, zaznacz wszystko | Delete, Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z (lub Ctrl+Y), Cmd/Ctrl+A |
@@ -67,8 +70,8 @@ Styl kodu: `.clang-format` (clang-format 18, sprawdzany w CI). `-DSSC_WARNINGS_A
 src/core/      rdzeń DSP (bez GUI i JUCE): filtry dopasowane, pasma, dynamika, silnik spektralny, korektor fazy,
                oversampling, głośność (Auto Gain), analiza (analizator, rezonanse, odczyty, mierniki)
 src/plugin/    procesor JUCE, parametry, stan i migracja, presety, usługi wątków tła
-src/ui/        edytor: wyświetlacz (analizator, krzywe, węzły), panel pasma, panel głośników, presety i A/B,
-               pasek sterowania z miernikami
+src/ui/        edytor: wyświetlacz (analizator, krzywe, węzły), panel pasma i jego Advanced, panel głośników,
+               presety i A/B, pasek dolny i globalny Advanced z miernikami, kontrolki, ruch, dokowanie paneli
 tests/         testy Catch2: rdzeń (tests/core), procesor, UI i testy obciążeniowe (tests/plugin)
 tools/         narzędzia deweloperskie, generator THIRD-PARTY-NOTICES.txt, skrypty CI (tools/ci)
 packaging/     instalatory macOS (pkg) i Windows (Inno Setup), tymczasowe warunki licencji

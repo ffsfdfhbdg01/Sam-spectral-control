@@ -82,7 +82,7 @@ chmod 755 "$work/root-uninstaller/Uninstall $name.command"
 cp "$repo/packaging/LICENSE.txt" "$repo/THIRD-PARTY-NOTICES.txt" "$work/root-uninstaller/"
 cp "$repo/docs/manual.md" "$work/root-uninstaller/Manual.md"
 mkdir -p "$work/root-uninstaller/images"
-cp "$repo/docs/images/editor.png" "$work/root-uninstaller/images/"
+cp "$repo/docs/images/editor.png" "$repo/docs/images/editor-advanced.png" "$work/root-uninstaller/images/"
 
 # Code signature of the bundles: Developer ID, hardened runtime, secure timestamp.
 for component in "${components[@]}"; do

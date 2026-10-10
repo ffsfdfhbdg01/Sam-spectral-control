@@ -47,7 +47,7 @@ Testy ręczne, których nie da się wykonać w CI (Atmos, AAX, interakcja w DAW)
 
 ### Real-time safety — RealtimeSanitizer (PLT-5)
 
-Preset `rtsan` (Clang 20, `-fsanitize=realtime`): `SscAudioProcessor::processImpl` i `Engine::process` są oznaczone `SSC_REALTIME` (`[[clang::nonblocking]]`), więc każda alokacja, blokada lub wywołanie blokujące w ich trakcie przerywa test z raportem. Pod RTSan przechodzą wszystkie testy rdzenia i wtyczki (172, w tym TST-4); w CI robi to zadanie „Real-time safety”. Lokalnie:
+Preset `rtsan` (Clang 20, `-fsanitize=realtime`): `SscAudioProcessor::processImpl` i `Engine::process` są oznaczone `SSC_REALTIME` (`[[clang::nonblocking]]`), więc każda alokacja, blokada lub wywołanie blokujące w ich trakcie przerywa test z raportem. Pod RTSan przechodzą wszystkie testy rdzenia i wtyczki (180, w tym TST-4); w CI robi to zadanie „Real-time safety”. Lokalnie:
 
 ```bash
 CC=clang-20 CXX=clang++-20 cmake --preset rtsan

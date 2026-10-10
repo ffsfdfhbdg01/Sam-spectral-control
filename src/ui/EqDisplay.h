@@ -74,6 +74,9 @@ public:
 
     /** Visible EQ range: ±range dB (3, 6, 12, 18 or 30). */
     void setEqRange (float rangeDb);
+
+    /** Height covered at the bottom (the global Advanced panel): the frequency scale moves above it. */
+    void setScaleInset (int pixels);
     float getEqRange() const noexcept { return eqRangeDb; }
 
     static constexpr float kMinHz = 10.0f;
@@ -155,6 +158,7 @@ private:
     std::vector<float> glowActivity, glowScratch, glowLineY; ///< scratch of paintGlow()
 
     float eqRangeDb = 18.0f;
+    int scaleInset = 0;
     int numChannels = 2;
     int numPairs = 1;
 

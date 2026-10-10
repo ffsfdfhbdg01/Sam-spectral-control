@@ -71,14 +71,18 @@ Microsoft Defender SmartScreen ocenia pobierane pliki według reputacji, którą
 
 - `THIRD-PARTY-NOTICES.txt` w katalogu głównym generuje `python3 tools/third-party-notices.py` z plików licencji w `external/` (wersje z `external/JUCE/JUCE.spdx.json` i commitów submodułów). Lista odpowiada temu, co jest w binarce: JUCE, pffft, zlib, HarfBuzz, SheenBidi, LunaSVG, PlutoVG, libpng, biblioteka JPEG IJG, VST 3 SDK, rozszerzenia PreSonus (domena publiczna) i — tylko w komponencie Audio Unit — AudioUnitSDK. Nieużywane kodeki JUCE (FLAC, Ogg Vorbis, Opus, MP3) i WebP są wyłączone w `src/CMakeLists.txt`, więc ich kod nie trafia do wtyczki (sprawdzone `nm` na binarce).
 - Po aktualizacji JUCE lub pffft: `python3 tools/third-party-notices.py` i commit; `--check` (krok CI na Linuksie i `local-check.sh`) wykrywa nieaktualny plik.
-- Instalatory zawsze instalują `LICENSE.txt` i `THIRD-PARTY-NOTICES.txt`; instrukcja [manual.md](manual.md) trafia obok jako `Manual.md` razem z `images/editor.png`. Zrzut ekranu odświeża się po zmianach interfejsu (build z `-DSSC_BUILD_TOOLS=ON`, na Linuksie pod `xvfb-run -a`):
+- Instalatory zawsze instalują `LICENSE.txt` i `THIRD-PARTY-NOTICES.txt`; instrukcja [manual.md](manual.md) trafia obok jako `Manual.md` razem z `images/editor.png` i `images/editor-advanced.png` (? → *User Manual* w nagłówku otwiera ten plik). Zrzuty ekranu odświeża się po zmianach interfejsu (build z `-DSSC_BUILD_TOOLS=ON`, na Linuksie pod `xvfb-run -a`):
 
 ```bash
-ssc_screenshot docs/images/editor.png 1100 660 b01_used=1 b01_shape=3 b01_freq=60 b01_slope=3 \
-    b02_used=1 b02_freq=250 b02_gain=-3 b02_q=1.2 b03_used=1 b03_freq=3000 b03_gain=3 b03_q=0.9 b03_mode=1 \
-    b03_threshold=-30 b04_used=1 b04_shape=2 b04_freq=10000 b04_gain=2.5 b05_used=1 b05_freq=6500 b05_q=2.5 \
-    b05_mode=2 b05_threshold=6 b05_thresholdmode=1 select=3
+BANDS="b01_used=1 b01_shape=3 b01_freq=60 b01_slope=3 b02_used=1 b02_freq=250 b02_gain=-3 b02_q=1.2 \
+    b03_used=1 b03_freq=3000 b03_gain=3 b03_q=0.9 b03_mode=1 b03_threshold=-30 b04_used=1 b04_shape=2 \
+    b04_freq=10000 b04_gain=2.5 b05_used=1 b05_freq=6500 b05_q=2.5 b05_mode=2 b05_threshold=6 b05_threshold_mode=1"
+ssc_screenshot docs/images/editor.png 1100 660 $BANDS select=3
+ssc_screenshot docs/images/editor-advanced.png 1100 660 $BANDS select=3 advanced=1 globaladvanced=1
+ssc_screenshot docs/images/editor-860x480.png 860 480 $BANDS select=3
 ```
+
+`advanced=1` otwiera panel Advanced pasma, `globaladvanced=1` globalny, `motion=0|1|2` ustawia animacje (Full / Reduced / Off). `docs/images/ui-1.0-*.png` to zrzuty interfejsu 1.0 do porównania w research §15 — nie odświeża się ich.
 
 ## Walidacja (TST-2)
 

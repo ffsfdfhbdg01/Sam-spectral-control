@@ -1,6 +1,6 @@
 # Research — indeks (M0)
 
-Notatki researchu dla funkcji z sekcji 4–14 [PROMPT.md](../../PROMPT.md) i propozycja przebudowy interfejsu po M8 (§15). Każda notatka ma ten sam układ:
+Notatki researchu dla funkcji z sekcji 4–14 [PROMPT.md](../../PROMPT.md) i przebudowa interfejsu po M8 (§15, wdrożona). Każda notatka ma ten sam układ:
 
 1. **a) Literatura i normy** — publikacje i standardy, na których opieramy rozwiązanie.
 2. **b) Wtyczki referencyjne** — jak problem rozwiązują najlepsze produkty (na podstawie manuali, recenzji i pomiarów; bez dekompilacji).
@@ -23,7 +23,7 @@ Decyzje o dużym wpływie na architekturę opisano dodatkowo jako ADR w [`docs/d
 | 12 | [Odczyty fazy i ringingu](12-odczyty-faza-ringing.md) | PR-1…PR-4 |
 | 13 | [Mierniki THD+N i aliasingu](13-mierniki-thd-aliasing.md) | MTR-1…MTR-4 |
 | 14 | [Funkcje globalne](14-funkcje-globalne.md) | GLB-1…GLB-5 |
-| 15 | [UX/UI: grupowanie, hierarchia, przyciski i animacje](15-ux-ui.md) (propozycja po M8) | VIS-7, GLB-5, BAND-6, BAND-7 |
+| 15 | [UX/UI: grupowanie, hierarchia, przyciski i animacje](15-ux-ui.md) (po M8: trzy poziomy informacji, panele Advanced; wdrożone U1–U4) | VIS-7, GLB-5, BAND-6, BAND-7 |
 
 Wspólne pojęcia używane w notatkach:
 

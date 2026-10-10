@@ -81,8 +81,9 @@ src/core/              – rdzeń DSP bez GUI i bez JUCE (ssc_core, ARC-5)
   engine/              – Engine, BandProcessor, ChannelTopology, tabele wzmocnień, typy
 src/plugin/            – AudioProcessor, parametry (APVTS), stan i migracja, presety,
                          usługi wątków tła (analizator, odczyty, mierniki)
-src/ui/                – edytor: EqDisplay, BandPanel, SpeakerPanel, ControlBar, PresetBar,
-                         MeterView, logika edycji pasm, motyw
+src/ui/                – edytor: EqDisplay, BandPanel (+ Advanced pasma), SpeakerPanel, ControlBar
+                         (+ globalny Advanced), PresetBar, MeterView, Controls (przyciski), Motion
+                         (animacje), PanelLayout (dokowanie), logika edycji pasm, motyw
 tests/core, tests/plugin – Catch2 v3: rdzeń; procesor, logika UI, presety, testy obciążeniowe
 tools/                 – ssc_measure (raporty w docs/measurements), ssc_benchmark (CPU),
                          ssc_screenshot, ssc_resonance_eval, third-party-notices.py,

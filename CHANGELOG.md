@@ -4,6 +4,18 @@ Wszystkie istotne zmiany Sam Spectral Control. Format: [Keep a Changelog](https:
 
 ## [Unreleased]
 
+### Zmienione
+- **Interfejs** ([research §15](docs/research/15-ux-ui.md)): trzy poziomy informacji — zawsze widoczne (nagłówek, wykres, pasek dolny), na żądanie (panel wybranego pasma) i zaawansowane (za przyciskami **Advanced**).
+- **Panel pasma** pod węzłem (nie zasłania go), o stałej szerokości; tryb jako przełącznik Static \| Dynamic \| Spectral; pokrętła zależne od trybu: Static — Freq, Gain, Q; Dynamic — także Threshold, Ratio, Range, Attack, Release; Spectral — Threshold, Selectivity, Range, Attack, Release; bypass z lampką, Solo (klik / przytrzymanie), menu ⋯ (Copy, Paste, Reset, Delete).
+- **Advanced pasma** wysuwany z boku panelu: Threshold Mode, Direction, Knee, Lookahead (Dynamic) lub Ratio (Spectral), Mix, Link i odczyty pasma; kropka na przycisku przy ustawieniach innych niż domyślne dla trybu i przy ostrzeżeniu o ringingu.
+- **Globalny Advanced** wysuwany z paska dolnego: Quality, Oversampling, Offline, **Max Lookahead** (dotąd tylko w hoście), ważenie i szybkość Auto Gain, mierniki THD+N i aliasingu (progi ostrzeżeń po kliknięciu w mierniki); kropka na przycisku przy zmianach, podpowiedzi oversamplingu i ostrzeżeniach mierników.
+- **Nagłówek**: presety ‹ › (poprzedni / następny) z kropką „zmieniony”, przełącznik A \| B, kopiowanie nieaktywne przy równych slotach, status latencji i CPU, Analyzer jako przełącznik + menu, ⚙ (animacje Full / Reduced / Off, rozmiary okna), ? (instrukcja, mysz i klawiatura, informacje); zakres skali EQ przeniesiony do rogu wykresu.
+- Pasek dolny: Phase (Model tylko w Analog Feel), Advanced, Delta, Auto Gain z bieżącą korekcją, Mix, Output.
+- Kolory z kontrastem WCAG (tekst ≥ 4,5:1, tor gałek ≥ 2:1), gałki w kolorze pasma; animacje paneli 110–200 ms, przerywalne.
+
+### Poprawione
+- Polecenie zrzutu ekranu w `docs/release.md` używało nieistniejącego identyfikatora `b05_thresholdmode` (poprawnie `b05_threshold_mode`).
+
 ## [1.0.0] - niewydana
 
 Pierwsze wydanie (etapy M0–M8). Data zostanie wpisana przy publikacji; publikacja czeka na decyzje ADR-0002 (licencja JUCE) i ADR-0016 (identyfikatory).
