@@ -2,15 +2,20 @@ name: Release
 
 # Installers for macOS (universal .pkg) and Windows (x64 Inno Setup), signed and notarised when the
 # signing secrets exist and unsigned otherwise (REL-1…REL-3, docs/release.md). A version tag
-# (vX.Y.Z) also publishes a GitHub release with the installers, a source archive with every
-# submodule (AGPLv3 corresponding source, ADR-0002) and SHA-256 sums; it is a pre-release while the
-# installers are unsigned. The tag is refused while the licence or the identifiers are undecided
-# (ADR-0002, ADR-0016).
+# (vX.Y.Z), or a manual run with "publish" (which then creates that tag), also publishes a GitHub
+# release with the installers, a source archive with every submodule (AGPLv3 corresponding source,
+# ADR-0002) and SHA-256 sums; it is a pre-release while the installers are unsigned. Publishing is
+# refused while the licence or the identifiers are undecided (ADR-0002, ADR-0016).
 
 on:
   push:
     tags: [ 'v*' ]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Also publish the GitHub release: creates the tag vX.Y.Z (version from CMakeLists.txt) on this commit'
+        type: boolean
+        default: false
 
 env:
   PLUGINVAL_VERSION: v1.0.4
@@ -33,11 +38,11 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Version $version"
       - name: Release gate
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || inputs.publish
         run: |
           version="${{ steps.version.outputs.version }}"
           fail=0
-          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
             echo "::error::Tag $GITHUB_REF_NAME does not match the version in CMakeLists.txt ($version)"; fail=1
           fi
           if ! grep -q "^## \[$version\]" CHANGELOG.md; then
@@ -212,7 +217,7 @@ jobs:
 
   release:
     name: GitHub release
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' || inputs.publish
     needs: [ check, macos, windows ]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -253,6 +258,9 @@ jobs:
           cat release-notes.md dist/SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
+          # A version tag names itself; a manual run with "publish" creates the tag on its commit.
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
           name: Sam Spectral Control ${{ env.VERSION }}
           body_path: release-notes.md
           prerelease: ${{ env.SIGNED != 'true' }}
