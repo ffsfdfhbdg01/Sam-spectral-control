@@ -4,21 +4,9 @@ Wszystkie istotne zmiany Sam Spectral Control. Format: [Keep a Changelog](https:
 
 ## [Unreleased]
 
-### Zmienione
-- **Interfejs** ([research §15](docs/research/15-ux-ui.md)): trzy poziomy informacji — zawsze widoczne (nagłówek, wykres, pasek dolny), na żądanie (panel wybranego pasma) i zaawansowane (za przyciskami **Advanced**).
-- **Panel pasma** pod węzłem (nie zasłania go), o stałej szerokości; tryb jako przełącznik Static \| Dynamic \| Spectral; pokrętła zależne od trybu: Static — Freq, Gain, Q; Dynamic — także Threshold, Ratio, Range, Attack, Release; Spectral — Threshold, Selectivity, Range, Attack, Release; bypass z lampką, Solo (klik / przytrzymanie), menu ⋯ (Copy, Paste, Reset, Delete).
-- **Advanced pasma** wysuwany z boku panelu: Threshold Mode, Direction, Knee, Lookahead (Dynamic) lub Ratio (Spectral), Mix, Link i odczyty pasma; kropka na przycisku przy ustawieniach innych niż domyślne dla trybu i przy ostrzeżeniu o ringingu.
-- **Globalny Advanced** wysuwany z paska dolnego: Quality, Oversampling, Offline, **Max Lookahead** (dotąd tylko w hoście), ważenie i szybkość Auto Gain, mierniki THD+N i aliasingu (progi ostrzeżeń po kliknięciu w mierniki); kropka na przycisku przy zmianach, podpowiedzi oversamplingu i ostrzeżeniach mierników.
-- **Nagłówek**: presety ‹ › (poprzedni / następny) z kropką „zmieniony”, przełącznik A \| B, kopiowanie nieaktywne przy równych slotach, status latencji i CPU, Analyzer jako przełącznik + menu, ⚙ (animacje Full / Reduced / Off, rozmiary okna), ? (instrukcja, mysz i klawiatura, informacje); zakres skali EQ przeniesiony do rogu wykresu.
-- Pasek dolny: Phase (Model tylko w Analog Feel), Advanced, Delta, Auto Gain z bieżącą korekcją, Mix, Output.
-- Kolory z kontrastem WCAG (tekst ≥ 4,5:1, tor gałek ≥ 2:1), gałki w kolorze pasma; animacje paneli 110–200 ms, przerywalne.
+## [1.0.0] - 2026-10-10
 
-### Poprawione
-- Polecenie zrzutu ekranu w `docs/release.md` używało nieistniejącego identyfikatora `b05_thresholdmode` (poprawnie `b05_threshold_mode`).
-
-## [1.0.0] - niewydana
-
-Pierwsze wydanie (etapy M0–M8). Data zostanie wpisana przy publikacji; publikacja czeka na decyzje ADR-0002 (licencja JUCE) i ADR-0016 (identyfikatory).
+Pierwsze wydanie (etapy M0–M8 i przebudowa interfejsu według [research §15](docs/research/15-ux-ui.md)). Licencja: GNU AGPLv3 ([ADR-0002](docs/decisions/0002-licencja-juce.md)); identyfikatory wtyczki zamrożone ([ADR-0016](docs/decisions/0016-identyfikatory-nazwy.md)). Instalatory nie są jeszcze podpisane cyfrowo — to wydanie wstępne.
 
 ### Dodane
 - **Pasma**: 24 pasma — Bell, Low/High Shelf, Low/High Cut (6–96 dB/okt. i Brickwall), Notch, Band Pass, Tilt Shelf, Flat Tilt, All Pass; filtry dopasowane do prototypu analogowego (SVF-TPT), cel L/R/Mid/Side; edycja na wykresie (tworzenie kliknięciem, menu kontekstowe, Undo/Redo).
@@ -29,6 +17,12 @@ Pierwsze wydanie (etapy M0–M8). Data zostanie wpisana przy publikacji; publika
 - **Wizualizacja**: analizator pre/post z peak hold i nachyleniem, poświata aktywności, świecące pasma dynamiczne, podpowiedzi rezonansów, nakładka fazy lub opóźnienia grupowego całego EQ, odczyty fazy, opóźnienia grupowego i pre/post ringingu pasma, mierniki THD+N i aliasingu z podpowiedzią oversamplingu.
 - **Presety**: 15 presetów fabrycznych, presety użytkownika (pliki `.sscpreset`), porównanie A/B z kopiowaniem, Undo/Redo w nagłówku i ze skrótów klawiszowych, każda zmiana jako krok Undo; migracja stanu między wersjami.
 - **Globalne**: Mix, Output, Bypass hosta z crossfade i stałą latencją, odsłuch pasma (Solo), odsłuch różnicy (Delta, bez korekcji Auto Gain), Max Lookahead.
+- **Interfejs** ([research §15](docs/research/15-ux-ui.md)): trzy poziomy informacji — zawsze widoczne (nagłówek, wykres, pasek dolny), na żądanie (panel wybranego pasma) i zaawansowane (za przyciskami **Advanced**).
+  - Panel pasma pod węzłem (nie zasłania go); tryb jako przełącznik Static \| Dynamic \| Spectral; pokrętła zależne od trybu: Static — Freq, Gain, Q; Dynamic — także Threshold, Ratio, Range, Attack, Release; Spectral — Threshold, Selectivity, Range, Attack, Release; bypass, Solo, menu ⋯ (Copy, Paste, Reset, Delete).
+  - **Advanced** pasma wysuwany z boku panelu: Threshold Mode, Direction, Knee, Lookahead (Dynamic) lub Ratio (Spectral), Mix, Link i odczyty pasma.
+  - Globalny **Advanced** wysuwany z paska dolnego: Quality, Oversampling, Offline, Max Lookahead, ważenie i szybkość Auto Gain, mierniki THD+N i aliasingu (progi ostrzeżeń po kliknięciu w mierniki).
+  - Nagłówek: presety ‹ › z kropką „zmieniony”, A \| B, Undo/Redo, status latencji i CPU, Analyzer, ⚙ (animacje Full / Reduced / Off, rozmiary okna), ? (instrukcja, mysz i klawiatura, informacje); pasek dolny: Phase, Advanced, Delta, Auto Gain, Mix, Output.
+  - Kolory z kontrastem WCAG (tekst ≥ 4,5:1), gałki w kolorze pasma, przerywalne animacje paneli 110–200 ms.
 - **Instalatory**: macOS `.pkg` (universal, wybór komponentów, deinstalator), Windows Inno Setup z deinstalatorem; podpisy i notaryzacja w workflow wydania; zawsze instalowane licencje (`THIRD-PARTY-NOTICES.txt` generowany z plików licencji bibliotek) i instrukcja obsługi po polsku (`docs/manual.md`).
 
 ### Jakość
@@ -38,4 +32,5 @@ Pierwsze wydanie (etapy M0–M8). Data zostanie wpisana przy publikacji; publika
 ### Ograniczenia
 - Format VST3; Audio Unit (P1) jest budowany tylko na życzenie (`SSC_FORMAT_AU`), AAX i CLAP — poza zakresem 1.0.
 - Brak wejścia sidechain i trybu niskiej latencji dla pasm Spectral (latencja ramki 43–171 ms); ambisonia nie jest obsługiwana.
-- Testy w hostach (docs/testing.md, TST-3) wykonuje się ręcznie przed publikacją.
+- Instalatory bez podpisu cyfrowego: macOS (Gatekeeper) i Windows (SmartScreen) ostrzegają przy pierwszym uruchomieniu; notatki wydania opisują, jak je otworzyć.
+- Wydanie przeszło testy automatyczne, pluginval (strictness 10) i walidator VST3 Steinberga na macOS i Windows; ręczne testy w hostach (docs/testing.md, TST-3) nie zostały jeszcze wykonane — zgłoszenia problemów z konkretnymi DAW są mile widziane.

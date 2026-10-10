@@ -46,9 +46,10 @@ if(APPLE AND SSC_FORMAT_AU)
     list(APPEND ssc_formats AU)
 endif()
 
-# Identifiers are provisional until ADR-0016 is accepted; never change them after the first release.
+# Identifiers are frozen since 1.0.0 (ADR-0016): changing any of them breaks saved host sessions.
 juce_add_plugin(SamSpectralControl
     COMPANY_NAME "Sam Audio"
+    COMPANY_WEBSITE "https://github.com/ffsfdfhbdg01/Sam-spectral-control"
     BUNDLE_ID com.samaudio.samspectralcontrol
     PLUGIN_MANUFACTURER_CODE SamA
     PLUGIN_CODE Sspc

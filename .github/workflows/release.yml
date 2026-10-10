@@ -2,8 +2,10 @@ name: Release
 
 # Installers for macOS (universal .pkg) and Windows (x64 Inno Setup), signed and notarised when the
 # signing secrets exist and unsigned otherwise (REL-1…REL-3, docs/release.md). A version tag
-# (vX.Y.Z) also drafts a GitHub release; it is refused while the licence or the identifiers are
-# undecided (ADR-0002, ADR-0016).
+# (vX.Y.Z) also publishes a GitHub release with the installers, a source archive with every
+# submodule (AGPLv3 corresponding source, ADR-0002) and SHA-256 sums; it is a pre-release while the
+# installers are unsigned. The tag is refused while the licence or the identifiers are undecided
+# (ADR-0002, ADR-0016).
 
 on:
   push:
@@ -209,28 +211,49 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Draft GitHub release
+    name: GitHub release
     if: github.ref_type == 'tag'
     needs: [ check, macos, windows ]
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
+    env:
+      # Signed: both installers signed and the macOS one notarised; otherwise a pre-release.
+      SIGNED: ${{ secrets.MACOS_CERTIFICATES_P12 != '' && secrets.NOTARY_KEY_P8 != '' && secrets.AZURE_CLIENT_ID != '' }}
+      VERSION: ${{ needs.check.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+      - name: Source archive with every submodule (AGPLv3 corresponding source)
+        run: |
+          prefix="SamSpectralControl-$VERSION"
+          git ls-files --recurse-submodules -z \
+            | tar --null --files-from=- --transform "s,^,$prefix/,S" --sort=name --owner=0 --group=0 \
+                --numeric-owner --mtime="@$(git log -1 --format=%ct)" -cf - \
+            | gzip -n -9 > "dist/$prefix-source.tar.gz"
+          ls -l dist
       - name: Release notes and checksums
         run: |
-          version="${{ needs.check.outputs.version }}"
-          awk -v v="$version" '/^## \[/ { p = index($0, "[" v "]") > 0; next } p' CHANGELOG.md > release-notes.md
-          (cd dist && sha256sum * > SHA256SUMS.txt)
+          {
+            sed "s/@VERSION@/$VERSION/g" packaging/release-notes.md
+            if [[ "$SIGNED" != true ]]; then
+              sed "s/@VERSION@/$VERSION/g" packaging/release-notes-unsigned.md
+            fi
+            echo
+            echo "## Zmiany"
+            awk -v v="$VERSION" '/^## \[/ { p = index($0, "[" v "]") > 0; next } p' CHANGELOG.md
+          } > release-notes.md
+          (cd dist && sha256sum -- * > SHA256SUMS.txt)
           cat release-notes.md dist/SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
-          draft: true
-          name: Sam Spectral Control ${{ needs.check.outputs.version }}
+          name: Sam Spectral Control ${{ env.VERSION }}
           body_path: release-notes.md
+          prerelease: ${{ env.SIGNED != 'true' }}
           files: dist/*

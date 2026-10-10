@@ -19,9 +19,11 @@ Korektor parametryczny z pasmami statycznymi, dynamicznymi i spektralno-dynamicz
 | M8 | Presety fabryczne i użytkownika, A/B, Undo/Redo w nagłówku, testy obciążeniowe, oversampling renderu offline, Delta, nakładka fazy całego EQ, korektor Minimum Phase High/Max, raporty pomiarów, instalatory (pkg / Inno Setup) i workflow wydania z podpisami, instrukcja (PL), licencje | ✅ |
 | UX | Przebudowa interfejsu ([research §15](docs/research/15-ux-ui.md)): trzy poziomy informacji, panel pasma pod węzłem z pokrętłami zależnymi od trybu, wysuwane panele Advanced (pasma i globalny), presety ‹ › ze znacznikiem zmian, animacje Full / Reduced / Off | ✅ |
 
-Wersja **1.0.0** jest gotowa do wydania, gdy zapadną decyzje właściciela projektu: licencja JUCE ([ADR-0002](docs/decisions/0002-licencja-juce.md)), identyfikatory wtyczki ([ADR-0016](docs/decisions/0016-identyfikatory-nazwy.md)), konta do podpisów (Apple Developer, Azure Artifact Signing) — i po ręcznych testach w hostach ([docs/testing.md](docs/testing.md), TST-3). Kroki: [docs/release.md](docs/release.md).
-
 Szczegółowy stan każdego wymagania: [docs/traceability.md](docs/traceability.md).
+
+## Pobieranie
+
+Instalatory wersji **1.0.0** dla macOS (`.pkg`, Apple silicon i Intel) i Windows (`.exe`, x64) są na stronie [Releases](https://github.com/ffsfdfhbdg01/Sam-spectral-control/releases), razem z archiwum pełnego kodu źródłowego i sumami SHA-256. Pierwsze wydanie nie jest podpisane cyfrowo (wydanie wstępne): macOS i Windows ostrzegają przed jego uruchomieniem, a notatki wydania opisują, jak przejść przez te ostrzeżenia. Na Linuksie wtyczkę buduje się ze źródeł (niżej). Jak powstaje wydanie: [docs/release.md](docs/release.md).
 
 ## Obsługa (skrót)
 
@@ -74,7 +76,7 @@ src/ui/        edytor: wyświetlacz (analizator, krzywe, węzły), panel pasma i
                presety i A/B, pasek dolny i globalny Advanced z miernikami, kontrolki, ruch, dokowanie paneli
 tests/         testy Catch2: rdzeń (tests/core), procesor, UI i testy obciążeniowe (tests/plugin)
 tools/         narzędzia deweloperskie, generator THIRD-PARTY-NOTICES.txt, skrypty CI (tools/ci)
-packaging/     instalatory macOS (pkg) i Windows (Inno Setup), tymczasowe warunki licencji
+packaging/     instalatory macOS (pkg) i Windows (Inno Setup), licencja instalatora, notatki wydania
 docs/          instrukcja, research, architektura, ADR, śledzenie wymagań, testy, pomiary, wydanie
 ```
 
@@ -84,11 +86,15 @@ docs/          instrukcja, research, architektura, ADR, śledzenie wymagań, tes
 - [PROMPT.md](PROMPT.md) — specyfikacja wymagań (z identyfikatorami wymagań).
 - [docs/architecture.md](docs/architecture.md) — tor sygnału, wątki, moduły, budowanie, testy, ryzyka.
 - [docs/research/](docs/research/) — research dla każdej funkcji: literatura, wtyczki referencyjne, wybrane podejście, kryteria akceptacji.
-- [docs/decisions/](docs/decisions/) — decyzje architektoniczne (ADR), w tym otwarte pytania do właściciela projektu.
+- [docs/decisions/](docs/decisions/) — decyzje architektoniczne (ADR).
 - [docs/testing.md](docs/testing.md) — checklista testów w hostach i testy obciążeniowe.
 - [docs/measurements/](docs/measurements/README.md) — raporty pomiarów: filtry, zniekształcenia, latencja, Auto Gain, rezonanse, CPU.
 - [docs/release.md](docs/release.md) — instalatory, podpisy, notaryzacja, workflow wydania; [CHANGELOG.md](CHANGELOG.md).
 
-## Licencje komponentów
+## Licencja
 
-JUCE 9 (AGPLv3 albo licencja komercyjna — decyzja otwarta, ADR-0002), VST3 SDK 3.8 (MIT, dołączony w JUCE), pffft (licencja BSD-podobna, FFTPACK) oraz biblioteki wkompilowane przez moduły JUCE (zlib, HarfBuzz, SheenBidi, LunaSVG, PlutoVG, libpng, JPEG IJG). Pełne teksty: [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) (generowany przez `tools/third-party-notices.py`). Catch2 (BSL-1.0) — tylko testy, nie trafia do wtyczki.
+Copyright © 2026 Sam Audio. Sam Spectral Control jest wolnym oprogramowaniem: możesz go rozpowszechniać i zmieniać na warunkach **GNU Affero General Public License, wersja 3** ([LICENSE](LICENSE); [ADR-0002](docs/decisions/0002-licencja-juce.md)). Program jest rozpowszechniany bez żadnej gwarancji. Kto rozpowszechnia zmienioną wersję, musi udostępnić jej kod źródłowy na tej samej licencji.
+
+### Licencje komponentów
+
+JUCE 9 (używany na AGPLv3), VST3 SDK 3.8 (MIT, dołączony w JUCE), pffft (licencja BSD-podobna, FFTPACK) oraz biblioteki wkompilowane przez moduły JUCE (zlib, HarfBuzz, SheenBidi, LunaSVG, PlutoVG, libpng, JPEG IJG). Pełne teksty: [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) (generowany przez `tools/third-party-notices.py`). Catch2 (BSL-1.0) — tylko testy, nie trafia do wtyczki.

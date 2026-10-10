@@ -49,7 +49,12 @@ Deinstalacja: uruchom `Uninstall Sam Spectral Control.command` z folderu `/Libra
 
 Uruchom `SamSpectralControl-1.0.0-Windows.exe`. Wtyczka trafia do `C:\Program Files\Common Files\VST3\Sam Spectral Control.vst3`, a licencje i (opcjonalnie) instrukcja do `C:\Program Files\Sam Audio\Sam Spectral Control`. Deinstalacja: *Ustawienia → Aplikacje → Zainstalowane aplikacje → Sam Spectral Control*.
 
-Przy pierwszych wydaniach Windows SmartScreen może pokazać ostrzeżenie „System Windows ochronił ten komputer” — reputacja nowego wydawcy rośnie z liczbą instalacji. Jeśli instalator jest podpisany przez Sam Audio, wybierz *Więcej informacji → Uruchom mimo to*.
+### Ostrzeżenia systemu przy instalatorach bez podpisu
+
+Wydanie 1.0.0 nie jest podpisane cyfrowo (wydanie wstępne), więc systemy ostrzegają przed pierwszym uruchomieniem instalatora. Sumę SHA-256 pobranego pliku można porównać z `SHA256SUMS.txt` ze strony wydania (macOS: `shasum -a 256 <plik>`, Windows: `certutil -hashfile <plik> SHA256`).
+
+- **macOS**: po dwukliku pojawia się komunikat, że Apple nie może sprawdzić pliku. Zamknij go, otwórz *Ustawienia systemowe → Prywatność i ochrona*, w sekcji *Ochrona* kliknij *Otwórz mimo to* przy nazwie instalatora i potwierdź hasłem. W macOS 15 i nowszych otwieranie przez Control-klik już nie omija tej blokady.
+- **Windows**: SmartScreen pokazuje okno „System Windows ochronił ten komputer” — wybierz *Więcej informacji → Uruchom mimo to*. Także podpisane instalatory nowego wydawcy mogą przez pierwsze tygodnie wywoływać to ostrzeżenie, zanim zbudują reputację.
 
 ### Po instalacji
 
@@ -476,6 +481,6 @@ Najwięcej kosztują: liczba kanałów, oversampling, pasma Dynamic i Spectral o
 
 ## 20. Licencje i znaki towarowe
 
-Warunki licencji wtyczki są w pliku `LICENSE.txt` instalowanym razem z nią. Sam Spectral Control zawiera oprogramowanie zewnętrzne (m.in. JUCE, pffft, zlib, HarfBuzz, SheenBidi, LunaSVG, PlutoVG, libpng, biblioteka JPEG Independent JPEG Group, VST 3 SDK); pełne teksty licencji są w pliku `THIRD-PARTY-NOTICES.txt` w folderze instalacji. To oprogramowanie jest częściowo oparte na pracy Independent JPEG Group.
+Copyright © 2026 Sam Audio. Sam Spectral Control jest wolnym oprogramowaniem na licencji **GNU Affero General Public License, wersja 3**: można go używać, rozpowszechniać i zmieniać, a kto rozpowszechnia zmienioną wersję, musi udostępnić jej kod źródłowy na tej samej licencji. Program jest dostarczany bez żadnej gwarancji. Pełny tekst licencji jest w pliku `LICENSE.txt` instalowanym razem z wtyczką, a pełny kod źródłowy każdej wersji — w repozytorium https://github.com/ffsfdfhbdg01/Sam-spectral-control i w archiwum źródeł na stronie wydania. Sam Spectral Control zawiera oprogramowanie zewnętrzne (m.in. JUCE, pffft, zlib, HarfBuzz, SheenBidi, LunaSVG, PlutoVG, libpng, biblioteka JPEG Independent JPEG Group, VST 3 SDK); pełne teksty licencji są w pliku `THIRD-PARTY-NOTICES.txt` w folderze instalacji. To oprogramowanie jest częściowo oparte na pracy Independent JPEG Group.
 
 VST is a registered trademark of Steinberg Media Technologies GmbH. Pozostałe nazwy produktów i firm są znakami towarowymi ich właścicieli i występują tylko w celu opisu.

@@ -419,8 +419,12 @@ void SscEditor::showHelpMenu()
     menu.addItem ("About Sam Spectral Control", [safe] {
         juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, plugin::kPluginName,
                                                 "Version " SSC_VERSION_STRING "\nDynamic and spectral equaliser.\n\n"
-                                                "Licence: LICENSE.txt. Third-party components: THIRD-PARTY-NOTICES.txt "
-                                                "(installed next to the user manual).",
+                                                "Copyright (C) 2026 Sam Audio. This program comes with ABSOLUTELY NO "
+                                                "WARRANTY. It is free software: you may redistribute and modify it under "
+                                                "the GNU Affero General Public License, version 3 (LICENSE.txt).\n"
+                                                "Source code: https://github.com/ffsfdfhbdg01/Sam-spectral-control\n\n"
+                                                "Third-party components: THIRD-PARTY-NOTICES.txt (installed next to the "
+                                                "user manual).",
                                                 {}, safe.getComponent());
     });
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (helpButton));

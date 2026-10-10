@@ -8,8 +8,9 @@
 # plug-in, the Audio Unit (when built) and the uninstaller with the licences, installed to
 # /Library/Application Support/Sam Spectral Control.
 #
-# Signing and notarisation run only when their variables are set; otherwise the bundles and the
-# package stay unsigned (internal testing only):
+# Signing and notarisation run only when their variables are set. Otherwise the bundles get an
+# ad-hoc signature (Apple silicon loads only signed code; Gatekeeper still treats them as
+# unsigned) and the package stays unsigned:
 #   MACOS_APP_IDENTITY        codesign identity, "Developer ID Application: <name> (<team>)"
 #   MACOS_INSTALLER_IDENTITY  productbuild identity, "Developer ID Installer: <name> (<team>)"
 #   MACOS_KEYCHAIN            keychain that holds them (optional)
@@ -91,7 +92,9 @@ for component in "${components[@]}"; do
             run codesign --force --sign "$MACOS_APP_IDENTITY" ${keychain[@]+"${keychain[@]}"} --options runtime --timestamp "$bundle"
             run codesign --verify --strict --verbose=2 "$bundle"
         else
-            echo "warning: MACOS_APP_IDENTITY is not set; $(basename "$bundle") stays unsigned" >&2
+            echo "warning: MACOS_APP_IDENTITY is not set; $(basename "$bundle") gets an ad-hoc signature" >&2
+            run codesign --force --sign - "$bundle"
+            run codesign --verify --strict --verbose=2 "$bundle"
         fi
     done
 done

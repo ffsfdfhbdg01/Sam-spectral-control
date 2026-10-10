@@ -5,7 +5,7 @@ Format: kontekst → decyzja → konsekwencje → rozważane alternatywy. Decyzj
 | ADR | Tytuł | Status |
 |---|---|---|
 | [0001](0001-framework-juce9-cmake.md) | Framework: JUCE 9 + CMake + C++20 | Zaakceptowana |
-| [0002](0002-licencja-juce.md) | Licencja JUCE: AGPLv3 czy komercyjna | **Otwarta** |
+| [0002](0002-licencja-juce.md) | Licencja JUCE: AGPLv3 czy komercyjna | Zaakceptowana (2026-10-10): AGPLv3 |
 | [0003](0003-hybrydowa-architektura-dsp.md) | Hybrydowa architektura DSP | Zaakceptowana |
 | [0004](0004-filtry-dopasowane-svf-tpt.md) | Filtry dopasowane realizowane jako SVF-TPT | Zaakceptowana |
 | [0005](0005-natural-phase.md) | Natural Phase: dopasowany IIR + korektor FIR | Zaakceptowana |
@@ -19,4 +19,4 @@ Format: kontekst → decyzja → konsekwencje → rozważane alternatywy. Decyzj
 | [0013](0013-biblioteka-fft.md) | Biblioteka FFT | Zaakceptowana |
 | [0014](0014-instalatory-podpisy.md) | Instalatory i podpisy | Zaakceptowana |
 | [0015](0015-strategia-testow.md) | Strategia testów | Zaakceptowana |
-| [0016](0016-identyfikatory-nazwy.md) | Identyfikatory i nazwy wtyczki | **Otwarta** (przed pierwszą dystrybucją) |
+| [0016](0016-identyfikatory-nazwy.md) | Identyfikatory i nazwy wtyczki | Zaakceptowana (2026-10-10): wartości zamrożone |

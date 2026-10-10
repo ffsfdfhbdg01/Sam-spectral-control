@@ -5,9 +5,9 @@
 | Workflow | Kiedy | Co robi |
 |---|---|---|
 | `ci.yml` | pull request, push do `main`/`master`, ręcznie (*Run workflow*: `all` albo `linux`); nie startuje dla zmian samej dokumentacji ani na pushach do gałęzi roboczych | build (Linux, macOS universal, Windows x64), testy, pluginval (strictness 10), walidator VST3 Steinberga (tryb rozszerzony), RealtimeSanitizer, ASan/UBSan, clang-format |
-| `release.yml` | tag `vX.Y.Z` albo ręcznie (*Run workflow*) | to samo dla macOS i Windows, potem instalatory: `SamSpectralControl-X.Y.Z-macOS.pkg` i `SamSpectralControl-X.Y.Z-Windows.exe`; przy tagu — szkic wydania GitHub z notatkami z CHANGELOG i sumami SHA-256 |
+| `release.yml` | tag `vX.Y.Z` albo ręcznie (*Run workflow*) | to samo dla macOS i Windows, potem instalatory: `SamSpectralControl-X.Y.Z-macOS.pkg` i `SamSpectralControl-X.Y.Z-Windows.exe`; przy tagu — opublikowane wydanie GitHub z instalatorami, archiwum źródeł `SamSpectralControl-X.Y.Z-source.tar.gz` (ze wszystkimi submodułami), `SHA256SUMS.txt` i notatkami (`packaging/release-notes.md` + sekcja wersji z CHANGELOG) |
 
-Bez sekretów podpisu workflow wydania buduje **niepodpisane** instalatory — wyłącznie do testów wewnętrznych (macOS Gatekeeper je blokuje, Windows SmartScreen ostrzega).
+Bez sekretów podpisu workflow wydania buduje **niepodpisane** instalatory: bundle macOS dostaje podpis ad hoc (Apple silicon wczytuje tylko podpisany kod), pakiet zostaje bez podpisu, a Windows bez Authenticode. Wydanie z tagu jest wtedy oznaczane jako **wstępne** (*pre-release*), a do notatek trafia `packaging/release-notes-unsigned.md` — jak otworzyć instalator mimo ostrzeżeń Gatekeepera (macOS) i SmartScreen (Windows). Z kompletem sekretów (Developer ID, notaryzacja, Azure) wydanie jest zwykłe.
 
 ## Bramka wydania
 
@@ -19,10 +19,12 @@ Dla tagu workflow odmawia wydania, dopóki:
 
 ## Kroki wydania
 
-1. Decyzje: ADR-0002 i ADR-0016 → „Zaakceptowana”; ostateczne warunki licencji w `packaging/LICENSE.txt` (bez linii `PROVISIONAL`). Przy licencji AGPLv3 dla JUCE sekcja JUCE w `THIRD-PARTY-NOTICES.txt` (generator `tools/third-party-notices.py`) musi dodatkowo zawierać pełny tekst AGPLv3 i miejsce, skąd można pobrać kod źródłowy wtyczki.
-2. Testy w hostach według [testing.md](testing.md) (TST-3).
+1. Decyzje (od 1.0.0 podjęte, 2026-10-10): licencja AGPLv3 ([ADR-0002](decisions/0002-licencja-juce.md)) — `LICENSE` (pełny tekst), `packaging/LICENSE.txt` (nota, adres kodu źródłowego i pełny tekst; pokazywany i instalowany przez instalatory), sekcja JUCE w `THIRD-PARTY-NOTICES.txt` odsyła do niego i do kodu źródłowego; identyfikatory zamrożone ([ADR-0016](decisions/0016-identyfikatory-nazwy.md)).
+2. Testy w hostach według [testing.md](testing.md) (TST-3) — przed wydaniem zwykłym; 1.0.0 jest wstępne i ich jeszcze nie ma.
 3. Wersja w `CMakeLists.txt` i sekcja w `CHANGELOG.md` z datą: `## [X.Y.Z] - RRRR-MM-DD`.
-4. `git tag vX.Y.Z && git push origin vX.Y.Z` → workflow „Release” → szkic wydania na GitHubie → sprawdzenie instalatorów (instalacja, deinstalacja, `spctl`/właściwości pliku) → *Publish release*.
+4. `git tag vX.Y.Z && git push origin vX.Y.Z` → workflow „Release” (bramka, build, testy, pluginval, walidator VST3, instalatory, archiwum źródeł) → opublikowane wydanie GitHub → sprawdzenie instalatorów (instalacja, deinstalacja, `spctl`/właściwości pliku). Wydanie można potem edytować albo cofnąć do szkicu na GitHubie.
+
+Archiwum źródeł to kod odpowiadający binarkom w rozumieniu AGPLv3 (§6): wszystkie pliki z `git ls-files --recurse-submodules` (wtyczka, JUCE, pffft, Catch2), w katalogu `SamSpectralControl-X.Y.Z/`; buduje się z niego tak samo jak z repozytorium (`cmake -S SamSpectralControl-X.Y.Z -B build`).
 
 ## Sekrety i zmienne (Settings → Secrets and variables → Actions)
 
@@ -92,7 +94,7 @@ ssc_screenshot docs/images/editor-860x480.png 860 480 $BANDS select=3
 
 ## Minuty GitHub Actions i weryfikacja lokalna
 
-W repozytorium prywatnym minuty macOS liczą się ×10, a Windows ×2: pełne CI to ok. 155 minut rozliczeniowych, sam Linux (`platforms: linux`) — ok. 35. Po wyczerpaniu miesięcznego limitu zadania w ogóle nie startują. Dlatego `ci.yml` nie uruchamia się na pushach do gałęzi roboczych ani dla zmian samej dokumentacji, tylko dla pull requestów, pushy do `main`/`master` i ręcznie (Actions → CI → *Run workflow*, z wyborem `all` albo `linux`). Workflow wydania startuje tylko dla tagów i ręcznie.
+Od wydania 1.0.0 repozytorium jest publiczne, a w repozytoriach publicznych standardowe runnery GitHub Actions (także macOS i Windows) są bezpłatne. W repozytorium prywatnym minuty macOS liczą się ×10, a Windows ×2: pełne CI to ok. 155 minut rozliczeniowych, sam Linux (`platforms: linux`) — ok. 35, a po wyczerpaniu miesięcznego limitu zadania w ogóle nie startują. Dlatego `ci.yml` nie uruchamia się na pushach do gałęzi roboczych ani dla zmian samej dokumentacji, tylko dla pull requestów, pushy do `main`/`master` i ręcznie (Actions → CI → *Run workflow*, z wyborem `all` albo `linux`). Workflow wydania startuje tylko dla tagów i ręcznie.
 
 Te same kontrole działają lokalnie, bez minut:
 

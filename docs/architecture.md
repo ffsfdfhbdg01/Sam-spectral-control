@@ -160,7 +160,7 @@ flowchart TB
 
 | Ryzyko | Wpływ | Działanie |
 |---|---|---|
-| Licencja JUCE (AGPLv3 vs komercyjna) | dystrybucja binarek | decyzja użytkownika przed wydaniem (ADR-0002) |
+| Licencja JUCE (AGPLv3 vs komercyjna) | dystrybucja binarek | rozstrzygnięte: AGPLv3, kod publiczny (ADR-0002) |
 | Znaki towarowe (Neve, Pultec, SSL) | nazewnictwo UI/marketing | neutralne nazwy, konsultacja prawna (ADR-0009) |
 | Patenty na dynamikę w dziedzinie częstotliwości | wydanie komercyjne | analiza freedom-to-operate przed wydaniem |
 | CPU silnika spektralnego w 9.1.6 / Max | NFR-1 | benchmark w M3, decymacja analizy, SIMD |

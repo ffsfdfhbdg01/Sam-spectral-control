@@ -19,6 +19,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 JUCE = ROOT / "external" / "JUCE"
 OUTPUT = ROOT / "THIRD-PARTY-NOTICES.txt"
 APACHE = "Apache License 2.0"
+SOURCE_URL = "https://github.com/ffsfdfhbdg01/Sam-spectral-control"
 
 # (SPDX package name, title, scope, licence file relative to external/, copyright line or None)
 COMPONENTS = [
@@ -90,7 +91,7 @@ def generate():
         "",
         "Components",
         "----------",
-        f"  JUCE {juce['versionInfo']} (commit {juce_commit[:12]}) - AGPLv3 or the commercial JUCE licence",
+        f"  JUCE {juce['versionInfo']} (commit {juce_commit[:12]}) - AGPL-3.0-only (used under the AGPLv3)",
         f"  pffft (commit {pffft_commit[:12]}) - FFTPACK licence (BSD-style)",
     ]
     for name, title, scope, _, _ in COMPONENTS:
@@ -104,8 +105,13 @@ def generate():
 
     section(f"JUCE {juce['versionInfo']} - https://juce.com",
             "The JUCE framework modules are dual-licensed under the GNU Affero General Public License\n"
-            "version 3 and the commercial JUCE licence. Sam Spectral Control uses JUCE under the licence\n"
-            "recorded in its licence terms (LICENSE.txt). JUCE's own licence summary follows.\n\n"
+            "version 3 and the commercial JUCE licence. Sam Spectral Control uses JUCE under the GNU\n"
+            "Affero General Public License version 3; the full text of that licence is in LICENSE.txt,\n"
+            "which covers Sam Spectral Control as well. The complete corresponding source code, JUCE\n"
+            "included, is available at\n"
+            f"{SOURCE_URL}\n"
+            "(one tag per version; every release also carries a source archive).\n"
+            "JUCE's own licence summary follows.\n\n"
             + read("JUCE/LICENSE.md"))
     section("pffft - https://github.com/marton78/pffft", read("pffft/LICENSE.txt"))
     for name, title, scope, licence, copyright_line in COMPONENTS:
