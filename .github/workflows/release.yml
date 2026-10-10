@@ -254,6 +254,8 @@ jobs:
             echo "## Zmiany"
             awk -v v="$VERSION" '/^## \[/ { p = index($0, "[" v "]") > 0; next } p' CHANGELOG.md
           } > release-notes.md
+          # Links into the repository (CHANGELOG) would resolve against the release page.
+          sed -i -E "s#\]\((docs/[^)]*)\)#](https://github.com/$GITHUB_REPOSITORY/blob/v$VERSION/\1)#g" release-notes.md
           (cd dist && sha256sum -- * > SHA256SUMS.txt)
           cat release-notes.md dist/SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
