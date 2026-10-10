@@ -55,3 +55,19 @@ cmake --build --preset rtsan
 ctest --preset rtsan
 ```
 
+### Pamięć — ASan/UBSan
+
+Preset `sanitize` (także w `tools/ci/local-check.sh`) obejmuje testy rdzenia DSP (127). Testy wtyczki, łącznie z interfejsem (`[ui]`, `[UX]`), sprawdza się pod ASan/UBSan na żądanie, w buildzie Debug z instrumentacją także kodu JUCE (na 4 rdzeniach budowa ok. 5 min, testy ok. 4 min):
+
+```bash
+SAN="-fsanitize=address,undefined -fno-omit-frame-pointer"
+cmake -S . -B build/asan-plugin -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSSC_BUILD_PLUGIN=ON \
+  -DCMAKE_CXX_FLAGS="$SAN" -DCMAKE_C_FLAGS="$SAN" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+cmake --build build/asan-plugin --target ssc_plugin_tests
+ulimit -s 65536
+build/asan-plugin/tests/plugin/ssc_plugin_tests_artefacts/Debug/ssc_plugin_tests
+```
+
+Ostatni przebieg (interfejs z research §15): 54 z 54, bez zgłoszeń ASan, UBSan i LeakSanitizer. Test podpowiedzi rezonansów podaje dane w tempie wątku analizy, a nie zegara — wolniejszy build nie gubi próbek w pełnym FIFO.
+

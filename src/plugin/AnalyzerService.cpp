@@ -129,8 +129,8 @@ void AnalyzerService::run()
         }
 
         // At most one FIFO's worth per pass, so that a producer faster than real time (offline
-        // render, validators) cannot keep the thread from seeing a stop request; the FIFOs drop
-        // their oldest data when they overflow.
+        // render, validators) cannot keep the thread from seeing a stop request; a full FIFO
+        // drops the samples that do not fit (the newest).
         const auto& s = activeSettings;
         int preFrames = 0, postFrames = 0;
         bool hintsUpdated = false;

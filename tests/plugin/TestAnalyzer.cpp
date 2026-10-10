@@ -57,6 +57,22 @@ plugin::SpectrumFrame settledFrame (plugin::AnalyzerService& service)
     }
     return frame;
 }
+
+/** Waits (at most 10 s) for the next frame the service publishes. */
+bool nextFrame (plugin::AnalyzerService& service, plugin::SpectrumFrame& frame)
+{
+    const auto start = std::chrono::steady_clock::now();
+    while (std::chrono::steady_clock::now() - start < std::chrono::seconds (10))
+    {
+        if (service.frames().update())
+        {
+            frame = service.frames().read();
+            return true;
+        }
+        std::this_thread::sleep_for (std::chrono::milliseconds (1));
+    }
+    return false;
+}
 } // namespace
 
 TEST_CASE ("Analyzer settings are saved with the state; invalid values fall back (VIS-1)", "[plugin][VIS-1]")
@@ -160,12 +176,16 @@ TEST_CASE ("Analyzer publishes resonance hints of the output (VIS-4, VIS-5)", "[
     }
     std::vector<float> signal (x.size());
     std::transform (x.begin(), x.end(), signal.begin(), [] (double v) { return static_cast<float> (v); });
+
+    // The next chunk goes in once the analysis thread has published the previous one: a full FIFO
+    // drops the samples that do not fit, and a slow build (Debug, sanitizers) analyses more slowly
+    // than a clock-paced loop would feed it.
+    plugin::SpectrumFrame frame;
     for (std::size_t offset = 0; offset + 4096 <= 6 * 48000; offset += 4096)
     {
         service.pushPost (signal.data() + offset, 4096);
-        std::this_thread::sleep_for (std::chrono::milliseconds (10));
+        REQUIRE (nextFrame (service, frame));
     }
-    const auto frame = settledFrame (service);
     service.removeClient();
 
     REQUIRE (frame.hasHints);

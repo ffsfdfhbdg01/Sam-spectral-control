@@ -126,7 +126,7 @@ flowchart TB
     A4 -- "triple buffer" --> E
 ```
 
-- FIFO: jednoproducentowe/jednokonsumenckie, prealokowane; przy przepełnieniu producent nadpisuje najstarsze dane (wizualizacja może zgubić ramkę — audio nigdy nie czeka).
+- FIFO: jednoproducentowe/jednokonsumenckie, prealokowane; przy przepełnieniu producent zapisuje tylko to, co się mieści, a resztę (najnowsze próbki) odrzuca (wizualizacja może zgubić fragment — audio nigdy nie czeka).
 - Telemetria dużych tablic (maski spektralne) — decymowana do ≤ 512 punktów i przekazywana przez triple buffer.
 - Wątki tła działają tylko przy otwartym edytorze (klienci `AnalyzerService`, `ReadoutService`, `MeterService`); bez edytora wątek audio nie nagrywa też migawek mierników (`Engine::setDistortionMetering`).
 - Mierniki (§13e): wątek audio podłącza rejestratory pasm tylko na okno na końcu każdego 125-milisekundowego okresu i publikuje migawkę przez triple buffer; analiza (replika ADAA i cień bez próbkowania) działa w `MeterService`.
