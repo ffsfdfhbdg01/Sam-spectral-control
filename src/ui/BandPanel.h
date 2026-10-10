@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <memory>
 #include <vector>
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -9,18 +8,78 @@
 #include "ssc/analysis/BandReadouts.h"
 #include "ssc/engine/ChannelTopology.h"
 #include "ui/BandModel.h"
+#include "ui/Controls.h"
 
 namespace ssc::ui
 {
+/** Rotary control of one band parameter: caption above, value below (click it to type a value).
+    A drag, a typed value or a double click (default value) is one undo step. */
+class BandKnob final : public juce::Component
+{
+public:
+    BandKnob (BandModel& model, plugin::BandParam param, const juce::String& caption, bool bipolar = false);
+    ~BandKnob() override;
+
+    plugin::BandParam getParam() const noexcept { return param; }
+    /** Binds range, text conversion and default value of the band's parameter. */
+    void setBand (int band);
+    /** Shows the model's value (not while dragging). */
+    void refresh();
+    /** Ends an edit left open by a drag (the band changed meanwhile). */
+    void endDrag();
+    void setColour (juce::Colour colour);
+    juce::Slider& getSlider() noexcept { return slider; }
+
+    void resized() override;
+
+private:
+    BandModel& model;
+    plugin::BandParam param;
+    juce::String caption;
+    int band = -1;
+    bool dragging = false;
+    bool updating = false;
+    juce::Label label;
+    juce::Slider slider { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow };
+};
+
+/** ValueButton bound to a choice parameter of a band (Shape, Slope, Target, Character, Link);
+    each choice is one undo step. */
+class BandChoiceButton final : public ValueButton
+{
+public:
+    BandChoiceButton (BandModel& model, plugin::BandParam param, const juce::String& caption);
+
+    plugin::BandParam getParam() const noexcept { return param; }
+    void setBand (int band);
+    void refresh();
+    int getIndex() const;
+
+    /** Choices offered, in menu order (default: all). */
+    std::function<std::vector<int>()> itemsToShow;
+    /** Whether a choice can be picked (default: all). */
+    std::function<bool (int)> isItemEnabled;
+
+private:
+    void choose (int index);
+
+    BandModel& model;
+    plugin::BandParam param;
+    juce::String caption;
+    int band = -1;
+};
+
 /**
-    Floating panel with every parameter of the focused band (BAND-7). Dynamic parameters appear
-    when the band mode is Dynamic or Spectral. All edits go through BandModel, so each knob drag,
-    typed value or menu choice is one undo step. The bottom line shows the band's readouts
-    (research §12c, PR-1): mean excess phase, group delay at fc, pre-/post-ring at −60 dB (and at
-    the full range for Dynamic bands, the STFT pre-echo for Spectral bands), highlighted when the
-    ringing is likely audible (post > 50 ms, pre > 5 ms).
+    Panel of the focused band (BAND-7, research §15 d4), shown under its node.
+
+    Header: band, mode (Static | Dynamic | Spectral), Advanced, bypass, solo and a menu (copy,
+    paste, reset, delete). EQ row: shape and slope, Freq / Gain / Q, target and Character (and the
+    speakers in surround). Dynamic and Spectral bands add a dynamics row whose knobs follow the
+    mode: Dynamic — Threshold, Ratio, Range, Attack, Release; Spectral — Threshold, Selectivity,
+    Range, Attack, Release; with the band's Auto Gain. The detector details and the readouts live
+    in the Advanced flyout (BandAdvancedPanel). All edits go through BandModel (undo).
 */
-class BandPanel final : public juce::Component, private BandModel::Listener, private juce::Timer
+class BandPanel final : public juce::Component, private BandModel::Listener
 {
 public:
     explicit BandPanel (BandModel& model);
@@ -29,71 +88,118 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
-    /** Size the panel wants for the focused band. */
+    /** Size for the focused band: the width follows the channel layout, the height the band mode. */
     juce::Point<int> getPreferredSize() const;
 
-    /** Called when the preferred size changes (band, shape or mode changed). */
-    std::function<void()> onPreferredSizeChanged;
+    /** Called when the band, its preferred size or the Advanced state changes. */
+    std::function<void()> onLayoutChanged;
 
-    /** Channel layout of the host bus: Target choices and the speaker panel follow it (CH-4). */
+    /** Channel layout of the host bus: Target choices and the speakers follow it (CH-4). */
     void setTopology (const engine::ChannelTopology& topology);
 
     int getBand() const noexcept { return band; }
 
-    /** Source of the readouts of a band (polled 10 times a second). */
+    /** The Advanced toggle (the flyout belongs to the editor). */
+    bool isAdvancedOpen() const noexcept { return advancedButton.getToggleState(); }
+    void setAdvancedOpen (bool open);
+
+    /** Source of the readouts of a band (polled for the Advanced indicator). */
     std::function<analysis::BandReadout (int band)> readoutProvider;
 
-    /** Readout line for a band ("" while it is being computed). */
-    static juce::String readoutText (const analysis::BandReadout& readout);
-    static bool readoutWarns (const analysis::BandReadout& readout) noexcept;
+    /** Band parameters with a control in the panel (research §15 e, E2). */
+    std::vector<plugin::BandParam> visibleParameters() const;
+
+    /** True when a setting of the Advanced flyout differs from its default for the band's mode. */
+    static bool advancedDiffersFromDefault (const BandModel& model, int band);
+
+    static constexpr int kStaticHeight = 132;
+    static constexpr int kDynamicHeight = 232;
 
 private:
-    struct Knob
-    {
-        plugin::BandParam param;
-        juce::String title;
-        juce::Slider slider { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow };
-        juce::Label label;
-        bool dragging = false;
-        bool dynamic = false;
-    };
-
-    struct Choice
-    {
-        plugin::BandParam param;
-        juce::String title;
-        juce::ComboBox box;
-        bool dynamic = false;
-    };
-
     void bandsChanged() override;
     void selectionChanged() override;
-    void timerCallback() override;
-
-    Knob& addKnob (plugin::BandParam, const juce::String& title, bool dynamic);
-    Choice& addChoice (plugin::BandParam, const juce::String& title, bool dynamic);
-    void bind();
+    void bindBand();
     void updateFromModel();
-    void rebuildChoiceItems (Choice&);
-    bool showsDynamics() const;
-    void layoutChanged();
+    void updateIndicator();
+    void showMoreMenu();
+    void openSpeakerPanel();
+    void pollReadout();
+    void notifyLayout();
 
     BandModel& model;
     int band = -1;
-    bool updating = false;
-    int numPairs = 1;
+    BandMode shownMode = BandMode::Static;
+    bool slopeShown = false;
     engine::ChannelTopology topology = engine::ChannelTopology::stereo();
-    void openSpeakerPanel();
-    Shape itemsShape = Shape::Bell;
-    bool lastDynamics = false;
+    int numPairs = 1;
+    bool readoutWarning = false;
+    bool soloHeld = false;
+    bool soloWasOn = false;
+    double soloPressMs = 0.0;
 
-    juce::Label title;
-    juce::Label readoutLabel;
-    juce::TextButton onButton { "On" }, soloButton { "Solo" }, autoGainButton { "Auto Gain" }, deleteButton { "Delete" },
-        speakersButton { "Speakers" };
-    std::vector<std::unique_ptr<Knob>> knobs;
-    std::vector<std::unique_ptr<Choice>> choices;
+    SegmentedControl modeSelector { { "Static", "Dynamic", "Spectral" } };
+    ChipButton advancedButton { "Advanced", Icon::ChevronRight };
+    IconButton bypassButton { Icon::Power, "Bypass" }, soloButton { Icon::Solo, "Solo" }, moreButton { Icon::More, "More" };
+    BandChoiceButton shape, slope, target, character;
+    ValueButton speakers { "Speakers" };
+    BandKnob freq, gain, q;
+    ChipButton autoGainButton { "Auto Gain" };
+    BandKnob threshold, ratio, range, attack, release, selectivity;
+    juce::TimedCallback readoutTimer { [this] { pollReadout(); } };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BandPanel)
+};
+
+/**
+    Advanced flyout of the focused band (research §15 d4): it slides out to the right of the band
+    panel. Dynamic and Spectral bands: threshold mode, direction, knee, lookahead (Dynamic) or ratio
+    (Spectral), mix and detector link. Every band: its readouts (research §12c, PR-1) — mean excess
+    phase, group delay at fc, pre-/post-ring at −60 dB (and at the full Range for Dynamic bands, the
+    STFT pre-echo for Spectral bands), highlighted when the ringing is likely audible
+    (post > 50 ms, pre > 5 ms).
+*/
+class BandAdvancedPanel final : public juce::Component, public juce::SettableTooltipClient, private BandModel::Listener
+{
+public:
+    explicit BandAdvancedPanel (BandModel& model);
+    ~BandAdvancedPanel() override;
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void visibilityChanged() override;
+
+    static constexpr int kWidth = 248;
+    /** Height of the content for the focused band. */
+    int getPreferredHeight() const;
+
+    /** Source of the readouts of a band (polled 10 times a second while shown). */
+    std::function<analysis::BandReadout (int band)> readoutProvider;
+
+    /** Band parameters with a control in the flyout (tests). */
+    std::vector<plugin::BandParam> visibleParameters() const;
+
+    /** Readout lines: label and value, e.g. {"Group delay", "0.12 ms"}. */
+    static std::vector<std::pair<juce::String, juce::String>> readoutLines (const analysis::BandReadout& readout);
+    static bool readoutWarns (const analysis::BandReadout& readout) noexcept;
+
+private:
+    void bandsChanged() override;
+    void selectionChanged() override;
+    void bindBand();
+    void updateFromModel();
+    void pollReadout();
+    bool showsDetector() const;
+
+    BandModel& model;
+    int band = -1;
+    BandMode shownMode = BandMode::Static;
+    analysis::BandReadout readout;
+
+    SegmentedControl thresholdMode { { "Absolute", "Relative" } }, direction { { "Above", "Below" } };
+    BandKnob knee, lookahead, ratio, mix;
+    BandChoiceButton link;
+    juce::TimedCallback readoutTimer { [this] { pollReadout(); } };
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BandAdvancedPanel)
 };
 } // namespace ssc::ui

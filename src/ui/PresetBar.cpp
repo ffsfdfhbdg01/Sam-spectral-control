@@ -1,68 +1,82 @@
 #include "ui/PresetBar.h"
 
-#include <map>
-
+#include "plugin/StateMigration.h"
 #include "ui/Theme.h"
 
 namespace ssc::ui
 {
-UndoArrowButton::UndoArrowButton (bool isRedo)
-    : juce::Button (isRedo ? "Redo" : "Undo"),
-      redo (isRedo)
+PresetNameButton::PresetNameButton()
+    : juce::Button ("Preset")
 {
+    setMouseClickGrabsKeyboardFocus (false);
     setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
 
-void UndoArrowButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
+void PresetNameButton::setPresetName (const juce::String& name)
 {
-    auto bounds = getLocalBounds().toFloat().reduced (1.0f);
-    const auto base = findColour (juce::TextButton::buttonColourId);
-    g.setColour (down ? base.brighter (0.2f) : (highlighted && isEnabled() ? base.brighter (0.1f) : base));
-    g.fillRoundedRectangle (bounds, 4.0f);
-
-    // A curved arrow: an arc over the top, the head at its left end (redo: mirrored).
-    const auto c = bounds.getCentre();
-    const float r = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.26f;
-    juce::Path arc;
-    arc.addCentredArc (c.x, c.y + r * 0.35f, r, r, 0.0f, -juce::MathConstants<float>::halfPi, juce::MathConstants<float>::halfPi, true);
-    juce::Path head;
-    const juce::Point<float> tip (c.x - r - r * 0.05f, c.y + r * 0.35f + r * 0.55f);
-    head.addTriangle (tip, { tip.x - r * 0.55f, tip.y - r * 0.75f }, { tip.x + r * 0.6f, tip.y - r * 0.6f });
-    if (redo)
+    if (presetName != name)
     {
-        const auto mirror = juce::AffineTransform::scale (-1.0f, 1.0f, c.x, c.y);
-        arc.applyTransform (mirror);
-        head.applyTransform (mirror);
+        presetName = name;
+        repaint();
     }
-    g.setColour (isEnabled() ? colours::text : colours::textDim.withAlpha (0.45f));
-    g.strokePath (arc, juce::PathStrokeType (1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-    g.fillPath (head);
+}
+
+void PresetNameButton::setModified (bool isModified)
+{
+    if (modified != isModified)
+    {
+        modified = isModified;
+        repaint();
+    }
+}
+
+void PresetNameButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
+{
+    const auto bounds = getLocalBounds().toFloat().reduced (0.5f);
+    g.setColour (colours::panel.brighter (down ? 0.08f : (highlighted ? 0.04f : 0.0f)));
+    g.fillRoundedRectangle (bounds, metrics::controlRadius);
+    g.setColour (highlighted ? colours::outline : colours::panelEdge);
+    g.drawRoundedRectangle (bounds, metrics::controlRadius, 1.0f);
+
+    auto area = getLocalBounds().reduced (10, 0);
+    drawIcon (g, Icon::ChevronDown, area.removeFromRight (12).toFloat().withSizeKeepingCentre (11.0f, 11.0f),
+              highlighted ? colours::text : colours::textDim);
+    area.removeFromRight (6);
+
+    // A modified preset: the name steps back and a dot follows it.
+    const auto font = uiFont (13.0f);
+    const int width = juce::jmin (area.getWidth() - (modified ? 14 : 0), juce::GlyphArrangement::getStringWidthInt (font, presetName) + 2);
+    g.setFont (font);
+    g.setColour (modified ? colours::textSecondary : colours::text);
+    g.drawText (presetName, area.withWidth (width), juce::Justification::centredLeft, true);
+    if (modified)
+    {
+        g.setColour (colours::accent);
+        g.fillEllipse (juce::Rectangle<float> (6.0f, 6.0f)
+                           .withCentre ({ static_cast<float> (area.getX() + width + 7), static_cast<float> (area.getCentreY()) }));
+    }
+    if (hasKeyboardFocus (false))
+        drawFocusRing (g, bounds, metrics::controlRadius);
 }
 
 PresetBar::PresetBar (juce::AudioProcessorValueTreeState& s, juce::UndoManager& undo)
     : state (s),
       undoManager (undo)
 {
-    presetButton.setTooltip ("Presets: factory and user presets, Save As");
-    presetButton.onClick = [this] { showMenu(); };
-    addAndMakeVisible (presetButton);
+    for (auto* c : std::initializer_list<juce::Component*> { &previous, &presetButton, &next, &slots, &copy, &undoButton, &redoButton })
+        addAndMakeVisible (c);
 
-    for (auto* button : { &slotA, &slotB })
-    {
-        button->setClickingTogglesState (false);
-        button->setTooltip ("A/B: compare two settings");
-        // The slot shown in the accent colour.
-        button->setColour (juce::TextButton::buttonOnColourId, colours::accent.withAlpha (0.85f));
-        button->setColour (juce::TextButton::textColourOnId, colours::background);
-        addAndMakeVisible (*button);
-    }
-    slotA.onClick = [this] {
-        if (plugin::compareSlot (state.state) != 0)
-            plugin::switchCompareSlot (state, undoManager);
-        refresh();
-    };
-    slotB.onClick = [this] {
-        if (plugin::compareSlot (state.state) != 1)
+    previous.setTooltip ("Previous preset");
+    next.setTooltip ("Next preset");
+    previous.onClick = [this] { step (-1); };
+    next.onClick = [this] { step (1); };
+    presetButton.onClick = [this] { showMenu(); };
+
+    slots.setTooltip ("A/B: compare two settings");
+    slots.setItemTooltip (0, "Show setting A");
+    slots.setItemTooltip (1, "Show setting B");
+    slots.onChange = [this] (int index) {
+        if (plugin::compareSlot (state.state) != index)
             plugin::switchCompareSlot (state, undoManager);
         refresh();
     };
@@ -70,7 +84,6 @@ PresetBar::PresetBar (juce::AudioProcessorValueTreeState& s, juce::UndoManager& 
         plugin::copyToOtherSlot (state, undoManager);
         refresh();
     };
-    addAndMakeVisible (copy);
 
     undoButton.onClick = [this] {
         undoManager.undo();
@@ -80,8 +93,6 @@ PresetBar::PresetBar (juce::AudioProcessorValueTreeState& s, juce::UndoManager& 
         undoManager.redo();
         refresh();
     };
-    addAndMakeVisible (undoButton);
-    addAndMakeVisible (redoButton);
     undoManager.addChangeListener (this);
 
     refresh();
@@ -93,16 +104,59 @@ PresetBar::~PresetBar()
     undoManager.removeChangeListener (this);
 }
 
+std::vector<PresetBar::Entry> PresetBar::entries() const
+{
+    std::vector<Entry> list;
+    for (const auto& preset : plugin::factoryPresets())
+        list.push_back ({ preset.name, preset.tree, {} });
+    for (const auto& file : library.list())
+        list.push_back ({ file.getFileNameWithoutExtension(), {}, file });
+    return list;
+}
+
+juce::ValueTree PresetBar::findPreset (const juce::String& name) const
+{
+    if (name.isEmpty())
+    {
+        // Nothing loaded yet: the defaults.
+        juce::ValueTree defaults (plugin::kPresetType);
+        defaults.setProperty (plugin::kVersionProperty, plugin::kStateVersion, nullptr);
+        return defaults;
+    }
+    for (const auto& preset : plugin::factoryPresets())
+        if (preset.name == name)
+            return preset.tree;
+    for (const auto& file : library.list())
+        if (file.getFileNameWithoutExtension() == name)
+            return plugin::readPresetFile (file);
+    return {};
+}
+
 void PresetBar::refresh()
 {
     const auto name = state.state[plugin::kPresetName].toString();
-    presetButton.setButtonText (name.isEmpty() ? juce::String ("Default") : name);
+    if (! referenceResolved || name != referenceName)
+    {
+        referenceName = name;
+        reference = plugin::PresetComparison (state, findPreset (name));
+        referenceResolved = true;
+    }
+    const bool modified = reference.isValid() && ! reference.matches (state);
+    presetButton.setPresetName (name.isEmpty() ? juce::String ("Default") : name);
+    presetButton.setModified (modified);
+    presetButton.setTooltip (modified ? "Presets: factory and user presets, Save As.\nThe dot: the settings differ from the preset."
+                                      : "Presets: factory and user presets, Save As");
+
     const int slot = plugin::compareSlot (state.state);
-    slotA.setToggleState (slot == 0, juce::dontSendNotification);
-    slotB.setToggleState (slot == 1, juce::dontSendNotification);
-    const auto arrow = juce::String::fromUTF8 ("\xe2\x86\x92");
-    copy.setButtonText (slot == 0 ? "A" + arrow + "B" : "B" + arrow + "A");
-    copy.setTooltip (slot == 0 ? "Copy A to B" : "Copy B to A");
+    slots.setSelectedIndex (slot, juce::dontSendNotification);
+    if (const auto other = plugin::otherComparePreset (state.state); other != otherSlotTree)
+    {
+        otherSlotTree = other;
+        otherSlot = other.isValid() ? plugin::PresetComparison (state, other) : plugin::PresetComparison();
+    }
+    const bool equal = ! otherSlot.isValid() || otherSlot.matches (state);
+    copy.setEnabled (! equal);
+    copy.setTooltip (equal ? "A and B are the same" : (slot == 0 ? "Copy A to B" : "Copy B to A"));
 
 #if JUCE_MAC
     const juce::String shortcut ("Cmd");
@@ -117,20 +171,55 @@ void PresetBar::refresh()
                                                  : "Nothing to redo");
 }
 
+void PresetBar::step (int direction)
+{
+    const auto list = entries();
+    if (list.empty())
+        return;
+    auto current = state.state[plugin::kPresetName].toString();
+    if (current.isEmpty())
+        current = "Default";
+    const int n = static_cast<int> (list.size());
+    int index = -1;
+    for (int i = 0; i < n; ++i)
+        if (list[static_cast<std::size_t> (i)].name == current)
+        {
+            index = i;
+            break;
+        }
+    const int target = index < 0 ? (direction > 0 ? 0 : n - 1) : (index + direction + n) % n;
+    const auto& entry = list[static_cast<std::size_t> (target)];
+    if (entry.factoryTree.isValid())
+        load (entry.factoryTree);
+    else if (const auto preset = plugin::readPresetFile (entry.file); preset.isValid())
+        load (preset);
+}
+
 void PresetBar::resized()
 {
     auto area = getLocalBounds();
-    redoButton.setBounds (area.removeFromRight (26));
+    redoButton.setBounds (area.removeFromRight (28));
     area.removeFromRight (2);
-    undoButton.setBounds (area.removeFromRight (26));
-    area.removeFromRight (8);
-    copy.setBounds (area.removeFromRight (40));
+    undoButton.setBounds (area.removeFromRight (28));
+    area.removeFromRight (17);
+    copy.setBounds (area.removeFromRight (28));
     area.removeFromRight (4);
-    slotB.setBounds (area.removeFromRight (26));
+    slots.setBounds (area.removeFromRight (64).reduced (0, 1));
+    area.removeFromRight (17);
+    next.setBounds (area.removeFromRight (26));
     area.removeFromRight (2);
-    slotA.setBounds (area.removeFromRight (26));
-    area.removeFromRight (6);
+    previous.setBounds (area.removeFromLeft (26));
+    area.removeFromLeft (2);
     presetButton.setBounds (area);
+}
+
+void PresetBar::paint (juce::Graphics& g)
+{
+    // Dividers between presets | comparison | history.
+    g.setColour (colours::panelEdge);
+    const int y = getHeight() / 2 - 8;
+    g.fillRect ((next.getRight() + slots.getX()) / 2, y, 1, 16);
+    g.fillRect ((copy.getRight() + undoButton.getX()) / 2, y, 1, 16);
 }
 
 void PresetBar::load (const juce::ValueTree& preset)
@@ -201,6 +290,7 @@ void PresetBar::saveAs()
                                      return;
                                  if (safe->library.save (plugin::capturePreset (safe->state, name), name).existsAsFile())
                                      safe->state.state.setProperty (plugin::kPresetName, name, nullptr);
+                                 safe->referenceResolved = false; // the file may have been replaced
                                  safe->refresh();
                              }),
                              true);

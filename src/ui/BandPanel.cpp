@@ -13,17 +13,34 @@ using plugin::BandParam;
 
 namespace
 {
-    constexpr int kPadding = 8;
-    constexpr int kHeaderHeight = 26;
-    constexpr int kKnobWidth = 62;
-    constexpr int kKnobRowHeight = 78;
-    constexpr int kChoiceWidth = 104;
-    constexpr int kChoiceHeight = 22;
-    constexpr int kGap = 6;
-    constexpr int kSpeakersWidth = 122;
-    constexpr int kReadoutHeight = 16;
+    // Band panel (research §15 d4).
+    constexpr int kPad = 12;
+    constexpr int kTop = 10;
+    constexpr int kHeaderHeight = 28;
+    constexpr int kTitleWidth = 64;
+    constexpr int kRowGap = 8;
+    constexpr int kEqRowHeight = 76;
+    constexpr int kChoiceHeight = 36;
+    constexpr int kChoiceWidth = 108;
+    constexpr int kKnobCell = 66;
+    constexpr int kRightWidth = 130;
+    constexpr int kSpeakersWidth = 104;
+    constexpr int kSectionGap = 6;
+    constexpr int kSectionHeight = 22;
+    constexpr int kDynamicsRowHeight = 68;
+    constexpr int kStereoWidth = 488;
 
-    const juce::StringArray& itemsFor (BandParam p)
+    // Advanced flyout.
+    constexpr int kFlyPadX = 12;
+    constexpr int kFlyPadY = 10;
+    constexpr int kSegmentRowHeight = 36;
+    constexpr int kFlyKnobRowHeight = 62;
+    constexpr int kReadoutLine = 14;
+
+    static_assert (BandPanel::kStaticHeight == kTop + kHeaderHeight + kRowGap + kEqRowHeight + 10);
+    static_assert (BandPanel::kDynamicHeight == BandPanel::kStaticHeight + kSectionGap + kSectionHeight + 4 + kDynamicsRowHeight);
+
+    const juce::StringArray& choicesFor (BandParam p)
     {
         using Labels = const juce::StringArray& (*)();
         static const std::pair<BandParam, Labels> table[] = {
@@ -40,172 +57,310 @@ namespace
         return none;
     }
 
-    void styleButton (juce::TextButton& b)
+    float plainValue (const BandModel& model, int band, BandParam p)
     {
-        b.setColour (juce::TextButton::buttonColourId, colours::panel.brighter (0.06f));
-        b.setColour (juce::TextButton::buttonOnColourId, colours::accent.withAlpha (0.85f));
-        b.setColour (juce::TextButton::textColourOffId, colours::text);
-        b.setColour (juce::TextButton::textColourOnId, colours::background);
+        const auto& param = model.parameter (band, p);
+        return param.convertFrom0to1 (param.getValue());
+    }
+
+    int choiceIndex (const BandModel& model, int band, BandParam p)
+    {
+        return juce::roundToInt (plainValue (model, band, p));
+    }
+
+    bool differsFromDefault (const BandModel& model, int band, BandParam p)
+    {
+        const auto& param = model.parameter (band, p);
+        return std::abs (param.getValue() - param.getDefaultValue()) > 1.0e-4f;
+    }
+
+    void captionText (juce::Graphics& g, const juce::String& text, juce::Rectangle<int> area)
+    {
+        g.setFont (uiFont (11.0f));
+        g.setColour (colours::textDim);
+        g.drawText (text, area, juce::Justification::centredLeft, true);
     }
 } // namespace
 
-BandPanel::BandPanel (BandModel& m)
-    : model (m)
+// BandKnob ------------------------------------------------------------------------------------
+
+BandKnob::BandKnob (BandModel& m, BandParam p, const juce::String& text, bool bipolar)
+    : model (m),
+      param (p),
+      caption (text)
 {
-    readoutLabel.setFont (uiFont (11.0f));
-    readoutLabel.setColour (juce::Label::textColourId, colours::textDim);
-    addAndMakeVisible (readoutLabel);
-    startTimerHz (10);
+    label.setText (text, juce::dontSendNotification);
+    label.setFont (uiFont (11.0f));
+    label.setJustificationType (juce::Justification::centred);
+    label.setColour (juce::Label::textColourId, colours::textDim);
+    label.setInterceptsMouseClicks (false, false);
+    addAndMakeVisible (label);
 
-    title.setFont (uiFont (13.0f, true));
-    title.setColour (juce::Label::textColourId, colours::text);
-    addAndMakeVisible (title);
+    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 74, 16);
+    slider.getProperties().set (kBipolarProperty, bipolar);
+    addAndMakeVisible (slider);
 
-    for (auto* b : { &onButton, &soloButton, &autoGainButton, &deleteButton, &speakersButton })
+    slider.onDragStart = [this] {
+        if (band < 0)
+            return;
+        model.beginEdit ("Change " + caption);
+        dragging = true;
+    };
+    slider.onDragEnd = [this] { endDrag(); };
+    slider.onValueChange = [this] {
+        if (updating || band < 0)
+            return;
+        if (dragging)
+        {
+            model.setValue (band, param, static_cast<float> (slider.getValue()));
+        }
+        else
+        {
+            BandModel::ScopedEdit edit (model, "Change " + caption);
+            model.setValue (band, param, static_cast<float> (slider.getValue()));
+        }
+    };
+}
+
+BandKnob::~BandKnob()
+{
+    endDrag();
+}
+
+void BandKnob::endDrag()
+{
+    if (! dragging)
+        return;
+    dragging = false;
+    model.endEdit();
+}
+
+void BandKnob::setBand (int newBand)
+{
+    endDrag();
+    band = newBand;
+    if (band < 0)
+        return;
+
+    auto& p = model.parameter (band, param);
+    const auto& range = p.getNormalisableRange();
+    const juce::ScopedValueSetter<bool> svs (updating, true);
+    slider.setNormalisableRange (
+        { static_cast<double> (range.start), static_cast<double> (range.end),
+          [&p] (double, double, double n) { return static_cast<double> (p.convertFrom0to1 (static_cast<float> (n))); },
+          [&p] (double, double, double v) { return static_cast<double> (p.convertTo0to1 (static_cast<float> (v))); },
+          [&p] (double, double, double v) {
+              return static_cast<double> (p.getNormalisableRange().snapToLegalValue (static_cast<float> (v)));
+          } });
+    slider.textFromValueFunction = [&p] (double v) { return p.getText (p.convertTo0to1 (static_cast<float> (v)), 0); };
+    slider.valueFromTextFunction = [&p] (const juce::String& text) {
+        return static_cast<double> (p.convertFrom0to1 (p.getValueForText (text)));
+    };
+    slider.setDoubleClickReturnValue (true, static_cast<double> (p.convertFrom0to1 (p.getDefaultValue())));
+    slider.setTooltip (p.getName (64) + " (double-click: default; click the value to type one)");
+    slider.setValue (static_cast<double> (p.convertFrom0to1 (p.getValue())), juce::dontSendNotification);
+    slider.updateText();
+}
+
+void BandKnob::refresh()
+{
+    if (band < 0 || dragging)
+        return;
+    auto& p = model.parameter (band, param);
+    const juce::ScopedValueSetter<bool> svs (updating, true);
+    slider.setValue (static_cast<double> (p.convertFrom0to1 (p.getValue())), juce::dontSendNotification);
+}
+
+void BandKnob::setColour (juce::Colour colour)
+{
+    slider.setColour (juce::Slider::rotarySliderFillColourId, colour);
+}
+
+void BandKnob::resized()
+{
+    auto area = getLocalBounds();
+    label.setBounds (area.removeFromTop (14));
+    slider.setBounds (area);
+}
+
+// BandChoiceButton ----------------------------------------------------------------------------
+
+BandChoiceButton::BandChoiceButton (BandModel& m, BandParam p, const juce::String& captionText)
+    : ValueButton (captionText),
+      model (m),
+      param (p),
+      caption (captionText)
+{
+    setTooltip (captionText);
+    buildMenu = [this] (juce::PopupMenu& menu) {
+        if (band < 0)
+            return;
+        const auto& labels = choicesFor (param);
+        std::vector<int> indices;
+        if (itemsToShow)
+            indices = itemsToShow();
+        else
+            for (int i = 0; i < labels.size(); ++i)
+                indices.push_back (i);
+
+        const int current = getIndex();
+        const int forBand = band;
+        juce::Component::SafePointer<BandChoiceButton> safe (this);
+        for (const int i : indices)
+            menu.addItem (labels[i], isItemEnabled == nullptr || isItemEnabled (i), i == current, [safe, i, forBand] {
+                if (safe != nullptr && safe->band == forBand)
+                    safe->choose (i);
+            });
+    };
+}
+
+int BandChoiceButton::getIndex() const
+{
+    return band < 0 ? 0 : choiceIndex (model, band, param);
+}
+
+void BandChoiceButton::setBand (int newBand)
+{
+    band = newBand;
+    refresh();
+}
+
+void BandChoiceButton::refresh()
+{
+    if (band >= 0)
+        setValueText (choicesFor (param)[getIndex()]);
+}
+
+void BandChoiceButton::choose (int index)
+{
+    if (param == BandParam::Shape)
     {
-        styleButton (*b);
-        addAndMakeVisible (*b);
+        model.setShape (band, static_cast<Shape> (index));
+        return;
     }
-    onButton.setColour (juce::TextButton::buttonOnColourId, colours::powerOn);
-    onButton.setTooltip ("Switch the band on or off (double-click its node)");
-    soloButton.setTooltip ("Listen to the region the band works on (Alt/Option + click its node)");
-    autoGainButton.setTooltip ("Compensate the average gain change of this Dynamic or Spectral band");
-    deleteButton.setTooltip ("Delete the band (Delete key)");
+    BandModel::ScopedEdit edit (model, "Change " + caption);
+    model.setValue (band, param, static_cast<float> (index));
+}
 
-    onButton.onClick = [this] {
+// BandPanel -----------------------------------------------------------------------------------
+
+BandPanel::BandPanel (BandModel& m)
+    : model (m),
+      shape (m, BandParam::Shape, "Shape"),
+      slope (m, BandParam::Slope, "Slope"),
+      target (m, BandParam::Target, "Target"),
+      character (m, BandParam::Character, "Character"),
+      freq (m, BandParam::Frequency, "Freq"),
+      gain (m, BandParam::Gain, "Gain", true),
+      q (m, BandParam::Q, "Q"),
+      threshold (m, BandParam::Threshold, "Threshold"),
+      ratio (m, BandParam::Ratio, "Ratio"),
+      range (m, BandParam::Range, "Range"),
+      attack (m, BandParam::Attack, "Attack"),
+      release (m, BandParam::Release, "Release"),
+      selectivity (m, BandParam::Selectivity, "Selectivity")
+{
+    setOpaque (false);
+    for (auto* c : std::initializer_list<juce::Component*> {
+             &modeSelector, &advancedButton, &bypassButton, &soloButton, &moreButton, &shape,      &slope,
+             &target,       &character,      &speakers,     &freq,       &gain,       &q,          &autoGainButton,
+             &threshold,    &ratio,          &range,        &attack,     &release,    &selectivity })
+        addAndMakeVisible (c);
+    speakers.setVisible (false);
+
+    modeSelector.setItemTooltip (0, "Static: a fixed gain, like a classic EQ");
+    modeSelector.setItemTooltip (1, "Dynamic: the gain follows the level in the band (e.g. a de-esser)");
+    modeSelector.setItemTooltip (2,
+                                 "Spectral: acts only on the frequencies that exceed the threshold (e.g. resonances); "
+                                 "adds the latency of the STFT frame");
+    modeSelector.onChange = [this] (int index) {
+        if (band >= 0)
+            model.setMode (band, static_cast<BandMode> (index));
+    };
+
+    advancedButton.setClickingTogglesState (true);
+    advancedButton.setOnColour (colours::textSecondary); // open, not "something else is heard"
+    advancedButton.onClick = [this] {
+        advancedButton.setTrailingIcon (advancedButton.getToggleState() ? Icon::ChevronLeft : Icon::ChevronRight);
+        notifyLayout();
+    };
+
+    bypassButton.setTooltip ("Band on/off (or double-click its node)");
+    bypassButton.setOnColour (colours::lamp);
+    bypassButton.onClick = [this] {
         if (band < 0)
             return;
         BandModel::ScopedEdit edit (model, "Toggle Band");
         model.setValue (band, BandParam::On, model.band (band).on ? 0.0f : 1.0f);
     };
-    soloButton.onClick = [this] {
-        if (band >= 0)
-            model.setSoloBand (model.getSoloBand() == band ? -1 : band);
+
+    // Solo: a click latches it, holding the button listens only while pressed (FabFilter style).
+    soloButton.setTooltip ("Solo: listen to the region of the band. Click to latch; hold to listen while pressed "
+                           "(also Alt/Option + hold its node)");
+    soloButton.onStateChange = [this] {
+        const bool down = soloButton.getState() == juce::Button::buttonDown;
+        if (down == soloHeld || band < 0)
+            return;
+        soloHeld = down;
+        if (down)
+        {
+            soloPressMs = motion::now();
+            soloWasOn = model.getSoloBand() == band;
+            if (! soloWasOn)
+                model.setSoloBand (band);
+        }
+        else if (soloWasOn || motion::now() - soloPressMs > 400.0)
+        {
+            model.setSoloBand (-1);
+        }
     };
+
+    moreButton.setTooltip ("Copy, paste, reset or delete the band");
+    moreButton.onClick = [this] { showMoreMenu(); };
+
+    autoGainButton.setTooltip ("Band Auto Gain: compensates the average gain change of this band, "
+                               "so it changes the tone but not the average level");
     autoGainButton.onClick = [this] {
         if (band < 0)
             return;
         BandModel::ScopedEdit edit (model, "Toggle Auto Gain");
         model.setValue (band, BandParam::AutoGain, model.band (band).autoGain ? 0.0f : 1.0f);
     };
-    deleteButton.onClick = [this] {
+
+    speakers.setTooltip ("Choose the speakers this band works on");
+    speakers.onClick = [this] { openSpeakerPanel(); };
+
+    slope.itemsToShow = [this] {
+        std::vector<int> items;
         if (band >= 0)
-            model.deleteBand (band);
+            for (const auto s : slopesFor (model.band (band).shape))
+                items.push_back (static_cast<int> (s));
+        return items;
     };
-    speakersButton.setTooltip ("Choose the speakers this band works on");
-    speakersButton.onClick = [this] { openSpeakerPanel(); };
-    speakersButton.setVisible (false);
+    target.isItemEnabled = [this] (int index) { return index == 0 || numPairs > 0; };
+    character.setTooltip ("Character: Clear = clean, Warm = soft saturation, Sharp = hard saturation");
+    target.setTooltip ("Target: the stereo component the band works on");
 
-    addChoice (BandParam::Shape, "Shape", false);
-    addChoice (BandParam::Slope, "Slope", false);
-    addChoice (BandParam::Target, "Target", false);
-    addChoice (BandParam::Mode, "Mode", false);
-    addChoice (BandParam::Character, "Character", false);
-    addChoice (BandParam::ThresholdMode, "Threshold Mode", true);
-    addChoice (BandParam::Direction, "Direction", true);
-    addChoice (BandParam::Link, "Link", true);
-
-    addKnob (BandParam::Frequency, "Freq", false);
-    addKnob (BandParam::Gain, "Gain", false);
-    addKnob (BandParam::Q, "Q", false);
-    addKnob (BandParam::Threshold, "Threshold", true);
-    addKnob (BandParam::Ratio, "Ratio", true);
-    addKnob (BandParam::Range, "Range", true);
-    addKnob (BandParam::Knee, "Knee", true);
-    addKnob (BandParam::Attack, "Attack", true);
-    addKnob (BandParam::Release, "Release", true);
-    addKnob (BandParam::Lookahead, "Lookahead", true);
-    addKnob (BandParam::Mix, "Mix", true);
-    addKnob (BandParam::Selectivity, "Selectivity", true);
-
+    readoutTimer.startTimerHz (4);
     model.addListener (this);
     selectionChanged();
 }
 
 BandPanel::~BandPanel()
 {
-    for (auto& k : knobs)
-        if (k->dragging)
-            model.endEdit();
     model.removeListener (this);
 }
 
-BandPanel::Knob& BandPanel::addKnob (BandParam param, const juce::String& name, bool dynamic)
+void BandPanel::setAdvancedOpen (bool open)
 {
-    auto knob = std::make_unique<Knob>();
-    knob->param = param;
-    knob->title = name;
-    knob->dynamic = dynamic;
-    knob->slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, kKnobWidth, 16);
-    knob->label.setText (name, juce::dontSendNotification);
-    knob->label.setFont (uiFont (11.0f));
-    knob->label.setJustificationType (juce::Justification::centred);
-    knob->label.setColour (juce::Label::textColourId, colours::textDim);
-    addAndMakeVisible (knob->slider);
-    addAndMakeVisible (knob->label);
-
-    auto* k = knob.get();
-    k->slider.onDragStart = [this, k] {
-        if (band < 0)
-            return;
-        model.beginEdit ("Change " + k->title);
-        k->dragging = true;
-    };
-    k->slider.onDragEnd = [this, k] {
-        if (! k->dragging)
-            return;
-        k->dragging = false;
-        model.endEdit();
-    };
-    k->slider.onValueChange = [this, k] {
-        if (updating || band < 0)
-            return;
-        if (k->dragging)
-        {
-            model.setValue (band, k->param, static_cast<float> (k->slider.getValue()));
-        }
-        else
-        {
-            BandModel::ScopedEdit edit (model, "Change " + k->title);
-            model.setValue (band, k->param, static_cast<float> (k->slider.getValue()));
-        }
-    };
-
-    knobs.push_back (std::move (knob));
-    return *knobs.back();
+    advancedButton.setToggleState (open, juce::dontSendNotification);
+    advancedButton.setTrailingIcon (open ? Icon::ChevronLeft : Icon::ChevronRight);
 }
 
-BandPanel::Choice& BandPanel::addChoice (BandParam param, const juce::String& name, bool dynamic)
+void BandPanel::notifyLayout()
 {
-    auto choice = std::make_unique<Choice>();
-    choice->param = param;
-    choice->title = name;
-    choice->dynamic = dynamic;
-    choice->box.setTooltip (name);
-    addAndMakeVisible (choice->box);
-
-    auto* c = choice.get();
-    c->box.onChange = [this, c] {
-        const int id = c->box.getSelectedId();
-        if (updating || band < 0 || id <= 0)
-            return;
-        if (c->param == BandParam::Shape)
-        {
-            model.setShape (band, static_cast<Shape> (id - 1));
-        }
-        else if (c->param == BandParam::Mode)
-        {
-            model.setMode (band, static_cast<BandMode> (id - 1));
-        }
-        else
-        {
-            BandModel::ScopedEdit edit (model, "Change " + c->title);
-            model.setValue (band, c->param, static_cast<float> (id - 1));
-        }
-    };
-
-    choices.push_back (std::move (choice));
-    return *choices.back();
+    if (onLayoutChanged)
+        onLayoutChanged();
 }
 
 void BandPanel::setTopology (const engine::ChannelTopology& newTopology)
@@ -213,19 +368,15 @@ void BandPanel::setTopology (const engine::ChannelTopology& newTopology)
     const bool surround = newTopology.numChannels > 2;
     const bool changed = newTopology.numChannels != topology.numChannels || newTopology.roles != topology.roles;
     topology = newTopology;
-    if (speakersButton.isVisible() != surround)
+    numPairs = newTopology.numPairs;
+    if (speakers.isVisible() != surround)
     {
-        speakersButton.setVisible (surround);
+        speakers.setVisible (surround);
         resized();
+        notifyLayout();
     }
     if (changed)
         updateFromModel();
-    if (newTopology.numPairs == numPairs)
-        return;
-    numPairs = newTopology.numPairs;
-    for (auto& c : choices)
-        if (c->param == BandParam::Target)
-            rebuildChoiceItems (*c);
 }
 
 void BandPanel::openSpeakerPanel()
@@ -233,12 +384,38 @@ void BandPanel::openSpeakerPanel()
     if (band < 0)
         return;
     auto panel = std::make_unique<SpeakerPanel> (model, band, topology);
-    juce::CallOutBox::launchAsynchronously (std::move (panel), speakersButton.getScreenBounds(), nullptr);
+    juce::CallOutBox::launchAsynchronously (std::move (panel), speakers.getScreenBounds(), nullptr);
 }
 
-bool BandPanel::showsDynamics() const
+void BandPanel::showMoreMenu()
 {
-    return band >= 0 && model.band (band).mode != BandMode::Static;
+    if (band < 0)
+        return;
+    const int b = band;
+    juce::Component::SafePointer<BandPanel> safe (this);
+    juce::PopupMenu menu;
+    menu.addItem ("Copy Band", [safe, b] {
+        if (safe != nullptr)
+            safe->model.copyBand (b);
+    });
+    menu.addItem ("Paste Band", model.canPaste(), false, [safe, b] {
+        if (safe != nullptr)
+            safe->model.pasteToBand (b);
+    });
+    menu.addItem ("Reset Band", [safe, b] {
+        if (safe != nullptr)
+            safe->model.resetBand (b);
+    });
+    menu.addSeparator();
+    juce::PopupMenu::Item remove ("Delete Band");
+    remove.setColour (colours::warning);
+    remove.shortcutKeyDescription = "Delete";
+    remove.setAction ([safe, b] {
+        if (safe != nullptr)
+            safe->model.deleteBand (b);
+    });
+    menu.addItem (std::move (remove));
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&moreButton));
 }
 
 void BandPanel::selectionChanged()
@@ -246,90 +423,32 @@ void BandPanel::selectionChanged()
     const int focused = model.getFocusedBand();
     if (focused == band)
         return;
-
-    for (auto& k : knobs)
-        if (k->dragging)
-        {
-            k->dragging = false;
-            model.endEdit();
-        }
-
     band = focused;
-    setVisible (band >= 0);
     if (band >= 0)
-        bind();
-    layoutChanged();
+        bindBand();
+    notifyLayout();
 }
 
 void BandPanel::bandsChanged()
 {
-    if (band < 0)
-        return;
-    if (! model.band (band).used)
+    if (band < 0 || ! model.band (band).used)
         return; // the selection update follows
     updateFromModel();
 }
 
-void BandPanel::bind()
+void BandPanel::bindBand()
 {
-    for (auto& k : knobs)
+    const auto colour = bandColour (band);
+    for (auto* k : { &freq, &gain, &q, &threshold, &ratio, &range, &attack, &release, &selectivity })
     {
-        auto& param = model.parameter (band, k->param);
-        const auto& range = param.getNormalisableRange();
-        const juce::ScopedValueSetter<bool> svs (updating, true);
-        k->slider.setNormalisableRange (
-            { static_cast<double> (range.start), static_cast<double> (range.end),
-              [&param] (double, double, double n) { return static_cast<double> (param.convertFrom0to1 (static_cast<float> (n))); },
-              [&param] (double, double, double v) { return static_cast<double> (param.convertTo0to1 (static_cast<float> (v))); },
-              [&param] (double, double, double v) {
-                  return static_cast<double> (param.getNormalisableRange().snapToLegalValue (static_cast<float> (v)));
-              } });
-        k->slider.textFromValueFunction = [&param] (double v) { return param.getText (param.convertTo0to1 (static_cast<float> (v)), 0); };
-        k->slider.valueFromTextFunction = [&param] (const juce::String& text) {
-            return static_cast<double> (param.convertFrom0to1 (param.getValueForText (text)));
-        };
-        k->slider.setDoubleClickReturnValue (true, static_cast<double> (param.convertFrom0to1 (param.getDefaultValue())));
-        k->slider.setTooltip (param.getName (64));
-        k->slider.updateText();
+        k->setBand (band);
+        k->setColour (colour);
     }
-
-    for (auto& c : choices)
-        rebuildChoiceItems (*c);
-
+    for (auto* c : { &shape, &slope, &target, &character })
+        c->setBand (band);
+    modeSelector.setIndicatorColour (colours::raised);
+    readoutWarning = false;
     updateFromModel();
-}
-
-void BandPanel::rebuildChoiceItems (Choice& c)
-{
-    if (band < 0)
-        return;
-
-    const juce::ScopedValueSetter<bool> svs (updating, true);
-    const auto& v = model.band (band);
-    const auto& items = itemsFor (c.param);
-    c.box.clear (juce::dontSendNotification);
-
-    if (c.param == BandParam::Slope)
-    {
-        for (auto slope : slopesFor (v.shape))
-            c.box.addItem (items[static_cast<int> (slope)], static_cast<int> (slope) + 1);
-        itemsShape = v.shape;
-    }
-    else
-    {
-        for (int i = 0; i < items.size(); ++i)
-            c.box.addItem (items[i], i + 1);
-    }
-
-    if (c.param == BandParam::Mode)
-        for (int i = 1; i < items.size(); ++i)
-            c.box.setItemEnabled (i + 1, shapeUsesGain (v.shape));
-    if (c.param == BandParam::Target)
-        for (int i = 1; i < items.size(); ++i)
-            c.box.setItemEnabled (i + 1, numPairs > 0);
-
-    const int index = juce::roundToInt (model.parameter (band, c.param).convertFrom0to1 (model.parameter (band, c.param).getValue()));
-    c.box.setSelectedId (index + 1, juce::dontSendNotification);
 }
 
 void BandPanel::updateFromModel()
@@ -338,187 +457,411 @@ void BandPanel::updateFromModel()
         return;
 
     const auto& v = model.band (band);
-    const juce::ScopedValueSetter<bool> svs (updating, true);
+    const bool gainShape = shapeUsesGain (v.shape);
+    modeSelector.setSelectedIndex (static_cast<int> (v.mode), juce::dontSendNotification);
+    for (int i = 1; i < 3; ++i)
+    {
+        modeSelector.setItemEnabled (i, gainShape);
+        modeSelector.setItemTooltip (i,
+                                     gainShape ? (i == 1 ? "Dynamic: the gain follows the level in the band (e.g. a de-esser)"
+                                                         : "Spectral: acts only on the frequencies that exceed the threshold "
+                                                           "(e.g. resonances); adds the latency of the STFT frame")
+                                               : "Dynamic and Spectral need a shape with gain (Bell, shelves, tilts)");
+    }
 
-    title.setText ("Band " + juce::String (band + 1), juce::dontSendNotification);
-    onButton.setToggleState (v.on, juce::dontSendNotification);
-    onButton.setButtonText (v.on ? "On" : "Off");
+    bypassButton.setToggleState (! v.on, juce::dontSendNotification);
+    bypassButton.setIndicator (v.on ? juce::Colours::transparentBlack : colours::lamp);
+    bypassButton.setTooltip (v.on ? "Band on: click to bypass it (or double-click its node)"
+                                  : "Band bypassed: click to switch it on (or double-click its node)");
     soloButton.setToggleState (model.getSoloBand() == band, juce::dontSendNotification);
     soloButton.setEnabled (v.on);
     autoGainButton.setToggleState (v.autoGain, juce::dontSendNotification);
-    // AG-2: make-up for the dynamic part only; a Static band's change is the user's choice.
-    autoGainButton.setEnabled (v.mode != BandMode::Static);
-    speakersButton.setButtonText ("Speakers: " + SpeakerPanel::summary (v.speakers, topology));
+    speakers.setValueText (SpeakerPanel::summary (v.speakers, topology));
 
-    for (auto& k : knobs)
+    for (auto* c : { &shape, &slope, &target, &character })
+        c->refresh();
+    for (auto* k : { &freq, &gain, &q, &threshold, &ratio, &range, &attack, &release, &selectivity })
+        k->refresh();
+    gain.setEnabled (gainShape);
+    q.setEnabled (shapeUsesQ (v.shape));
+
+    const bool slopeNow = shapeUsesSlope (v.shape);
+    const bool layoutChanged = v.mode != shownMode || slopeNow != slopeShown || ! freq.isVisible();
+    shownMode = v.mode;
+    slopeShown = slopeNow;
+    const bool dynamics = shownMode != BandMode::Static;
+    for (auto* k : { &threshold, &range, &attack, &release })
+        k->setVisible (dynamics);
+    ratio.setVisible (shownMode == BandMode::Dynamic);
+    selectivity.setVisible (shownMode == BandMode::Spectral);
+    autoGainButton.setVisible (dynamics);
+    slope.setVisible (slopeShown);
+    freq.setVisible (true);
+
+    updateIndicator();
+    if (layoutChanged)
     {
-        auto& param = model.parameter (band, k->param);
-        if (! k->dragging)
-            k->slider.setValue (static_cast<double> (param.convertFrom0to1 (param.getValue())), juce::dontSendNotification);
-        if (k->param == BandParam::Gain)
-            k->slider.setEnabled (shapeUsesGain (v.shape));
-        if (k->param == BandParam::Q)
-            k->slider.setEnabled (shapeUsesQ (v.shape));
-        if (k->param == BandParam::Selectivity)
-            k->slider.setEnabled (v.mode == BandMode::Spectral); // the frequency resolution of the Spectral mask
-        if (k->param == BandParam::Lookahead)
-            k->slider.setEnabled (v.mode == BandMode::Dynamic); // a Spectral frame already sees ahead
+        resized();
+        notifyLayout();
     }
-
-    for (auto& c : choices)
-    {
-        if ((c->param == BandParam::Slope && v.shape != itemsShape) || c->param == BandParam::Mode)
-        {
-            rebuildChoiceItems (*c);
-            continue;
-        }
-        auto& param = model.parameter (band, c->param);
-        c->box.setSelectedId (juce::roundToInt (param.convertFrom0to1 (param.getValue())) + 1, juce::dontSendNotification);
-    }
-
-    const bool dynamics = showsDynamics();
-    const bool slopeVisible = shapeUsesSlope (v.shape);
-    bool layoutDirty = dynamics != lastDynamics;
-    for (auto& c : choices)
-        if (c->param == BandParam::Slope && c->box.isVisible() != slopeVisible)
-            layoutDirty = true;
-    if (layoutDirty)
-        layoutChanged();
     repaint();
 }
 
-void BandPanel::layoutChanged()
+bool BandPanel::advancedDiffersFromDefault (const BandModel& model, int band)
 {
-    lastDynamics = showsDynamics();
-    const bool slopeVisible = band >= 0 && shapeUsesSlope (model.band (band).shape);
-    for (auto& k : knobs)
-    {
-        k->slider.setVisible (! k->dynamic || lastDynamics);
-        k->label.setVisible (! k->dynamic || lastDynamics);
-    }
-    for (auto& c : choices)
-        c->box.setVisible ((! c->dynamic || lastDynamics) && (c->param != BandParam::Slope || slopeVisible));
+    if (band < 0)
+        return false;
+    const auto mode = model.band (band).mode;
+    if (mode == BandMode::Static)
+        return false;
+    // The threshold mode defaults with the band mode (DYN-4).
+    const auto modeDefault = mode == BandMode::Spectral ? ThresholdMode::Relative : ThresholdMode::Absolute;
+    if (choiceIndex (model, band, BandParam::ThresholdMode) != static_cast<int> (modeDefault))
+        return true;
+    for (const auto p : { BandParam::Direction, BandParam::Knee, BandParam::Mix, BandParam::Link })
+        if (differsFromDefault (model, band, p))
+            return true;
+    return differsFromDefault (model, band, mode == BandMode::Dynamic ? BandParam::Lookahead : BandParam::Ratio);
+}
 
-    resized();
-    if (onPreferredSizeChanged)
-        onPreferredSizeChanged();
+void BandPanel::updateIndicator()
+{
+    const bool differs = advancedDiffersFromDefault (model, band);
+    advancedButton.setIndicator (differs || readoutWarning ? colours::accent : juce::Colours::transparentBlack);
+    juce::String tip = shownMode == BandMode::Static ? "Advanced: readouts of the band (phase, group delay, ringing)"
+                                                     : "Advanced: detector settings (threshold mode, direction, knee, "
+            + juce::String (shownMode == BandMode::Dynamic ? "lookahead" : "ratio") + ", mix, link) and readouts of the band";
+    if (differs)
+        tip << "\nThe dot: a detector setting differs from its default.";
+    if (readoutWarning)
+        tip << "\nThe dot: long ringing, may be audible.";
+    advancedButton.setTooltip (tip);
+}
+
+void BandPanel::pollReadout()
+{
+    if (band < 0 || ! readoutProvider || ! isVisible())
+        return;
+    const bool warns = BandAdvancedPanel::readoutWarns (readoutProvider (band));
+    if (warns != readoutWarning)
+    {
+        readoutWarning = warns;
+        updateIndicator();
+    }
+}
+
+std::vector<BandParam> BandPanel::visibleParameters() const
+{
+    std::vector<BandParam> params { BandParam::Mode, BandParam::On };
+    for (const auto* c : { &shape, &slope, &target, &character })
+        if (c->isVisible())
+            params.push_back (c->getParam());
+    for (const auto* k : { &freq, &gain, &q, &threshold, &ratio, &range, &attack, &release, &selectivity })
+        if (k->isVisible())
+            params.push_back (k->getParam());
+    if (autoGainButton.isVisible())
+        params.push_back (BandParam::AutoGain);
+    return params;
 }
 
 juce::Point<int> BandPanel::getPreferredSize() const
 {
-    // Row 1: title, On, Solo, Shape, Slope, Delete. Row 2: Freq, Gain, Q, Target/Mode/Character, Auto Gain.
-    // Row 3 (Dynamic/Spectral): nine knobs and the detector choices.
-    const int row1 = 74 + 2 * (48 + kGap) + 2 * (kChoiceWidth + kGap) + 64;
-    const int row2 = 3 * kKnobWidth + kGap + kChoiceWidth + kGap + kSpeakersWidth;
-    const int row3 = 9 * kKnobWidth + kGap + kChoiceWidth;
-    const int width = 2 * kPadding + juce::jmax (row1, row2, showsDynamics() ? row3 : 0);
-    const int height =
-        2 * kPadding + kHeaderHeight + kGap + kKnobRowHeight + (showsDynamics() ? kGap + kKnobRowHeight : 0) + kGap + kReadoutHeight;
-    return { width, height };
+    const int width = kStereoWidth + (topology.numChannels > 2 ? 8 + kSpeakersWidth : 0);
+    return { width, shownMode == BandMode::Static ? kStaticHeight : kDynamicHeight };
 }
 
 void BandPanel::resized()
 {
-    auto area = getLocalBounds().reduced (kPadding);
-    readoutLabel.setBounds (area.removeFromBottom (kReadoutHeight).withTrimmedLeft (14));
-    area.removeFromBottom (kGap);
+    auto area = getLocalBounds().reduced (kPad, 0).withTrimmedTop (kTop);
 
     auto header = area.removeFromTop (kHeaderHeight);
-    title.setBounds (header.removeFromLeft (74).withTrimmedLeft (14));
-    onButton.setBounds (header.removeFromLeft (48).reduced (0, 2));
-    header.removeFromLeft (kGap);
-    soloButton.setBounds (header.removeFromLeft (48).reduced (0, 2));
-    header.removeFromLeft (kGap);
-    deleteButton.setBounds (header.removeFromRight (64).reduced (0, 2));
+    header.removeFromLeft (kTitleWidth); // dot and title (painted)
+    moreButton.setBounds (header.removeFromRight (28));
+    header.removeFromRight (2);
+    soloButton.setBounds (header.removeFromRight (28));
+    header.removeFromRight (2);
+    bypassButton.setBounds (header.removeFromRight (28));
+    header.removeFromRight (8);
+    advancedButton.setBounds (header.removeFromRight (advancedButton.getIdealWidth()).reduced (0, 2));
+    header.removeFromRight (8);
+    modeSelector.setBounds (header.removeFromLeft (juce::jmin (header.getWidth(), 198)).reduced (0, 1));
 
-    auto choice = [this] (BandParam p) -> juce::ComboBox& {
-        for (auto& c : choices)
-            if (c->param == p)
-                return c->box;
-        jassertfalse;
-        return choices.front()->box;
-    };
-    auto knob = [this] (BandParam p) -> Knob& {
-        for (auto& k : knobs)
-            if (k->param == p)
-                return *k;
-        jassertfalse;
-        return *knobs.front();
-    };
-
-    choice (BandParam::Shape).setBounds (header.removeFromLeft (kChoiceWidth).reduced (0, 1));
-    header.removeFromLeft (kGap);
-    choice (BandParam::Slope).setBounds (header.removeFromLeft (kChoiceWidth).reduced (0, 1));
-
-    auto placeKnob = [] (Knob& k, juce::Rectangle<int> cell) {
-        k.label.setBounds (cell.removeFromTop (14));
-        k.slider.setBounds (cell);
-    };
-
-    area.removeFromTop (kGap);
-    auto row2 = area.removeFromTop (kKnobRowHeight);
-    for (auto p : { BandParam::Frequency, BandParam::Gain, BandParam::Q })
-        placeKnob (knob (p), row2.removeFromLeft (kKnobWidth));
-    row2.removeFromLeft (kGap);
+    area.removeFromTop (kRowGap);
+    auto eq = area.removeFromTop (kEqRowHeight);
     {
-        auto column = row2.removeFromLeft (kChoiceWidth);
-        const int spacing = (column.getHeight() - 3 * kChoiceHeight) / 2;
-        for (auto p : { BandParam::Target, BandParam::Mode, BandParam::Character })
-        {
-            choice (p).setBounds (column.removeFromTop (kChoiceHeight));
-            column.removeFromTop (spacing);
-        }
+        auto column = eq.removeFromLeft (kChoiceWidth);
+        shape.setBounds (column.removeFromTop (kChoiceHeight));
+        column.removeFromTop (4);
+        slope.setBounds (column.removeFromTop (kChoiceHeight));
     }
-    row2.removeFromLeft (kGap);
+    eq.removeFromLeft (14);
+    for (auto* k : { &freq, &gain, &q })
+        k->setBounds (eq.removeFromLeft (kKnobCell));
+    eq.removeFromLeft (14);
     {
-        auto column = row2.removeFromLeft (kSpeakersWidth);
-        if (speakersButton.isVisible())
-        {
-            autoGainButton.setBounds (column.removeFromTop (column.getHeight() / 2).withSizeKeepingCentre (kSpeakersWidth, 24));
-            speakersButton.setBounds (column.withSizeKeepingCentre (kSpeakersWidth, 24));
-        }
-        else
-        {
-            autoGainButton.setBounds (column.withSizeKeepingCentre (84, 24));
-        }
+        auto column = eq.removeFromLeft (kRightWidth);
+        target.setBounds (column.removeFromTop (kChoiceHeight));
+        column.removeFromTop (4);
+        character.setBounds (column.removeFromTop (kChoiceHeight));
+    }
+    if (speakers.isVisible())
+    {
+        eq.removeFromLeft (8);
+        speakers.setBounds (eq.removeFromLeft (kSpeakersWidth).removeFromTop (kChoiceHeight));
     }
 
-    if (showsDynamics())
-    {
-        area.removeFromTop (kGap);
-        auto row3 = area.removeFromTop (kKnobRowHeight);
-        for (auto p : { BandParam::Threshold, BandParam::Ratio, BandParam::Range, BandParam::Knee, BandParam::Attack, BandParam::Release,
-                        BandParam::Lookahead, BandParam::Mix, BandParam::Selectivity })
-            placeKnob (knob (p), row3.removeFromLeft (kKnobWidth));
-        row3.removeFromLeft (kGap);
-        auto column = row3.removeFromLeft (kChoiceWidth);
-        const int spacing = (column.getHeight() - 3 * kChoiceHeight) / 2;
-        for (auto p : { BandParam::ThresholdMode, BandParam::Direction, BandParam::Link })
-        {
-            choice (p).setBounds (column.removeFromTop (kChoiceHeight));
-            column.removeFromTop (spacing);
-        }
-    }
+    // Dynamics (Dynamic and Spectral bands): the knobs follow the mode.
+    area.removeFromTop (kSectionGap);
+    auto section = area.removeFromTop (kSectionHeight);
+    autoGainButton.setBounds (section.removeFromRight (autoGainButton.getIdealWidth()));
+    area.removeFromTop (4);
+    auto row = area.removeFromTop (kDynamicsRowHeight).withWidth (kStereoWidth - 2 * kPad);
+    auto& second = shownMode == BandMode::Spectral ? selectivity : ratio;
+    const int cell = row.getWidth() / 5;
+    for (auto* k : { &threshold, &second, &range, &attack, &release })
+        k->setBounds (row.removeFromLeft (cell).withSizeKeepingCentre (juce::jmin (cell, 80), kDynamicsRowHeight));
 }
 
-juce::String BandPanel::readoutText (const analysis::BandReadout& r)
+void BandPanel::paint (juce::Graphics& g)
 {
-    if (! r.valid)
-        return juce::String::fromUTF8 ("\xe2\x80\xa6");
-    auto ms = [] (float v) { return (v < 10.0f ? juce::String (v, 1) : juce::String (juce::roundToInt (v))) + " ms"; };
-    const auto phi = juce::String::fromUTF8 ("\xce\x94\xcf\x86 ");
-    if (r.stftPreEchoMs >= 0.0f)
-        return phi + "0" + juce::String::fromUTF8 ("\xc2\xb0") + "   STFT pre-echo " + juce::String::fromUTF8 ("\xc2\xb1")
-            + ms (r.stftPreEchoMs);
-    auto text = phi + juce::String (juce::roundToInt (r.meanPhaseDeg)) + juce::String::fromUTF8 ("\xc2\xb0") + "   "
-        + juce::String::fromUTF8 ("\xcf\x84g ") + juce::String (r.groupDelayMs, 2) + " ms   Pre " + ms (r.preRingMs) + "   Post "
-        + ms (r.postRingMs);
-    if (r.rangePostRingMs >= 0.0f)
-        text << "   (range: pre " << ms (r.rangePreRingMs) << ", post " << ms (r.rangePostRingMs) << ")";
-    return text;
+    const auto bounds = getLocalBounds().toFloat().reduced (0.5f);
+    g.setColour (colours::panel);
+    g.fillRoundedRectangle (bounds, metrics::panelRadius);
+    const auto colour = band >= 0 ? bandColour (band) : colours::outline;
+    g.setColour (colour.withAlpha (0.6f));
+    g.drawRoundedRectangle (bounds, metrics::panelRadius, 1.0f);
+    if (band < 0)
+        return;
+
+    const auto title = juce::Rectangle<int> (kPad, kTop, kTitleWidth, kHeaderHeight);
+    g.setColour (model.band (band).on ? colour : colours::powerOff);
+    g.fillEllipse (juce::Rectangle<float> (10.0f, 10.0f).withCentre ({ static_cast<float> (kPad) + 5.0f, title.toFloat().getCentreY() }));
+    g.setColour (colours::text);
+    g.setFont (uiFont (13.5f, true));
+    g.drawText ("Band " + juce::String (band + 1), title.withTrimmedLeft (16), juce::Justification::centredLeft, false);
+
+    if (shownMode != BandMode::Static)
+    {
+        const int y = kTop + kHeaderHeight + kRowGap + kEqRowHeight + kSectionGap;
+        const auto text = juce::String (shownMode == BandMode::Spectral ? "SPECTRAL DYNAMICS" : "DYNAMICS");
+        const auto font = uiFont (10.5f, true);
+        const auto line = juce::Rectangle<int> (kPad, y, autoGainButton.getX() - 10 - kPad, kSectionHeight);
+        g.setFont (font);
+        g.setColour (colours::textDim);
+        g.drawText (text, line, juce::Justification::centredLeft, false);
+        g.setColour (colours::panelEdge);
+        g.fillRect (juce::Rectangle<float> (static_cast<float> (line.getX()) + juce::GlyphArrangement::getStringWidth (font, text) + 8.0f,
+                                            static_cast<float> (line.getCentreY()), 0.0f, 1.0f)
+                        .withRight (static_cast<float> (line.getRight())));
+    }
 }
 
-bool BandPanel::readoutWarns (const analysis::BandReadout& r) noexcept
+// BandAdvancedPanel ---------------------------------------------------------------------------
+
+BandAdvancedPanel::BandAdvancedPanel (BandModel& m)
+    : model (m),
+      knee (m, BandParam::Knee, "Knee"),
+      lookahead (m, BandParam::Lookahead, "Lookahead"),
+      ratio (m, BandParam::Ratio, "Ratio"),
+      mix (m, BandParam::Mix, "Mix"),
+      link (m, BandParam::Link, "Link")
+{
+    setOpaque (false);
+    for (auto* c : std::initializer_list<juce::Component*> { &thresholdMode, &direction, &knee, &lookahead, &ratio, &mix, &link })
+        addAndMakeVisible (c);
+
+    thresholdMode.setTooltip ("Threshold Mode. Absolute: in dBFS. Relative: above the neighbouring spectrum, "
+                              "nearly independent of the loudness of the material");
+    direction.setTooltip ("Direction. Above: acts while the level exceeds the threshold. Below: while it stays under it");
+    lookahead.getSlider().setTooltip ("Lookahead: the band reacts before a transient; raises Max Lookahead (latency) when needed");
+    link.setTooltip ("Link: channels (or M/S components) that share the detection. Independent, Pair, Group (default) or All");
+
+    thresholdMode.onChange = [this] (int index) {
+        if (band < 0)
+            return;
+        BandModel::ScopedEdit edit (model, "Change Threshold Mode");
+        model.setValue (band, BandParam::ThresholdMode, static_cast<float> (index));
+    };
+    direction.onChange = [this] (int index) {
+        if (band < 0)
+            return;
+        BandModel::ScopedEdit edit (model, "Change Direction");
+        model.setValue (band, BandParam::Direction, static_cast<float> (index));
+    };
+
+    model.addListener (this);
+    selectionChanged();
+}
+
+BandAdvancedPanel::~BandAdvancedPanel()
+{
+    model.removeListener (this);
+}
+
+bool BandAdvancedPanel::showsDetector() const
+{
+    return band >= 0 && shownMode != BandMode::Static;
+}
+
+void BandAdvancedPanel::selectionChanged()
+{
+    const int focused = model.getFocusedBand();
+    if (focused == band)
+        return;
+    band = focused;
+    readout = {};
+    if (band >= 0)
+        bindBand();
+}
+
+void BandAdvancedPanel::bandsChanged()
+{
+    if (band >= 0 && model.band (band).used)
+        updateFromModel();
+}
+
+void BandAdvancedPanel::bindBand()
+{
+    const auto colour = bandColour (band);
+    for (auto* k : { &knee, &lookahead, &ratio, &mix })
+    {
+        k->setBand (band);
+        k->setColour (colour);
+    }
+    link.setBand (band);
+    shownMode = model.band (band).mode;
+    updateFromModel();
+    resized();
+    pollReadout();
+}
+
+void BandAdvancedPanel::updateFromModel()
+{
+    if (band < 0)
+        return;
+    thresholdMode.setSelectedIndex (choiceIndex (model, band, BandParam::ThresholdMode), juce::dontSendNotification);
+    direction.setSelectedIndex (choiceIndex (model, band, BandParam::Direction), juce::dontSendNotification);
+    for (auto* k : { &knee, &lookahead, &ratio, &mix })
+        k->refresh();
+    link.refresh();
+
+    const auto mode = model.band (band).mode;
+    const bool modeChanged = mode != shownMode;
+    shownMode = mode;
+    const bool detector = showsDetector();
+    for (auto* c : std::initializer_list<juce::Component*> { &thresholdMode, &direction, &knee, &mix, &link })
+        c->setVisible (detector);
+    lookahead.setVisible (shownMode == BandMode::Dynamic);
+    ratio.setVisible (shownMode == BandMode::Spectral);
+    if (modeChanged)
+        resized();
+    repaint();
+}
+
+int BandAdvancedPanel::getPreferredHeight() const
+{
+    const int lines = static_cast<int> (readoutLines (readout).size());
+    if (! showsDetector())
+        return 2 * kFlyPadY + 16 + 4 * kReadoutLine + 18; // caption, lines, note
+    return 2 * kFlyPadY + kSegmentRowHeight + 8 + kFlyKnobRowHeight + 6 + kChoiceHeight + 7 + juce::jmax (lines, 4) * kReadoutLine;
+}
+
+std::vector<BandParam> BandAdvancedPanel::visibleParameters() const
+{
+    std::vector<BandParam> params;
+    if (thresholdMode.isVisible())
+        params.push_back (BandParam::ThresholdMode);
+    if (direction.isVisible())
+        params.push_back (BandParam::Direction);
+    for (const auto* k : { &knee, &lookahead, &ratio, &mix })
+        if (k->isVisible())
+            params.push_back (k->getParam());
+    if (link.isVisible())
+        params.push_back (BandParam::Link);
+    return params;
+}
+
+void BandAdvancedPanel::resized()
+{
+    auto area = getLocalBounds().reduced (kFlyPadX, kFlyPadY);
+    if (! showsDetector())
+        return;
+
+    auto segments = area.removeFromTop (kSegmentRowHeight);
+    auto left = segments.removeFromLeft ((segments.getWidth() - 8) / 2);
+    segments.removeFromLeft (8);
+    thresholdMode.setBounds (left.withTrimmedTop (13));
+    direction.setBounds (segments.withTrimmedTop (13));
+
+    area.removeFromTop (8);
+    auto knobs = area.removeFromTop (kFlyKnobRowHeight);
+    const int cell = knobs.getWidth() / 3;
+    knee.setBounds (knobs.removeFromLeft (cell));
+    (shownMode == BandMode::Dynamic ? lookahead : ratio).setBounds (knobs.removeFromLeft (cell));
+    mix.setBounds (knobs);
+
+    area.removeFromTop (6);
+    link.setBounds (area.removeFromTop (kChoiceHeight).removeFromLeft (128));
+}
+
+void BandAdvancedPanel::visibilityChanged()
+{
+    if (isVisible())
+    {
+        pollReadout();
+        readoutTimer.startTimerHz (10);
+    }
+    else
+    {
+        readoutTimer.stopTimer();
+    }
+}
+
+void BandAdvancedPanel::pollReadout()
+{
+    if (band < 0 || ! readoutProvider)
+        return;
+    const auto next = readoutProvider (band);
+    const auto same = [] (const analysis::BandReadout& a, const analysis::BandReadout& b) {
+        return a.valid == b.valid && juce::exactlyEqual (a.meanPhaseDeg, b.meanPhaseDeg)
+            && juce::exactlyEqual (a.groupDelayMs, b.groupDelayMs) && juce::exactlyEqual (a.preRingMs, b.preRingMs)
+            && juce::exactlyEqual (a.postRingMs, b.postRingMs) && juce::exactlyEqual (a.rangePreRingMs, b.rangePreRingMs)
+            && juce::exactlyEqual (a.rangePostRingMs, b.rangePostRingMs) && juce::exactlyEqual (a.stftPreEchoMs, b.stftPreEchoMs);
+    };
+    if (same (next, readout))
+        return;
+    readout = next;
+    juce::String tip = next.stftPreEchoMs >= 0.0f
+        ? "Spectral band: the STFT mask is zero-phase; it smears transients by about half a frame each way (pre-echo)."
+        : "Mean excess phase where the band acts, group delay at its frequency, ringing before (pre) and after (post) "
+          "an impulse down to -60 dB.";
+    if (readoutWarns (next))
+        tip << "\nAmber: likely audible (post-ring > 50 ms or pre-ring > 5 ms).";
+    setTooltip (tip);
+    repaint();
+}
+
+std::vector<std::pair<juce::String, juce::String>> BandAdvancedPanel::readoutLines (const analysis::BandReadout& r)
+{
+    const auto ellipsis = juce::String::fromUTF8 ("\xe2\x80\xa6");
+    if (! r.valid)
+        return { { "Excess phase", ellipsis }, { "Group delay", ellipsis }, { "Ringing", ellipsis } };
+
+    auto ms = [] (float v) { return (v < 10.0f ? juce::String (v, 1) : juce::String (juce::roundToInt (v))) + " ms"; };
+    const auto degree = juce::String::fromUTF8 ("\xc2\xb0");
+    if (r.stftPreEchoMs >= 0.0f)
+        return { { "Excess phase", "0" + degree }, { "STFT pre-echo", juce::String::fromUTF8 ("\xc2\xb1") + ms (r.stftPreEchoMs) } };
+
+    std::vector<std::pair<juce::String, juce::String>> lines { { "Excess phase",
+                                                                 juce::String (juce::roundToInt (r.meanPhaseDeg)) + degree },
+                                                               { "Group delay", juce::String (r.groupDelayMs, 2) + " ms" },
+                                                               { "Ringing", "pre " + ms (r.preRingMs) + "  post " + ms (r.postRingMs) } };
+    if (r.rangePostRingMs >= 0.0f)
+        lines.push_back ({ "At full Range", "pre " + ms (r.rangePreRingMs) + "  post " + ms (r.rangePostRingMs) });
+    return lines;
+}
+
+bool BandAdvancedPanel::readoutWarns (const analysis::BandReadout& r) noexcept
 {
     // Pre-echo is heard more easily than a tail of the same length (research §12c).
     const float post = juce::jmax (r.postRingMs, r.rangePostRingMs);
@@ -526,33 +869,60 @@ bool BandPanel::readoutWarns (const analysis::BandReadout& r) noexcept
     return r.valid && (post > 50.0f || pre > 5.0f);
 }
 
-void BandPanel::timerCallback()
-{
-    if (band < 0 || ! readoutProvider)
-        return;
-    const auto r = readoutProvider (band);
-    readoutLabel.setText (readoutText (r), juce::dontSendNotification);
-    readoutLabel.setColour (juce::Label::textColourId, readoutWarns (r) ? colours::accent : colours::textDim);
-    readoutLabel.setTooltip (readoutWarns (r) ? "Long ringing: may be audible (post-ring > 50 ms or pre-ring > 5 ms at -60 dB)"
-                                              : "Mean excess phase, group delay at the band frequency, ringing at -60 dB");
-}
-
-void BandPanel::paint (juce::Graphics& g)
+void BandAdvancedPanel::paint (juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat().reduced (0.5f);
-    g.setColour (colours::panel.withAlpha (0.95f));
-    g.fillRoundedRectangle (bounds, 6.0f);
+    g.setColour (colours::popover);
+    g.fillRoundedRectangle (bounds, metrics::panelRadius);
+    g.setColour ((band >= 0 ? bandColour (band) : colours::outline).withAlpha (0.35f));
+    g.drawRoundedRectangle (bounds, metrics::panelRadius, 1.0f);
+    if (band < 0)
+        return;
 
-    const auto colour = band >= 0 ? bandColour (band) : colours::panelEdge;
-    g.setColour (colour.withAlpha (0.55f));
-    g.drawRoundedRectangle (bounds, 6.0f, 1.0f);
-
-    if (band >= 0)
+    auto area = getLocalBounds().reduced (kFlyPadX, kFlyPadY);
+    if (showsDetector())
     {
-        const auto dot = juce::Rectangle<float> (10.0f, 10.0f)
-                             .withCentre ({ static_cast<float> (kPadding) + 6.0f, static_cast<float> (kPadding + kHeaderHeight / 2) });
-        g.setColour (model.band (band).on ? colour : colours::powerOff);
-        g.fillEllipse (dot);
+        captionText (g, "Threshold", thresholdMode.getBounds().withY (thresholdMode.getY() - 14).withHeight (13));
+        captionText (g, "Direction", direction.getBounds().withY (direction.getY() - 14).withHeight (13));
+        area.setTop (link.getBottom() + 4);
+        g.setColour (colours::panelEdge);
+        g.fillRect (area.removeFromTop (1).toFloat());
+        area.removeFromTop (2);
+    }
+    else
+    {
+        g.setFont (uiFont (10.5f, true));
+        g.setColour (colours::textDim);
+        g.drawText ("READOUTS", area.removeFromTop (16), juce::Justification::centredLeft, false);
+    }
+
+    // Ringing lines (and the STFT pre-echo) in amber when they are likely audible.
+    const bool spectral = readout.stftPreEchoMs >= 0.0f;
+    const auto warnLine = [spectral] (const analysis::BandReadout& r, int index) {
+        if (index == (spectral ? 1 : 2))
+            return r.valid && (r.postRingMs > 50.0f || r.preRingMs > 5.0f);
+        if (index == 3)
+            return r.valid && (r.rangePostRingMs > 50.0f || r.rangePreRingMs > 5.0f);
+        return false;
+    };
+    const auto lines = readoutLines (readout);
+    for (int i = 0; i < static_cast<int> (lines.size()); ++i)
+    {
+        auto line = area.removeFromTop (kReadoutLine);
+        g.setFont (uiFont (11.0f));
+        g.setColour (colours::textDim);
+        g.drawText (lines[static_cast<std::size_t> (i)].first, line.removeFromLeft (84), juce::Justification::centredLeft, false);
+        g.setFont (uiFont (11.5f));
+        g.setColour (warnLine (readout, i) ? colours::accent : colours::textSecondary);
+        g.drawText (lines[static_cast<std::size_t> (i)].second, line, juce::Justification::centredRight, true);
+    }
+
+    if (! showsDetector())
+    {
+        g.setFont (uiFont (10.5f));
+        g.setColour (colours::textDim);
+        g.drawFittedText ("Detector settings: Dynamic and Spectral bands",
+                          getLocalBounds().reduced (kFlyPadX, kFlyPadY).removeFromBottom (14), juce::Justification::centredLeft, 1, 0.9f);
     }
 }
 } // namespace ssc::ui

@@ -9,9 +9,11 @@
 namespace ssc::ui
 {
 /**
-    THD+N and aliasing meters in the bottom bar (research §13c, MTR-1, MTR-4): two short lines
-    refreshed at 10 Hz, the value in the warning colour above its threshold, the bands that
-    contribute in the tooltip. Values below −120 dB read "< −120 dB".
+    THD+N and aliasing meters in the global Advanced panel (research §13c, §15 d5, MTR-1, MTR-4):
+    two short lines refreshed at 10 Hz, the value in the warning colour above its threshold, the
+    bands that contribute in the tooltip; a click opens the warning thresholds. Values below
+    −120 dB read "< −120 dB". The readings keep updating while the panel is closed, so the
+    Advanced button can show a warning.
 */
 class MeterView final : public juce::Component, public juce::SettableTooltipClient, private juce::Timer
 {
@@ -27,6 +29,12 @@ public:
 
     void setThresholds (float thdWarningDb, float aliasingWarningDb);
 
+    /** Called on a click (the editor opens the warning thresholds). */
+    std::function<void()> onClick;
+
+    /** True while a reading is above its warning threshold. */
+    bool hasWarning() const noexcept;
+
     /** Pulls the newest readings (the timer does this; offscreen tools call it directly). */
     void refresh();
 
@@ -34,6 +42,7 @@ public:
     int getOversamplingHint() const noexcept { return hint; }
 
     void paint (juce::Graphics&) override;
+    void mouseUp (const juce::MouseEvent&) override;
 
     /** "−52.3 dB", or "< −120 dB" below the display floor. */
     static juce::String formatDb (float db);

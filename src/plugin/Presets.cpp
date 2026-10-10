@@ -260,6 +260,43 @@ juce::File PresetLibrary::save (const juce::ValueTree& preset, const juce::Strin
     return writePresetFile (named, file) ? file : juce::File {};
 }
 
+PresetComparison::PresetComparison (juce::AudioProcessorValueTreeState& state, const juce::ValueTree& source)
+{
+    auto preset = source.createCopy();
+    if (! migratePreset (preset))
+        return;
+    forEachSoundParameter (state, [this, &preset] (juce::RangedAudioParameter& p) {
+        const auto stored = preset.getChildWithProperty (kIdProperty, p.getParameterID());
+        values.emplace_back (
+            &p, stored.isValid() ? p.convertTo0to1 (static_cast<float> (stored.getProperty (kValueProperty))) : p.getDefaultValue());
+    });
+    speakers = preset.getChildWithName (kSpeakersType).createCopy();
+    valid = true;
+}
+
+bool PresetComparison::matches (juce::AudioProcessorValueTreeState& state) const
+{
+    if (! valid)
+        return false;
+    for (const auto& [parameter, value] : values)
+        if (std::abs (parameter->getValue() - value) > 1.0e-5f)
+            return false;
+
+    // No speaker selections and an empty set are the same (every band on its default speakers).
+    const auto current = state.state.getChildWithName (kSpeakersType);
+    const int currentCount = current.isValid() ? current.getNumProperties() : 0;
+    const int storedCount = speakers.isValid() ? speakers.getNumProperties() : 0;
+    if (currentCount != storedCount)
+        return false;
+    for (int i = 0; i < currentCount; ++i)
+    {
+        const auto name = current.getPropertyName (i);
+        if (! speakers.hasProperty (name) || speakers[name] != current[name])
+            return false;
+    }
+    return true;
+}
+
 int compareSlot (const juce::ValueTree& state)
 {
     return juce::jlimit (0, 1, static_cast<int> (state.getChildWithName (kCompareType).getProperty (kSlotProperty, 0)));
@@ -275,5 +312,9 @@ void copyToOtherSlot (juce::AudioProcessorValueTreeState& state, juce::UndoManag
 {
     undoManager.beginNewTransaction (compareSlot (state.state) == 0 ? "Copy A to B" : "Copy B to A");
     undoManager.perform (new CopySlotAction (state));
+}
+juce::ValueTree otherComparePreset (const juce::ValueTree& state)
+{
+    return state.getChildWithName (kCompareType).getChildWithName (kPresetType);
 }
 } // namespace ssc::plugin

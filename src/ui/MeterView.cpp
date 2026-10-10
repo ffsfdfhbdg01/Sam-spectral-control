@@ -7,7 +7,19 @@ namespace ssc::ui
 MeterView::MeterView()
 {
     setTooltip ("THD+N and aliasing of the processing, relative to the output");
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
     startTimerHz (10);
+}
+
+bool MeterView::hasWarning() const noexcept
+{
+    return readings.valid && (readings.thdDb > thdWarning || readings.aliasingDb > aliasingWarning);
+}
+
+void MeterView::mouseUp (const juce::MouseEvent& e)
+{
+    if (onClick && e.mouseWasClicked() && getLocalBounds().contains (e.getPosition()))
+        onClick();
 }
 
 void MeterView::setThresholds (float thdWarningDb, float aliasingWarningDb)
@@ -75,7 +87,7 @@ void MeterView::updateTooltip()
         text << "\nNo signal.";
     }
     text << "\nWarning colour above " << formatDb (thdWarning) << " (THD+N) and " << formatDb (aliasingWarning)
-         << " (aliasing): Analyzer menu.";
+         << " (aliasing): click to change.";
     if (hint > 0)
         text << "\nAliasing above " << formatDb (plugin::kOversamplingHintDb) << ": Oversampling " << hint << "x would reduce it.";
     setTooltip (text);

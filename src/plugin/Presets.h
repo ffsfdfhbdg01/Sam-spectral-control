@@ -72,6 +72,29 @@ struct FactoryPreset
 
 const std::vector<FactoryPreset>& factoryPresets();
 
+// Comparisons --------------------------------------------------------------------------------
+
+/**
+    The normalised values of every sound parameter and the speakers of a preset, to compare them
+    with the current settings cheaply (the preset-modified dot, the A/B copy button).
+*/
+class PresetComparison
+{
+public:
+    PresetComparison() = default;
+    PresetComparison (juce::AudioProcessorValueTreeState& state, const juce::ValueTree& preset);
+
+    bool isValid() const noexcept { return valid; }
+
+    /** True when the current settings equal the preset (parameters missing from it: their defaults). */
+    bool matches (juce::AudioProcessorValueTreeState& state) const;
+
+private:
+    std::vector<std::pair<juce::RangedAudioParameter*, float>> values;
+    juce::ValueTree speakers;
+    bool valid = false;
+};
+
 // A/B ---------------------------------------------------------------------------------------
 
 /** The slot shown: 0 = A, 1 = B. */
@@ -82,4 +105,8 @@ void switchCompareSlot (juce::AudioProcessorValueTreeState& state, juce::UndoMan
 
 /** Copies the slot shown to the other one (one undo step). */
 void copyToOtherSlot (juce::AudioProcessorValueTreeState& state, juce::UndoManager& undoManager);
+
+/** The preset held by the slot not shown; invalid before the first switch (that slot then starts
+    as a copy of the one shown). */
+juce::ValueTree otherComparePreset (const juce::ValueTree& state);
 } // namespace ssc::plugin

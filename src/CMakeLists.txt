@@ -11,6 +11,9 @@ set(SSC_PLUGIN_SOURCES
     plugin/FactoryPresets.cpp
     plugin/PluginProcessor.cpp
     ui/Theme.cpp
+    ui/Motion.cpp
+    ui/Controls.cpp
+    ui/PanelLayout.cpp
     ui/BandLogic.cpp
     ui/BandModel.cpp
     ui/ResponseCurves.cpp

@@ -7,6 +7,7 @@ target_sources(ssc_plugin_tests PRIVATE
     TestAnalyzer.cpp
     TestMeters.cpp
     TestPresets.cpp
+    TestInterface.cpp
     TestStress.cpp
     ../AllocationCounter.cpp
     ${SSC_PLUGIN_SOURCES})
