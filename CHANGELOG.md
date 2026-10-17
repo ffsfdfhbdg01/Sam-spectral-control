@@ -4,6 +4,14 @@ Wszystkie istotne zmiany Sam Spectral Control. Format: [Keep a Changelog](https:
 
 ## [Unreleased]
 
+### Dodane
+- **Sidechain** pasm Dynamic i Spectral (DYN-4): opcjonalne wejście **Sidechain** wtyczki (mono lub stereo, domyślnie wyłączone) i wybór **Sidechain: Internal | External** w panelu Advanced pasma oraz *External Sidechain* w menu węzła. Pasmo z External mierzy poziom w sidechainie (na swoim celu: Left, Right, Mid, Side, All; sidechain mono steruje wszystkimi kanałami), a przetwarza własny sygnał; pasma Spectral biorą poziomy z widma sidechaina. Sidechain jest wyrównany w czasie z torem głównym (Lookahead, oversampling, Natural Phase) i nie dodaje latencji. Panel pasma pokazuje **· SIDECHAIN**, a bez sygnału na wejściu — bursztynowe **SIDECHAIN: NO INPUT**.
+- Solo pokazuje na wykresie słyszalny zakres: przyciemnia to, czego nie słychać, zaznacza granice (−3 dB) i podaje pasmo, cel i zakres (jak w Pro-Q 4).
+
+### Zmienione
+- **Solo** pasma brzmi tak głośno, jak pasmo naprawdę gra w miksie: z jego wzmocnieniem i działaniem Dynamic lub Spectral (podbicie głośniej, cięcie ciszej) zamiast stałego poziomu filtra pasmowego, i tylko na celu pasma — Mid daje samą składową środkową, Side samą boczną, Left / Right tylko ten kanał, w surround tylko głośniki pasma. Auto Gain nie zmienia poziomu Solo.
+- Stan zapisany przez 1.0 (bez parametru Sidechain) wczytuje się z Sidechain Internal; schowek pasma (*Copy* / *Paste*) ma nowy format, starszy nadal da się wkleić.
+
 ## [1.0.0] - 2026-10-10
 
 Pierwsze wydanie (etapy M0–M8 i przebudowa interfejsu według [research §15](docs/research/15-ux-ui.md)). Licencja: GNU AGPLv3 ([ADR-0002](docs/decisions/0002-licencja-juce.md)); identyfikatory wtyczki zamrożone ([ADR-0016](docs/decisions/0016-identyfikatory-nazwy.md)). Instalatory nie są jeszcze podpisane cyfrowo — to wydanie wstępne.

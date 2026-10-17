@@ -35,6 +35,7 @@ namespace
             case BandParam::Mix: return "mix";
             case BandParam::Selectivity: return "selectivity";
             case BandParam::Link: return "link";
+            case BandParam::Sidechain: return "sidechain";
             case BandParam::Count: break;
         }
         jassertfalse;
@@ -161,6 +162,7 @@ namespace
         group.addChild (
             floatParam (bandId (BandParam::Selectivity), prefix + "Selectivity", linearRange (0.0f, 100.0f, 0.1), 50.0f, format::percent));
         group.addChild (choiceParam (bandId (BandParam::Link), prefix + "Link", labels::links(), static_cast<int> (DetectorLink::Group)));
+        group.addChild (choiceParam (bandId (BandParam::Sidechain), prefix + "Sidechain", labels::sidechainSources(), 0));
     }
 } // namespace
 
@@ -253,6 +255,11 @@ namespace labels
     const juce::StringArray& links()
     {
         static const juce::StringArray s { "Independent", "Pair", "Group", "All" };
+        return s;
+    }
+    const juce::StringArray& sidechainSources()
+    {
+        static const juce::StringArray s { "Internal", "External" };
         return s;
     }
     const juce::StringArray& phaseModes()

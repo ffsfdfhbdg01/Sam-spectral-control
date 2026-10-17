@@ -26,6 +26,7 @@ struct BandValues
     StereoComponent target = StereoComponent::All;
     Character character = Character::Clear;
     bool autoGain = false;
+    bool sidechain = false;            ///< detection from the Sidechain input (Dynamic and Spectral bands)
     engine::SpeakerSelection speakers; ///< loudspeakers of the band (state, not a parameter; CH-4)
 
     bool active() const noexcept { return used && on; }
@@ -36,7 +37,7 @@ struct BandValues
         constexpr std::equal_to<float> same;
         return used == o.used && on == o.on && shape == o.shape && same (frequency, o.frequency) && same (gain, o.gain) && same (q, o.q)
             && slope == o.slope && mode == o.mode && target == o.target && character == o.character && autoGain == o.autoGain
-            && speakers == o.speakers;
+            && sidechain == o.sidechain && speakers == o.speakers;
     }
 };
 
@@ -139,6 +140,12 @@ public:
     void copyBand (int band) const;
     bool canPaste() const;
     bool pasteToBand (int band);
+
+    /** The band's parameters and speakers as clipboard text. */
+    juce::String bandText (int band) const;
+    /** Applies a clipboard text to a band (one undo step); a text of 1.0 leaves its Sidechain on the
+        default. False when the text is not a band. */
+    bool pasteBandText (int band, const juce::String& text);
 
     juce::UndoManager& getUndoManager() noexcept { return undoManager; }
 

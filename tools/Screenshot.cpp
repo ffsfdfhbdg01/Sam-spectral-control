@@ -2,9 +2,10 @@
 // Usage: ssc_screenshot <output.png> [width height] [paramId=value ...] [select=<band 1-24>]
 //        [layout=stereo|5.1|7.1.4|9.1.6] [speakers=<band 1-24>:<roles hex>] [speakerpanel=<band 1-24>]
 //        [analyzer.mode|resolution|speed|tilt|range|peak|glow|freeze|hints|phase=<value>] [profile=<frames>]
-//        [advanced=0|1] [globaladvanced=0|1] [motion=0|1|2] [solo=<band 1-24>]
+//        [advanced=0|1] [globaladvanced=0|1] [motion=0|1|2] [solo=<band 1-24>] [sidechain=0|1|2]
 // advanced opens the band's Advanced flyout, globaladvanced the global Advanced panel; motion sets
-// the animations (0 Full, 1 Reduced, 2 Off); solo auditions that band (its audible range is drawn).
+// the animations (0 Full, 1 Reduced, 2 Off); solo auditions that band (its audible range is drawn);
+// sidechain enables the Sidechain input with that many channels (default off), fed a 1 kHz tone.
 // profile paints the editor that many times while audio plays and prints the paint times (VIS-6);
 // seconds=<s> sets how long the test programme plays before the snapshot (default 3).
 // speakerpanel renders that band's loudspeaker panel instead of the editor.
@@ -40,11 +41,19 @@ int main (int argc, char** argv)
     constexpr double sampleRate = 48000.0;
     constexpr int blockSize = 512;
 
-    // The layout must be known before prepareToPlay.
+    // The layouts must be known before prepareToPlay.
     juce::AudioChannelSet layout = juce::AudioChannelSet::stereo();
+    juce::AudioChannelSet sidechainLayout = juce::AudioChannelSet::disabled();
     for (int i = 2; i < argc; ++i)
     {
         const juce::String arg (argv[i]);
+        if (arg.startsWith ("sidechain="))
+        {
+            const int channels = arg.fromFirstOccurrenceOf ("=", false, false).getIntValue();
+            sidechainLayout = channels == 1 ? juce::AudioChannelSet::mono()
+                : channels == 2             ? juce::AudioChannelSet::stereo()
+                                            : juce::AudioChannelSet::disabled();
+        }
         if (! arg.startsWith ("layout="))
             continue;
         const auto name = arg.fromFirstOccurrenceOf ("=", false, false);
@@ -59,10 +68,12 @@ int main (int argc, char** argv)
     auto processor = std::make_unique<ssc::plugin::SscAudioProcessor>();
     juce::AudioProcessor::BusesLayout buses;
     buses.inputBuses.add (layout);
+    buses.inputBuses.add (sidechainLayout);
     buses.outputBuses.add (layout);
     processor->setBusesLayout (buses);
     const int numChannels = layout.size();
-    processor->setPlayConfigDetails (numChannels, numChannels, sampleRate, blockSize);
+    const int numSidechain = sidechainLayout.size();
+    processor->setRateAndBufferSizeDetails (sampleRate, blockSize);
     processor->prepareToPlay (sampleRate, blockSize);
 
     int argIndex = 2;
@@ -89,7 +100,7 @@ int main (int argc, char** argv)
             selectBand = juce::roundToInt (value) - 1;
         else if (paramId == "solo")
             soloBand = juce::roundToInt (value) - 1;
-        else if (paramId == "layout")
+        else if (paramId == "layout" || paramId == "sidechain")
             continue;
         else if (paramId == "profile")
             profileFrames = juce::roundToInt (value);
@@ -184,7 +195,7 @@ int main (int argc, char** argv)
     const auto noise = ssc::test::pinkNoise (1 << 18);
     std::atomic<bool> running { true };
     std::thread audio ([&] {
-        juce::AudioBuffer<float> buffer (numChannels, blockSize);
+        juce::AudioBuffer<float> buffer (numChannels + numSidechain, blockSize);
         juce::MidiBuffer midi;
         std::size_t position = 0;
         long long sample = 0;
@@ -199,6 +210,8 @@ int main (int argc, char** argv)
                 position = (position + 1) % noise.size();
                 for (int ch = 0; ch < numChannels; ++ch)
                     buffer.setSample (ch, i, v * (ch % 2 == 0 ? 1.0f : 0.9f));
+                for (int ch = numChannels; ch < numChannels + numSidechain; ++ch)
+                    buffer.setSample (ch, i, static_cast<float> (0.2 * std::sin (ssc::kTwoPi * 1000.0 * t)));
             }
             processor->processBlock (buffer, midi);
             std::this_thread::sleep_for (std::chrono::microseconds (static_cast<int> (1.0e6 * blockSize / sampleRate)));

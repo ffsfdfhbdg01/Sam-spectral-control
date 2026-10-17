@@ -121,9 +121,22 @@ public:
     void prepare (const EngineConfig& config);
     void reset() noexcept;
 
+    /**
+        Processes a block in place. sidechain (optional, 1 or 2 channels; a mono one feeds both
+        sides) is the detection signal of bands set to the external sidechain: on the engine's
+        channels the left of a pair takes its left channel, the right its right channel, a single
+        channel (centre, LFE, mono) the mid of both. Without it those bands detect silence.
+    */
+    template <typename Sample>
+    void process (Sample* const* channels, int numChannels, int numSamples, const GlobalParams& params, const BandSettingsArray& bands,
+                  const Sample* const* sidechain, int numSidechainChannels) noexcept SSC_REALTIME;
+
     template <typename Sample>
     void process (Sample* const* channels, int numChannels, int numSamples, const GlobalParams& params,
-                  const BandSettingsArray& bands) noexcept SSC_REALTIME;
+                  const BandSettingsArray& bands) noexcept SSC_REALTIME
+    {
+        process (channels, numChannels, numSamples, params, bands, static_cast<const Sample* const*> (nullptr), 0);
+    }
 
     /** Convenience overload without bands (all inactive). */
     template <typename Sample>
@@ -176,7 +189,11 @@ public:
 private:
     template <typename Sample>
     void processChunk (Sample* const* channels, int numChannels, int numSamples, const BandSettingsArray& chain,
-                       const BandSettingsArray& bands) noexcept;
+                       const BandSettingsArray& bands, const Sample* const* sidechain, int numSidechain) noexcept;
+    template <typename Sample>
+    void feedSidechain (const Sample* const* sidechain, int numSidechain, int numChannels, int numSamples) noexcept;
+    double sidechainFor (int channel, double left, double right) const noexcept;
+    void startSidechain() noexcept;
     void runBands (const BandSettingsArray& chain, int numChannels, int offset, int numSamples) noexcept;
     void updateCorrector (const BandSettingsArray& bands) noexcept;
     void setOversampling (int factor, oversampling::FilterType type, Quality quality) noexcept;
@@ -242,6 +259,20 @@ private:
     std::vector<std::vector<double>> bandCurvesDb; ///< [band][ERB band]
     std::vector<double> channelCurveDb;            ///< scratch [ERB band]
     bool spectralEnabled = false;
+
+    // External sidechain (DYN-4): the input at the base rate, and mapped onto the engine's channels
+    // in rings that mirror the input history (base and oversampled rate), so that Dynamic bands read
+    // it as they read their own signal; the spectral engine gets it aligned with its input.
+    bool sidechainWanted = false;                     ///< an active Dynamic or Spectral band detects from the sidechain
+    std::array<int, kMaxChannels> sidechainSource {}; ///< per channel: 0 left, 1 right, 2 mid of the sidechain
+    std::vector<std::vector<double>> sidechainInput;  ///< [2][chunk]
+    std::vector<std::vector<double>> sidechainHistory, sidechainOsHistory, sidechainHigh, sidechainSpectral;
+    std::vector<const double*> sidechainHistoryPointers, sidechainOsHistoryPointers;
+    std::vector<double*> sidechainSpectralPointers;
+    MultiChannelDelay<double> sidechainSpectralDelay; ///< lookahead + oversampling + corrector: the spectral stage
+    std::unique_ptr<std::array<oversampling::Oversampler, 24>> sidechainOversamplers =
+        std::make_unique<std::array<oversampling::Oversampler, 24>>();
+    oversampling::Oversampler* sidechainOversampler = nullptr;
 
     // Oversampling of the band chain (ADR-0008): one oversampler per filter type, factor and Quality.
     int maxFactor = 1;

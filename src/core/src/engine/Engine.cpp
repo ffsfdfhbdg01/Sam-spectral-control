@@ -86,6 +86,32 @@ void Engine::prepare (const EngineConfig& config)
         osHistoryPointers[ch] = osHistory[ch].data();
     osHistoryMask = osHistorySize - 1;
     osBypassDelay.prepare (cfg.numChannels, maxLookaheadSamples + maxOsLatency, chunkSize);
+
+    // External sidechain: its two channels, and its image on the engine's channels (see process()).
+    sidechainInput.assign (2, std::vector<double> (chunk, 0.0));
+    sidechainHistory.assign (channels, std::vector<double> (static_cast<std::size_t> (historySize), 0.0));
+    sidechainOsHistory.assign (channels, std::vector<double> (static_cast<std::size_t> (osHistorySize), 0.0));
+    sidechainHigh.assign (2, std::vector<double> (chunk * static_cast<std::size_t> (maxFactor), 0.0));
+    sidechainHistoryPointers.resize (channels);
+    sidechainOsHistoryPointers.resize (channels);
+    for (std::size_t ch = 0; ch < channels; ++ch)
+    {
+        sidechainHistoryPointers[ch] = sidechainHistory[ch].data();
+        sidechainOsHistoryPointers[ch] = sidechainOsHistory[ch].data();
+    }
+    allocate (sidechainSpectral, sidechainSpectralPointers, channels, chunk);
+    for (int ch = 0; ch < cfg.numChannels; ++ch)
+    {
+        const int pair = cfg.topology.pairIndex[static_cast<std::size_t> (ch)];
+        const auto& sides = pair >= 0 ? cfg.topology.pairs[static_cast<std::size_t> (pair)] : ChannelTopology::Pair {};
+        sidechainSource[static_cast<std::size_t> (ch)] = pair < 0 ? 2 : (sides.left == ch ? 0 : 1);
+    }
+    for (const auto type : { oversampling::FilterType::PolyphaseIir, oversampling::FilterType::LinearPhaseFir })
+        for (int factor = 2; factor <= maxFactor; factor *= 2)
+            for (const auto quality : { Quality::Eco, Quality::Normal, Quality::High, Quality::Max })
+                (*sidechainOversamplers)[oversamplerIndex (type, factor, quality)].prepare (2, chunkSize, factor, type, quality);
+    sidechainOversampler = nullptr;
+    sidechainWanted = false;
     renderPadDelay.prepare (cfg.numChannels, maxOsLatency, chunkSize);
     renderPadActive = false;
     osRampLength = std::max (1, static_cast<int> (std::lround (0.005 * cfg.sampleRate)));
@@ -107,6 +133,7 @@ void Engine::prepare (const EngineConfig& config)
 
     latencySamples.store (0, std::memory_order_relaxed);
     dryDelay.prepare (cfg.numChannels, maxLookaheadSamples + maxOsLatency + maxCorrection + maxSpectralLatency, chunkSize);
+    sidechainSpectralDelay.prepare (cfg.numChannels, maxLookaheadSamples + maxOsLatency + maxCorrection, chunkSize);
     dryDelay.setDelay (0);
 
     outputGain.prepare (cfg.sampleRate, kRampSeconds);
@@ -134,6 +161,12 @@ void Engine::reset() noexcept
     soloProcessor->reset();
     spectralEngine->reset();
     autoGain->reset();
+    for (auto* rings : { &sidechainHistory, &sidechainOsHistory })
+        for (auto& ring : *rings)
+            std::fill (ring.begin(), ring.end(), 0.0);
+    sidechainSpectralDelay.reset();
+    if (sidechainOversampler != nullptr)
+        sidechainOversampler->reset();
     osBypassDelay.reset();
     renderPadDelay.reset();
     samplePosition = 0;
@@ -164,6 +197,11 @@ void Engine::setOversampling (int factor, oversampling::FilterType type, Quality
     osType = type;
     osQuality = quality;
     oversampler = factor > 1 ? &(*oversamplers)[oversamplerIndex (type, factor, quality)] : nullptr;
+    sidechainOversampler = factor > 1 ? &(*sidechainOversamplers)[oversamplerIndex (type, factor, quality)] : nullptr;
+    if (sidechainOversampler != nullptr)
+        sidechainOversampler->reset();
+    for (auto& ring : sidechainOsHistory)
+        std::fill (ring.begin(), ring.end(), 0.0);
 
     // Bands run at the oversampled rate (only a change of rate resets them).
     for (auto& band : *bandProcessors)
@@ -397,6 +435,9 @@ void Engine::configure (const GlobalParams& params, const BandSettingsArray& ban
     const int lookahead =
         std::clamp (static_cast<int> (std::lround (0.001 * params.maxLookaheadMs * cfg.sampleRate)), 0, maxLookaheadSamples);
     const bool wantSpectral = std::any_of (bands.begin(), bands.end(), [] (const BandSettings& b) { return b.isSpectral(); });
+    const bool wantSidechain = std::any_of (bands.begin(), bands.end(), [] (const BandSettings& b) {
+        return b.active && b.dynamics.sidechain && (b.mode == BandMode::Dynamic || b.isSpectral());
+    });
 
     bool spectralChanged = wantSpectral != spectralEnabled;
     if (wantSpectral)
@@ -472,8 +513,31 @@ void Engine::configure (const GlobalParams& params, const BandSettingsArray& ban
 
     lookaheadSamples = lookahead;
     osBypassDelay.setDelay (lookahead + osLatency);
+    sidechainSpectralDelay.setDelay (lookahead + osLatency + correctionLatency);
     dryDelay.setDelay (latency);
     latencySamples.store (latency, std::memory_order_relaxed);
+
+    if (wantSidechain && ! sidechainWanted)
+        startSidechain();
+    sidechainWanted = wantSidechain;
+}
+
+void Engine::startSidechain() noexcept
+{
+    // A band switched to External starts from silence: what its detection reads from before this
+    // point was written the last time a band listened to the sidechain.
+    for (int ch = 0; ch < cfg.numChannels; ++ch)
+    {
+        auto& ring = sidechainHistory[static_cast<std::size_t> (ch)];
+        for (int i = 1; i <= lookaheadSamples; ++i)
+            ring[static_cast<std::size_t> ((historyWrite - i) & historyMask)] = 0.0;
+        auto& osRing = sidechainOsHistory[static_cast<std::size_t> (ch)];
+        for (int i = 1; i <= lookaheadSamples * osFactor; ++i)
+            osRing[static_cast<std::size_t> ((osHistoryWrite - i) & osHistoryMask)] = 0.0;
+    }
+    if (sidechainOversampler != nullptr)
+        sidechainOversampler->reset();
+    sidechainSpectralDelay.clearPast();
 }
 
 int Engine::oversamplingLatency (oversampling::FilterType type, int factor, Quality quality) const noexcept
@@ -482,8 +546,8 @@ int Engine::oversamplingLatency (oversampling::FilterType type, int factor, Qual
 }
 
 template <typename Sample>
-void Engine::process (Sample* const* channels, int numChannels, int numSamples, const GlobalParams& params,
-                      const BandSettingsArray& bands) noexcept SSC_REALTIME
+void Engine::process (Sample* const* channels, int numChannels, int numSamples, const GlobalParams& params, const BandSettingsArray& bands,
+                      const Sample* const* sidechain, int numSidechainChannels) noexcept SSC_REALTIME
 {
     if (! prepared)
         return;
@@ -518,11 +582,15 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
     delta.setTarget (params.delta ? 1.0 : 0.0);
 
     Sample* chunkPointers[kMaxChannels];
+    const Sample* sidechainPointers[2] = { nullptr, nullptr };
+    const int numSidechain = sidechain != nullptr ? std::clamp (numSidechainChannels, 0, 2) : 0;
     for (int offset = 0; offset < numSamples; offset += chunkSize)
     {
         const int n = std::min (chunkSize, numSamples - offset);
         for (int ch = 0; ch < numChannels; ++ch)
             chunkPointers[ch] = channels[ch] + offset;
+        for (int k = 0; k < numSidechain; ++k)
+            sidechainPointers[k] = sidechain[k] + offset;
         if (metering && ! recording)
         {
             // The capture window: the last BandCapture::lengthFor() samples at the processing rate
@@ -531,7 +599,7 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
             if (meterCounter + n > meterPeriod - window)
                 attachRecorders (true);
         }
-        processChunk (chunkPointers, numChannels, n, chain, heard);
+        processChunk (chunkPointers, numChannels, n, chain, heard, sidechainPointers, numSidechain);
         if (metering)
             meterChunk (chunkPointers, numChannels, n);
     }
@@ -556,8 +624,10 @@ void Engine::runBands (const BandSettingsArray& chain, int numChannels, int offs
             segment[ch] = w.data() + offset;
         }
         const DetectionInput detection { historyPointers.data(), historyMask, historyWrite + offset, lookaheadSamples };
+        const DetectionInput external { sidechainHistoryPointers.data(), historyMask, historyWrite + offset, lookaheadSamples };
         for (std::size_t b = 0; b < bandProcessors->size(); ++b)
-            (*bandProcessors)[b].process (chain[b], cfg.topology, segment, numChannels, numSamples, controlBlock, detection);
+            (*bandProcessors)[b].process (chain[b], cfg.topology, segment, numChannels, numSamples, controlBlock,
+                                          chain[b].dynamics.sidechain ? external : detection);
         return;
     }
 
@@ -578,11 +648,27 @@ void Engine::runBands (const BandSettingsArray& chain, int numChannels, int offs
             w[static_cast<std::size_t> (j)] = ring[static_cast<std::size_t> ((osHistoryWrite + j - highLookahead) & osHistoryMask)];
     }
 
+    // The sidechain through the same upsampling filter, so that its timing matches the input's.
+    if (sidechainWanted && sidechainOversampler != nullptr)
+    {
+        for (int k = 0; k < 2; ++k)
+            sidechainOversampler->upsample (k, sidechainInput[static_cast<std::size_t> (k)].data() + offset,
+                                            sidechainHigh[static_cast<std::size_t> (k)].data(), numSamples);
+        for (int ch = 0; ch < numChannels; ++ch)
+        {
+            auto& ring = sidechainOsHistory[static_cast<std::size_t> (ch)];
+            for (int j = 0; j < highSamples; ++j)
+                ring[static_cast<std::size_t> ((osHistoryWrite + j) & osHistoryMask)] =
+                    sidechainFor (ch, sidechainHigh[0][static_cast<std::size_t> (j)], sidechainHigh[1][static_cast<std::size_t> (j)]);
+        }
+    }
+
     const DetectionInput detection { osHistoryPointers.data(), osHistoryMask, osHistoryWrite, highLookahead };
+    const DetectionInput external { sidechainOsHistoryPointers.data(), osHistoryMask, osHistoryWrite, highLookahead };
     const int highControlBlock = std::min (BandProcessor::kMaxControlBlock, controlBlock * factor);
     for (std::size_t b = 0; b < bandProcessors->size(); ++b)
         (*bandProcessors)[b].process (chain[b], cfg.topology, wetHighPointers.data(), numChannels, highSamples, highControlBlock,
-                                      detection);
+                                      chain[b].dynamics.sidechain ? external : detection);
     osHistoryWrite = (osHistoryWrite + highSamples) & osHistoryMask;
 
     // Channels that no band processes take the exactly delayed input instead (CH-6), with a short
@@ -611,7 +697,7 @@ void Engine::runBands (const BandSettingsArray& chain, int numChannels, int offs
 
 template <typename Sample>
 void Engine::processChunk (Sample* const* channels, int numChannels, int numSamples, const BandSettingsArray& chain,
-                           const BandSettingsArray& bands) noexcept
+                           const BandSettingsArray& bands, const Sample* const* sidechain, int numSidechain) noexcept
 {
     const auto n = static_cast<std::size_t> (numSamples);
 
@@ -635,6 +721,8 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
     }
     if (inputSanitised)
         nonFiniteEvents.fetch_add (1, std::memory_order_relaxed);
+    if (sidechainWanted)
+        feedSidechain (sidechain, numSidechain, numChannels, numSamples);
 
     // Solo works on what is heard, after the output stage below.
     const bool soloActive = soloAmount.isSmoothing() || soloAmount.getCurrent() > 0.0;
@@ -681,7 +769,19 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
     historyWrite = (historyWrite + numSamples) & historyMask;
 
     if (spectralEnabled)
-        spectralEngine->process (wetPointers.data(), numChannels, numSamples, chain, cfg.topology);
+    {
+        // The sidechain as Spectral bands detect it: aligned with the processed signal at this stage.
+        const double* const* spectralSidechain = nullptr;
+        if (sidechainWanted)
+        {
+            for (int ch = 0; ch < numChannels; ++ch)
+                for (std::size_t i = 0; i < n; ++i)
+                    sidechainSpectral[static_cast<std::size_t> (ch)][i] = sidechainFor (ch, sidechainInput[0][i], sidechainInput[1][i]);
+            sidechainSpectralDelay.processInPlace (sidechainSpectralPointers.data(), numChannels, numSamples);
+            spectralSidechain = sidechainSpectralPointers.data();
+        }
+        spectralEngine->process (wetPointers.data(), numChannels, numSamples, chain, cfg.topology, spectralSidechain);
+    }
 
     if (renderPadActive)
         renderPadDelay.processInPlace (wetPointers.data(), numChannels, numSamples);
@@ -804,6 +904,42 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
     }
 }
 
+double Engine::sidechainFor (int channel, double left, double right) const noexcept
+{
+    switch (sidechainSource[static_cast<std::size_t> (channel)])
+    {
+        case 0: return left;
+        case 1: return right;
+        default: return 0.5 * (left + right);
+    }
+}
+
+template <typename Sample>
+void Engine::feedSidechain (const Sample* const* sidechain, int numSidechain, int numChannels, int numSamples) noexcept
+{
+    const auto n = static_cast<std::size_t> (numSamples);
+
+    // Its two channels (a mono sidechain feeds both; none is silence), then its image on the
+    // engine's channels at the same ring positions as the input history.
+    for (int k = 0; k < 2; ++k)
+    {
+        auto& x = sidechainInput[static_cast<std::size_t> (k)];
+        const int source = std::min (k, numSidechain - 1);
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            const double v = source >= 0 ? static_cast<double> (sidechain[source][i]) : 0.0;
+            x[i] = std::isfinite (v) ? v : 0.0;
+        }
+    }
+    for (int ch = 0; ch < numChannels; ++ch)
+    {
+        auto& ring = sidechainHistory[static_cast<std::size_t> (ch)];
+        for (std::size_t i = 0; i < n; ++i)
+            ring[static_cast<std::size_t> ((historyWrite + static_cast<int> (i)) & historyMask)] =
+                sidechainFor (ch, sidechainInput[0][i], sidechainInput[1][i]);
+    }
+}
+
 void Engine::auditionSolo (int numChannels, int numSamples) noexcept
 {
     const auto n = static_cast<std::size_t> (numSamples);
@@ -851,6 +987,8 @@ void Engine::auditionSolo (int numChannels, int numSamples) noexcept
     }
 }
 
-template void Engine::process<float> (float* const*, int, int, const GlobalParams&, const BandSettingsArray&) noexcept SSC_REALTIME;
-template void Engine::process<double> (double* const*, int, int, const GlobalParams&, const BandSettingsArray&) noexcept SSC_REALTIME;
+template void Engine::process<float> (float* const*, int, int, const GlobalParams&, const BandSettingsArray&, const float* const*,
+                                      int) noexcept SSC_REALTIME;
+template void Engine::process<double> (double* const*, int, int, const GlobalParams&, const BandSettingsArray&, const double* const*,
+                                       int) noexcept SSC_REALTIME;
 } // namespace ssc::engine

@@ -10,6 +10,7 @@ add_executable(ssc_core_tests
     core/TestFilterDesign.cpp
     core/TestBandProcessor.cpp
     core/TestSolo.cpp
+    core/TestSidechain.cpp
     core/TestDynamics.cpp
     core/TestDynamicBands.cpp
     core/TestSpectral.cpp

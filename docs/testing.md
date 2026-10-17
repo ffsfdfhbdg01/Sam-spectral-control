@@ -31,6 +31,8 @@ Testy ręczne, których nie da się wykonać w CI (Atmos, AAX, interakcja w DAW)
    - Preset/projekt zapisany w stereo z pasmem „All + Side” otwarty na szynie 7.1.4 działa na Side każdej pary (L/R, Lss/Rss, Lrs/Rrs, Ltf/Rtf, Ltr/Rtr), C i LFE pozostają nietknięte.
    - CH-2 (Atmos): ścieżka/szyna bed 7.1.2 i 7.1.4 w Nuendo/Cubase, 7.1.4 w Resolve Fairlight, 9.1.6 w Nuendo — wtyczka się ładuje, przetwarza, a latencja jest kompensowana.
 8. Skalowanie okna, HiDPI, kilka instancji jednocześnie, zamykanie i otwieranie edytora podczas odtwarzania.
+9. Sidechain (DYN-4): wejście Sidechain wtyczki widoczne w hoście i domyślnie nieaktywne; po skierowaniu na nie śladu mono i stereo pasmo Dynamic i Spectral z **Sidechain: External** reaguje na ten ślad, a nie na własny sygnał; bez sygnału panel pasma pokazuje **SIDECHAIN: NO INPUT**; latencja kompensowana jak bez sidechaina; projekt z 1.0.0 otwiera się z Sidechain Internal.
+10. Solo pasma: odsłuch tak głośny, jak pasmo w miksie (podbicie głośniej, cięcie ciszej, praca Dynamic/Spectral słyszalna), pasmo Mid/Side/Left/Right gra tylko swoją składową, wykres pokazuje słyszalny zakres.
 
 ## Testy obciążeniowe — automatyczne (TST-4)
 
@@ -44,10 +46,11 @@ Testy ręczne, których nie da się wykonać w CI (Atmos, AAX, interakcja w DAW)
 | Szybka automatyzacja | wszystkie automatyzowalne parametry 8 pasm i globalne zmieniane losowo w każdym bloku (1–256 próbek, 1500 bloków); co 25 bloków parametry nieautomatyzowalne (tryb pasma, faza, Quality, OS, Max Lookahead), Solo; stereo i 5.1 | po zatrzymaniu automatyzacji i ciszy na wejściu sygnał zanika — filtry pozostały stabilne przy szybkiej modulacji |
 | Zmiana układu w trakcie sesji | stereo → 7.1.4 → mono → 5.1 → 9.1.6 → 32 kanały → LCR → stereo, przy 44,1–384 kHz i blokach 32–8192, z `releaseResources` i bez; analizator, mierniki i odczyty pracują w tle jak przy otwartym edytorze | wybór głośników pasma (Centre) zachowany; LFE dokładnym opóźnieniem; latencja stała |
 | Błędy hosta | `processBlock` przed `prepareToPlay`, puste bloki float i double | bez awarii; przed przygotowaniem bufor zostaje nietknięty |
+| Sidechain (`tests/plugin/TestSidechainBus.cpp`) | 32 kanały dyskretne + sidechain stereo, pasma External Dynamic i Spectral, oversampling 2×; stereo z sidechainem mono, stereo i wyłączonym, float i double | zero alokacji, wyjście skończone; pasmo kluczowane sidechainem (−12 dB), nie własnym sygnałem |
 
 ### Real-time safety — RealtimeSanitizer (PLT-5)
 
-Preset `rtsan` (Clang 20, `-fsanitize=realtime`): `SscAudioProcessor::processImpl` i `Engine::process` są oznaczone `SSC_REALTIME` (`[[clang::nonblocking]]`), więc każda alokacja, blokada lub wywołanie blokujące w ich trakcie przerywa test z raportem. Pod RTSan przechodzą wszystkie testy rdzenia i wtyczki (181, w tym TST-4); w CI robi to zadanie „Real-time safety”. Lokalnie:
+Preset `rtsan` (Clang 20, `-fsanitize=realtime`): `SscAudioProcessor::processImpl` i `Engine::process` są oznaczone `SSC_REALTIME` (`[[clang::nonblocking]]`), więc każda alokacja, blokada lub wywołanie blokujące w ich trakcie przerywa test z raportem. Pod RTSan przechodzą wszystkie testy rdzenia i wtyczki (196, w tym TST-4 i testy sidechaina); w CI robi to zadanie „Real-time safety”. Lokalnie:
 
 ```bash
 CC=clang-20 CXX=clang++-20 cmake --preset rtsan
@@ -57,7 +60,7 @@ ctest --preset rtsan
 
 ### Pamięć — ASan/UBSan
 
-Preset `sanitize` (także w `tools/ci/local-check.sh`) obejmuje testy rdzenia DSP (127). Testy wtyczki, łącznie z interfejsem (`[ui]`, `[UX]`), sprawdza się pod ASan/UBSan na żądanie, w buildzie Debug z instrumentacją także kodu JUCE (na 4 rdzeniach budowa ok. 5 min, testy ok. 4 min):
+Preset `sanitize` (także w `tools/ci/local-check.sh`) obejmuje testy rdzenia DSP (137). Testy wtyczki, łącznie z interfejsem (`[ui]`, `[UX]`), sprawdza się pod ASan/UBSan na żądanie, w buildzie Debug z instrumentacją także kodu JUCE (na 4 rdzeniach budowa ok. 5 min, testy ok. 4 min):
 
 ```bash
 SAN="-fsanitize=address,undefined -fno-omit-frame-pointer"

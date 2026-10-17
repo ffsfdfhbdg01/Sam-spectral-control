@@ -32,6 +32,7 @@ bool supports (SscAudioProcessor& p, const juce::AudioChannelSet& in, const juce
 {
     juce::AudioProcessor::BusesLayout layout;
     layout.inputBuses.add (in);
+    layout.inputBuses.add (juce::AudioChannelSet::disabled()); // sidechain
     layout.outputBuses.add (out);
     return p.checkBusesLayoutSupported (layout);
 }
@@ -84,6 +85,7 @@ TEST_CASE ("Parameter layout has stable IDs and the expected size", "[plugin][PL
     REQUIRE (p.getParameters().size() == 13 + ssc::kNumBands * ssc::plugin::kNumBandParams);
     REQUIRE (ssc::plugin::bandParamId (0, ssc::plugin::BandParam::Frequency) == "b01_freq");
     REQUIRE (ssc::plugin::bandParamId (23, ssc::plugin::BandParam::Link) == "b24_link");
+    REQUIRE (ssc::plugin::bandParamId (23, ssc::plugin::BandParam::Sidechain) == "b24_sidechain");
     REQUIRE (state.getParameter ("b12_threshold") != nullptr);
 
     // Latency-affecting parameters must not be automatable (ADR-0011).

@@ -30,6 +30,7 @@ struct DynamicSettings
     double mix = 1.0;         ///< 0 … 1, scales the gain change (DYN-7)
     double selectivity = 0.5; ///< 0 … 1 (Spectral)
     DetectorLink link = DetectorLink::Group;
+    bool sidechain = false;        ///< detection from the external sidechain input instead of the band's own signal
     bool autoGain = false;         ///< automatic make-up of the band (AG-2)
     double autoGainSeconds = 30.0; ///< averaging time of the make-up (global Auto Gain speed)
 };
@@ -53,7 +54,8 @@ struct BandSettings
 using BandSettingsArray = std::array<BandSettings, kNumBands>;
 
 /**
-    The undelayed engine input, used by Dynamic bands as their detection signal (sidechain).
+    The undelayed engine input, or the external sidechain mapped onto the engine's channels, used by
+    Dynamic bands as their detection signal.
     rings[ch] is a circular buffer (size mask + 1, a power of two); blockStart is the ring index of
     the newest input sample that corresponds to sample 0 of the processed block, whose main path
     is delayed by mainDelay samples (Max Lookahead, DYN-8).

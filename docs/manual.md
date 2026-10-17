@@ -152,7 +152,7 @@ Niektóre hosty przechwytują skróty klawiszowe; wtedy użyj przycisków Undo/R
 
 ### Menu pasma (prawy przycisk)
 
-*Shape*, *Slope* (dla cięć, półek i Band Pass) albo *Q* (gotowe wartości 0,5–16), *Mode*, *Target*, *Character*, *Auto Gain*, *Bypass*, *Solo*, *Copy*, *Paste*, *Reset* (wartości domyślne pasma), *Delete*. Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem.
+*Shape*, *Slope* (dla cięć, półek i Band Pass) albo *Q* (gotowe wartości 0,5–16), *Mode*, *Target*, *Character*, *Auto Gain*, *External Sidechain* (detekcja z wejścia sidechain, [rozdz. 6](#sidechain)), *Bypass*, *Solo*, *Copy*, *Paste*, *Reset* (wartości domyślne pasma), *Delete*. Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem; *Auto Gain* i *External Sidechain* — tylko w tych trybach.
 
 ### Panel pasma
 
@@ -163,9 +163,9 @@ Kliknięcie węzła pokazuje panel pasma pod węzłem (gdy zasłaniałby węzeł
 | Nagłówek | kolor i numer pasma; tryb **Static \| Dynamic \| Spectral**; **Advanced ›**; ⏻ — włączenie / wyłączenie pasma (czerwona lampka: wyłączone); 🎧 — Solo (kliknięcie: zostaje włączone, przytrzymanie: tylko na czas trzymania); ⋯ — *Copy*, *Paste*, *Reset*, *Delete* | jak Static | jak Static |
 | Rząd EQ | **Shape**, **Slope** (cięcia, półki, Band Pass), **Freq**, **Gain**, **Q**, **Target**, **Character** (w surround także **Speakers**) | jak Static | jak Static |
 | Rząd dynamiki | — | **Threshold**, **Ratio**, **Range**, **Attack**, **Release** i przycisk **Auto Gain** | **Threshold**, **Selectivity**, **Range**, **Attack**, **Release** i przycisk **Auto Gain** |
-| Panel **Advanced** pasma | odczyty | **Threshold Mode**, **Direction**, **Knee**, **Lookahead**, **Mix**, **Link**, odczyty | **Threshold Mode**, **Direction**, **Knee**, **Ratio**, **Mix**, **Link**, odczyty |
+| Panel **Advanced** pasma | odczyty | **Threshold Mode**, **Direction**, **Knee**, **Lookahead**, **Mix**, **Link**, **Sidechain**, odczyty | **Threshold Mode**, **Direction**, **Knee**, **Ratio**, **Mix**, **Link**, **Sidechain**, odczyty |
 
-Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem. **Advanced ›** wysuwa panel z boku panelu pasma — zwykle z prawej, z lewej, gdy z prawej zasłaniałby węzeł — i zostaje otwarty także dla kolejnych pasm, aż się go zamknie (**‹**). Kropka na **Advanced** oznacza ustawienie detektora inne niż domyślne dla trybu pasma (np. Threshold Mode Absolute w paśmie Spectral) albo ostrzeżenie o słyszalnym ringingu ([rozdz. 12](#odczyty-pasma)).
+Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem. Gdy pasmo słucha wejścia sidechain, nagłówek rzędu dynamiki ma dopisek **· SIDECHAIN** ([rozdz. 6](#sidechain)). **Advanced ›** wysuwa panel z boku panelu pasma — zwykle z prawej, z lewej, gdy z prawej zasłaniałby węzeł — i zostaje otwarty także dla kolejnych pasm, aż się go zamknie (**‹**). Kropka na **Advanced** oznacza ustawienie detektora inne niż domyślne dla trybu pasma (np. Threshold Mode Absolute w paśmie Spectral) albo ostrzeżenie o słyszalnym ringingu ([rozdz. 12](#odczyty-pasma)).
 
 Pokrętła reagują na przeciąganie (z *Shift* — precyzyjnie); **dwuklik** przywraca wartość domyślną; wartość pod pokrętłem można kliknąć i wpisać. Częstotliwość przyjmuje zapisy `1500`, `1.5k`, `1.5 kHz`; czasy — `12`, `12 ms`, `1.2 s`.
 
@@ -217,6 +217,7 @@ W panelu pasma rząd dynamiki zawiera to, czym ustawia się dany tryb (Dynamic: 
 | **Mix** | 0–100 % (100 %) | ile działania dynamicznego trafia do wzmocnienia pasma (bez interferencji z sygnałem suchym, bo skaluje wzmocnienie, a nie miesza sygnały) |
 | **Selectivity** | 0–100 % (50 %) | tylko Spectral: jak wąsko w częstotliwości działa maska — wyżej = bardziej „chirurgicznie” |
 | **Link** | Independent / Pair / Group / All (Group) | czy kanały (lub składowe M/S) dzielą detekcję: wspólny poziom = maksimum poziomów w zbiorze |
+| **Sidechain** | Internal / External (Internal) | skąd detekcja bierze poziom: Internal — z sygnału pasma, External — z wejścia sidechain wtyczki ([niżej](#sidechain)) |
 
 Po przełączeniu pasma w tryb Spectral z nieruszonym progiem Dynamic (Absolute −20 dB) wtyczka ustawia Relative +6 dB — i odwrotnie.
 
@@ -228,6 +229,19 @@ Po przełączeniu pasma w tryb Spectral z nieruszonym progiem Dynamic (Absolute 
 ### Lookahead i Max Lookahead
 
 Tor główny jest opóźniony o globalny parametr **Max Lookahead** (0–20 ms, w globalnym panelu **Advanced** i w parametrach hosta), a pasmo Dynamic z Lookahead *L* czyta detekcję z wyprzedzeniem *L*. Ustawienie Lookahead pasma większego niż Max Lookahead automatycznie podnosi Max Lookahead — latencja wtyczki rośnie o tę wartość i host ją kompensuje. Max Lookahead się nie obniża sam: zmniejsz go ręcznie, gdy już nie jest potrzebny.
+
+### Sidechain
+
+![Pasmo Dynamic na Sidechain External: dopisek SIDECHAIN w panelu pasma, wybór Sidechain w jego panelu Advanced, obniżenie pasma sterowane sidechainem](images/sidechain.png)
+
+Pasmo Dynamic lub Spectral z **Sidechain: External** (panel **Advanced** pasma albo *External Sidechain* w menu węzła) mierzy poziom w sygnale wejścia **Sidechain** wtyczki, a przetwarza dalej własny sygnał. Przykłady: miejsce dla wokalu w podkładzie (Bell 1–4 kHz na podkładzie, sidechain z wokalu), dla stopy w basie (Bell lub Low Shelf na basie, sidechain ze stopy), de-esser sterowany innym śladem.
+
+- **Wejście Sidechain** to dodatkowa magistrala wejściowa wtyczki — mono albo stereo, domyślnie wyłączona. Włącza się ją i kieruje na nią sygnał w hoście: np. w Cubase przyciskiem sidechain w nagłówku okna wtyczki, w Studio One, Reaperze, Ableton Live czy Bitwigu wyborem źródła sidechain dla wtyczki (nazwy w hostach się różnią: *Sidechain*, *Side-Chain*, *Aux input*).
+- Detekcja bierze z sidechaina to samo, co zwykle ze swojego sygnału: obszar wokół częstotliwości pasma (z jego Q i Selectivity) na **celu** pasma. **Left** słucha lewego kanału sidechaina, **Right** — prawego, **Mid** — (L + R)/2, **Side** — (L − R)/2, **All** — lewy kanał lewego, prawy prawego. Sidechain mono steruje wszystkimi kanałami. W surround lewe kanały par (L, Ls, Ltf…) słuchają lewego kanału sidechaina, prawe — prawego, a kanały bez pary (C, LFE) — jego środka (L + R)/2.
+- Pozostałe parametry dynamiki (Threshold, Ratio, Range, Attack, Release, Knee, Direction, Lookahead, Link) działają jak zwykle. Próg **Relative** w paśmie Spectral liczy się względem otoczenia w widmie sidechaina.
+- Sidechain jest wyrównany w czasie z torem głównym (także przy Lookahead, oversamplingu i Natural Phase) i nie dodaje latencji.
+- Sidechaina nie słychać na wyjściu. **Solo** i **Delta** pokazują, co pasmo robi z własnym sygnałem.
+- Gdy pasmo ma External, a host nie podaje nic na wejście Sidechain, detekcja „słyszy” ciszę: przy Direction Above pasmo nic nie robi, przy Below działa w pełnym Range. Nagłówek rzędu dynamiki pokazuje wtedy bursztynowe **SIDECHAIN: NO INPUT**, a wybór **Sidechain** w panelu Advanced — bursztynowy podpis i kropkę.
 
 ### Spectral
 
@@ -331,7 +345,7 @@ Auto Gain mierzy tylko kanały objęte co najmniej jednym pasmem, ogranicza kore
 | **Output** | −24…+24 dB, na końcu toru |
 | **Mix** | 0–100 %, proporcja sygnału przetworzonego i suchego (wyrównanego w czasie); patrz uwaga niżej |
 | **Delta** | odsłuch tylko tego, co wtyczka zmienia: wejście minus wyjście (bez korekcji Auto Gain). Pomaga usłyszeć, co dokładnie wycina pasmo Dynamic lub Spectral. Nie jest zapisywany w presetach ani w A/B |
-| **Solo** pasma | odsłuch obszaru, na którym pracuje pasmo (filtr pasmowy w jego miejscu); przycisk 🎧 w panelu (kliknięcie: zostaje włączone, przytrzymanie: tylko na czas trzymania), pozycja w menu albo *Alt/Option* + przytrzymanie węzła. Solo wyłącza się po zamknięciu okna wtyczki |
+| **Solo** pasma | odsłuch obszaru, na którym pracuje pasmo — tak głośno, jak naprawdę brzmi w miksie: z wzmocnieniem pasma i działaniem Dynamic lub Spectral (podbicie słychać głośniej, cięcie ciszej), tylko na **celu** pasma (Mid — sama składowa środkowa, Side — sama boczna, Left / Right — tylko ten kanał każdej pary, w surround tylko głośniki pasma). Auto Gain nie zmienia poziomu Solo. Wykres przyciemnia to, czego nie słychać ([rozdz. 12](#solo-słyszalny-zakres)). Przycisk 🎧 w panelu (kliknięcie: zostaje włączone, przytrzymanie: tylko na czas trzymania), pozycja w menu albo *Alt/Option* + przytrzymanie węzła. Solo wyłącza się po zamknięciu okna wtyczki |
 | **Max Lookahead** | 0–20 ms, w globalnym panelu **Advanced** (i w parametrach hosta); patrz [rozdz. 6](#lookahead-i-max-lookahead) |
 
 **Uwaga o Mix**: globalny Mix miesza sygnały, a filtry (we wszystkich trybach fazy) przesuwają fazę w obszarze pasm. Dlatego Mix poniżej 100 % nie daje „tej samej krzywej z mniejszym wzmocnieniem”: przy zboczach cięć, stromych półkach i All Pass mogą powstać dodatkowe wcięcia. Do łagodzenia działania pasm Dynamic i Spectral lepiej używać **Mix pasma** (miesza wzmocnienie, nie sygnały), a pasm Static — zmniejszyć ich Gain.
@@ -355,6 +369,12 @@ Przycisk **Analyzer** w nagłówku włącza i wyłącza widmo; strzałka **▾**
 | EQ phase overlay | **Off**, Phase, Group delay — faza lub opóźnienie grupowe całego EQ na wykresie |
 
 Progi ostrzeżeń mierników ustawia się kliknięciem w mierniki ([rozdz. 13](#13-mierniki-thdn-i-aliasingu)).
+
+### Solo: słyszalny zakres
+
+![Solo pasma Bell +6 dB na Mid: przyciemnione częstotliwości poza obszarem pasma, granice −3 dB i etykieta z zakresem](images/solo.png)
+
+Podczas **Solo** pasma wykres pokazuje, co słychać: częstotliwości poza obszarem pasma są przyciemnione (tym mocniej, im mocniej tłumi je filtr odsłuchu), słyszalny obszar ma kolor pasma, a pionowe linie wyznaczają jego granice (−3 dB). Etykieta u góry wykresu podaje pasmo, cel i zakres, np. *Solo · Band 3 · Mid · 1,20 kHz – 4,80 kHz*. Obszar odsłuchu to: dla Bell, Notch, Band Pass i All Pass — filtr pasmowy wokół częstotliwości pasma z jego Q (w granicach 0,5–20); dla półek i cięć — filtr 12 dB/okt. przepuszczający stronę, na którą działają (Low Shelf i Low Cut — dół, High Shelf i High Cut — górę); dla Tilt Shelf i Flat Tilt — szerokie pasmo wokół punktu obrotu.
 
 ### Podpowiedzi rezonansów
 
@@ -457,7 +477,7 @@ Najwięcej kosztują: liczba kanałów, oversampling, pasma Dynamic i Spectral o
 ## 18. Znane ograniczenia
 
 - Formaty: VST3; Audio Unit tylko w kompilacjach, które go zawierają (macOS); AAX i CLAP poza zakresem wersji 1.0.
-- Brak wejścia sidechain (detekcja pasm dynamicznych zawsze z sygnału na wejściu wtyczki).
+- Jedno wejście sidechain (mono lub stereo), wspólne dla wszystkich pasm; analizator nie pokazuje widma sidechaina.
 - Pasma Spectral mają dużą latencję (ramka STFT); tryb niskiej latencji dla Spectral jest planowany.
 - Podpowiedzi rezonansów są rzadkie poniżej ok. 400 Hz.
 - Modele Analog Feel to interpretacje charakteru klas urządzeń, nie emulacje konkretnych produktów.
@@ -473,6 +493,7 @@ Najwięcej kosztują: liczba kanałów, oversampling, pasma Dynamic i Spectral o
 | Wtyczki nie ma w hoście | ponowne skanowanie wtyczek; czy host skanuje folder VST3 z [rozdz. 1](#1-instalacja); czy host jest 64-bitowy |
 | macOS blokuje instalator | używaj pakietu podpisanego i notaryzowanego; kompilacje testowe bez podpisu są blokowane przez Gatekeeper |
 | Cisza lub dziwny dźwięk | czy nie jest włączona **Delta** albo **Solo** pasma; czy **Mix** nie jest na 0 %; czy pasma mają właściwy **Target** / głośniki |
+| Pasmo z Sidechain External nie działa | czy host kieruje sygnał na wejście Sidechain wtyczki (bursztynowe **SIDECHAIN: NO INPUT** w panelu pasma oznacza, że wejście jest wyłączone); czy sidechain ma energię w obszarze pasma i przekracza próg |
 | Nieoczekiwane wcięcia przy Mix < 100 % | interferencje suchego i przetworzonego sygnału — użyj Mix pasma albo zmniejsz Gain pasm ([rozdz. 11](#11-ustawienia-globalne-i-odsłuch)) |
 | Rozjazd w czasie z innymi ścieżkami | czy host ma włączoną kompensację latencji (PDC); latencja zmienia się przy zmianie trybu fazy, Quality, oversamplingu, pierwszego/ostatniego pasma Spectral i Max Lookahead |
 | Wysokie obciążenie CPU | obniż Oversampling (albo ustaw go tylko dla renderu w **Offline**), Quality, liczbę pasm Spectral/Dynamic; w Analog Feel użyj Normal zamiast High/Max |

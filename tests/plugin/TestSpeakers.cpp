@@ -128,6 +128,7 @@ TEST_CASE ("7.1.4: speakers outside the band stay bit-exact with oversampling, N
     const auto layout = juce::AudioChannelSet::create7point1point4();
     juce::AudioProcessor::BusesLayout buses;
     buses.inputBuses.add (layout);
+    buses.inputBuses.add (juce::AudioChannelSet::disabled()); // sidechain
     buses.outputBuses.add (layout);
     REQUIRE (p.setBusesLayout (buses));
     p.setPlayConfigDetails (12, 12, 48000.0, 512);

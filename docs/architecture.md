@@ -14,6 +14,9 @@ Status: **zrealizowana w M1–M8 (wersja 1.0.0)**. Dokument realizuje ARC-1…AR
 ```mermaid
 flowchart LR
     IN[Wejście<br/>N kanałów] --> HIST[Historia wejścia<br/>detekcja pasm Dynamic]
+    SC[Wejście Sidechain<br/>0–2 kanały] --> SCH[Historia sidechaina<br/>zmapowana na kanały]
+    SCH -. pasma External .-> CHAIN
+    SCH -. pasma External .-> STFT
     IN --> LA[Opóźnienie<br/>Max Lookahead]
     LA --> BYP{kanał objęty<br/>pasmem?}
     BYP -- nie --> DLY[Dokładne opóźnienie<br/>= latencja OS]
@@ -26,9 +29,10 @@ flowchart LR
     NP --> STFT[Silnik spektralny STFT<br/>wspólna maska pasm Spectral]
     STFT --> PAD[Dopełnienie latencji<br/>render offline OS-4]
     PAD --> AG[Auto Gain<br/>globalny]
-    AG --> SOLO[Solo pasma<br/>crossfade]
-    SOLO --> MIX[Mix · Delta · Output · Bypass<br/>z suchym sygnałem wyrównanym w czasie]
-    MIX --> OUT[Wyjście]
+    AG --> MIX[Mix · Delta · Output<br/>z suchym sygnałem wyrównanym w czasie]
+    MIX --> SOLO[Solo pasma<br/>obszar pasma na jego celu<br/>crossfade]
+    SOLO --> BP[Bypass]
+    BP --> OUT[Wyjście]
 ```
 
 Uwagi:
@@ -37,6 +41,8 @@ Uwagi:
 - **Silnik STFT** przetwarza tylko lane, na których działa co najmniej jedno pasmo Spectral; pozostałe lane omijają go z wyrównaniem opóźnienia.
 - **Kanały nieobjęte pasmami** omijają oversampling, pasma i nieliniowości — dostają tylko opóźnienie równe latencji (CH-6, bit w bit).
 - **Tor suchy** (Mix, Delta, Bypass) jest opóźniony o całą latencję. Delta = suchy − przetworzony bez korekcji Auto Gain (GLB-2, AG-5); Auto Gain nie wpływa też na Solo.
+- **Solo** gra wyjście (Mix, Delta i Output, bez korekcji Auto Gain) przez filtr obszaru pasma (`auditionShapeFor`: pasmowy dla dzwonów, 12 dB/okt. dla półek i cięć, szeroki dla nachyleń) i tylko na celu pasma: lane z `makeLanes` (kanał, Mid albo Side pary) — Mid i Side grają jako mono (L = R = M) albo (L = S, R = −S), kanały spoza celu milkną. Słychać więc działanie pasma (podbicie, cięcie, Dynamic, Spectral) na jego rzeczywistym poziomie; wyświetlacz przyciemnia częstotliwości poza tym obszarem. Solo nie dodaje latencji.
+- **Sidechain** (DYN-4): opcjonalna magistrala wejściowa (mono lub stereo) jest mapowana na kanały silnika — lewy kanał pary słucha lewego kanału sidechaina, prawy prawego, kanały bez pary środka (L + R)/2, sidechain mono wszystkich — i zapisywana do własnej historii obok historii wejścia (z oversamplingiem przez drugi zestaw filtrów OS). Pasmo Dynamic z External czyta detekcję z tej historii z tym samym wyprzedzeniem Lookahead; silnik STFT dostaje sidechain opóźniony o lookahead + latencję OS + korektora, wyrównany z ramką toru głównego, i dla pasm External liczy poziomy z jego widma. Sidechain nie trafia na wyjście i nie zmienia latencji.
 - **Render offline (OS-4)**: gdy oversampling renderu różni się od czasu rzeczywistego, latencja jest większą z dwóch, a krótszy tor jest dopełniany opóźnieniem — host widzi stałą latencję.
 
 ### Budżet latencji

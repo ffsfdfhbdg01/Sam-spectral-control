@@ -60,6 +60,8 @@ Source: "..\..\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\docs\manual.md"; DestDir: "{app}"; DestName: "Manual.md"; Components: docs; Flags: ignoreversion
 Source: "..\..\docs\images\editor.png"; DestDir: "{app}\images"; Components: docs; Flags: ignoreversion
 Source: "..\..\docs\images\editor-advanced.png"; DestDir: "{app}\images"; Components: docs; Flags: ignoreversion
+Source: "..\..\docs\images\sidechain.png"; DestDir: "{app}\images"; Components: docs; Flags: ignoreversion
+Source: "..\..\docs\images\solo.png"; DestDir: "{app}\images"; Components: docs; Flags: ignoreversion
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{commoncf64}\VST3\{#AppName}.vst3"

@@ -44,10 +44,15 @@ namespace
     {
         using Labels = const juce::StringArray& (*)();
         static const std::pair<BandParam, Labels> table[] = {
-            { BandParam::Shape, plugin::labels::shapes },         { BandParam::Slope, plugin::labels::slopes },
-            { BandParam::Mode, plugin::labels::bandModes },       { BandParam::Target, plugin::labels::targets },
-            { BandParam::Character, plugin::labels::characters }, { BandParam::ThresholdMode, plugin::labels::thresholdModes },
-            { BandParam::Direction, plugin::labels::directions }, { BandParam::Link, plugin::labels::links },
+            { BandParam::Shape, plugin::labels::shapes },
+            { BandParam::Slope, plugin::labels::slopes },
+            { BandParam::Mode, plugin::labels::bandModes },
+            { BandParam::Target, plugin::labels::targets },
+            { BandParam::Character, plugin::labels::characters },
+            { BandParam::ThresholdMode, plugin::labels::thresholdModes },
+            { BandParam::Direction, plugin::labels::directions },
+            { BandParam::Link, plugin::labels::links },
+            { BandParam::Sidechain, plugin::labels::sidechainSources },
         };
         for (const auto& [param, labels] : table)
             if (param == p)
@@ -499,6 +504,7 @@ void BandPanel::updateFromModel()
     freq.setVisible (true);
 
     updateIndicator();
+    updateSidechainState();
     if (layoutChanged)
     {
         resized();
@@ -518,7 +524,7 @@ bool BandPanel::advancedDiffersFromDefault (const BandModel& model, int band)
     const auto modeDefault = mode == BandMode::Spectral ? ThresholdMode::Relative : ThresholdMode::Absolute;
     if (choiceIndex (model, band, BandParam::ThresholdMode) != static_cast<int> (modeDefault))
         return true;
-    for (const auto p : { BandParam::Direction, BandParam::Knee, BandParam::Mix, BandParam::Link })
+    for (const auto p : { BandParam::Direction, BandParam::Knee, BandParam::Mix, BandParam::Link, BandParam::Sidechain })
         if (differsFromDefault (model, band, p))
             return true;
     return differsFromDefault (model, band, mode == BandMode::Dynamic ? BandParam::Lookahead : BandParam::Ratio);
@@ -530,7 +536,7 @@ void BandPanel::updateIndicator()
     advancedButton.setIndicator (differs || readoutWarning ? colours::accent : juce::Colours::transparentBlack);
     juce::String tip = shownMode == BandMode::Static ? "Advanced: readouts of the band (phase, group delay, ringing)"
                                                      : "Advanced: detector settings (threshold mode, direction, knee, "
-            + juce::String (shownMode == BandMode::Dynamic ? "lookahead" : "ratio") + ", mix, link) and readouts of the band";
+            + juce::String (shownMode == BandMode::Dynamic ? "lookahead" : "ratio") + ", mix, link, sidechain) and readouts of the band";
     if (differs)
         tip << "\nThe dot: a detector setting differs from its default.";
     if (readoutWarning)
@@ -540,6 +546,7 @@ void BandPanel::updateIndicator()
 
 void BandPanel::pollReadout()
 {
+    updateSidechainState();
     if (band < 0 || ! readoutProvider || ! isVisible())
         return;
     const bool warns = BandAdvancedPanel::readoutWarns (readoutProvider (band));
@@ -547,6 +554,18 @@ void BandPanel::pollReadout()
     {
         readoutWarning = warns;
         updateIndicator();
+    }
+}
+
+void BandPanel::updateSidechainState()
+{
+    // A band on External while the host feeds no Sidechain input detects silence.
+    const bool missing =
+        band >= 0 && shownMode != BandMode::Static && model.band (band).sidechain && sidechainConnected && ! sidechainConnected();
+    if (missing != sidechainMissing)
+    {
+        sidechainMissing = missing;
+        repaint();
     }
 }
 
@@ -643,11 +662,13 @@ void BandPanel::paint (juce::Graphics& g)
     if (shownMode != BandMode::Static)
     {
         const int y = kTop + kHeaderHeight + kRowGap + kEqRowHeight + kSectionGap;
-        const auto text = juce::String (shownMode == BandMode::Spectral ? "SPECTRAL DYNAMICS" : "DYNAMICS");
+        auto text = juce::String (shownMode == BandMode::Spectral ? "SPECTRAL DYNAMICS" : "DYNAMICS");
+        if (band >= 0 && model.band (band).sidechain)
+            text << "  " << juce::String::fromUTF8 ("\xc2\xb7") << (sidechainMissing ? "  SIDECHAIN: NO INPUT" : "  SIDECHAIN");
         const auto font = uiFont (10.5f, true);
         const auto line = juce::Rectangle<int> (kPad, y, autoGainButton.getX() - 10 - kPad, kSectionHeight);
         g.setFont (font);
-        g.setColour (colours::textDim);
+        g.setColour (sidechainMissing ? colours::accent : colours::textDim);
         g.drawText (text, line, juce::Justification::centredLeft, false);
         g.setColour (colours::panelEdge);
         g.fillRect (juce::Rectangle<float> (static_cast<float> (line.getX()) + juce::GlyphArrangement::getStringWidth (font, text) + 8.0f,
@@ -664,10 +685,12 @@ BandAdvancedPanel::BandAdvancedPanel (BandModel& m)
       lookahead (m, BandParam::Lookahead, "Lookahead"),
       ratio (m, BandParam::Ratio, "Ratio"),
       mix (m, BandParam::Mix, "Mix"),
-      link (m, BandParam::Link, "Link")
+      link (m, BandParam::Link, "Link"),
+      sidechain (m, BandParam::Sidechain, "Sidechain")
 {
     setOpaque (false);
-    for (auto* c : std::initializer_list<juce::Component*> { &thresholdMode, &direction, &knee, &lookahead, &ratio, &mix, &link })
+    for (auto* c :
+         std::initializer_list<juce::Component*> { &thresholdMode, &direction, &knee, &lookahead, &ratio, &mix, &link, &sidechain })
         addAndMakeVisible (c);
 
     thresholdMode.setTooltip ("Threshold Mode. Absolute: in dBFS. Relative: above the neighbouring spectrum, "
@@ -675,6 +698,7 @@ BandAdvancedPanel::BandAdvancedPanel (BandModel& m)
     direction.setTooltip ("Direction. Above: acts while the level exceeds the threshold. Below: while it stays under it");
     lookahead.getSlider().setTooltip ("Lookahead: the band reacts before a transient; raises Max Lookahead (latency) when needed");
     link.setTooltip ("Link: channels (or M/S components) that share the detection. Independent, Pair, Group (default) or All");
+    showSidechainHint (false);
 
     thresholdMode.onChange = [this] (int index) {
         if (band < 0)
@@ -729,6 +753,7 @@ void BandAdvancedPanel::bindBand()
         k->setColour (colour);
     }
     link.setBand (band);
+    sidechain.setBand (band);
     shownMode = model.band (band).mode;
     updateFromModel();
     resized();
@@ -744,12 +769,14 @@ void BandAdvancedPanel::updateFromModel()
     for (auto* k : { &knee, &lookahead, &ratio, &mix })
         k->refresh();
     link.refresh();
+    sidechain.refresh();
+    updateSidechainHint();
 
     const auto mode = model.band (band).mode;
     const bool modeChanged = mode != shownMode;
     shownMode = mode;
     const bool detector = showsDetector();
-    for (auto* c : std::initializer_list<juce::Component*> { &thresholdMode, &direction, &knee, &mix, &link })
+    for (auto* c : std::initializer_list<juce::Component*> { &thresholdMode, &direction, &knee, &mix, &link, &sidechain })
         c->setVisible (detector);
     lookahead.setVisible (shownMode == BandMode::Dynamic);
     ratio.setVisible (shownMode == BandMode::Spectral);
@@ -778,6 +805,8 @@ std::vector<BandParam> BandAdvancedPanel::visibleParameters() const
             params.push_back (k->getParam());
     if (link.isVisible())
         params.push_back (BandParam::Link);
+    if (sidechain.isVisible())
+        params.push_back (BandParam::Sidechain);
     return params;
 }
 
@@ -801,7 +830,31 @@ void BandAdvancedPanel::resized()
     mix.setBounds (knobs);
 
     area.removeFromTop (6);
-    link.setBounds (area.removeFromTop (kChoiceHeight).removeFromLeft (128));
+    auto choices = area.removeFromTop (kChoiceHeight);
+    link.setBounds (choices.removeFromLeft ((choices.getWidth() - 8) / 2));
+    choices.removeFromLeft (8);
+    sidechain.setBounds (choices);
+}
+
+void BandAdvancedPanel::updateSidechainHint()
+{
+    // External while the host feeds no Sidechain input: the band's detection hears silence.
+    const bool external = band >= 0 && model.band (band).mode != BandMode::Static && model.band (band).sidechain;
+    const bool hint = external && sidechainConnected && ! sidechainConnected();
+    if (hint != sidechainHint)
+        showSidechainHint (hint);
+}
+
+void BandAdvancedPanel::showSidechainHint (bool hint)
+{
+    sidechainHint = hint;
+    sidechain.setCaptionColour (hint ? colours::accent : colours::textDim);
+    sidechain.setIndicator (hint ? colours::accent : juce::Colours::transparentBlack);
+    sidechain.setTooltip (hint ? "No signal reaches the Sidechain input, so the band detects silence. Route a track to the "
+                                 "plug-in's sidechain in the host, or set the band back to Internal."
+                               : "Sidechain: what the band's detection listens to. Internal: the band's own signal. "
+                                 "External: the plug-in's Sidechain input (mono or stereo, routed in the host), taken on "
+                                 "the band's target; the band still processes its own signal.");
 }
 
 void BandAdvancedPanel::visibilityChanged()
@@ -819,6 +872,7 @@ void BandAdvancedPanel::visibilityChanged()
 
 void BandAdvancedPanel::pollReadout()
 {
+    updateSidechainHint();
     if (band < 0 || ! readoutProvider)
         return;
     const auto next = readoutProvider (band);

@@ -13,7 +13,10 @@ using plugin::kNumBandParams;
 
 namespace
 {
-    constexpr const char* kClipboardPrefix = "SamSpectralControl.band.v1:";
+    constexpr const char* kClipboardPrefix = "SamSpectralControl.band.v2:";
+    /** Texts copied by 1.0: the parameters before Sidechain, then the speakers. */
+    constexpr const char* kClipboardPrefixV1 = "SamSpectralControl.band.v1:";
+    constexpr int kNumBandParamsV1 = static_cast<int> (BandParam::Sidechain);
 
     template <typename Enum>
     Enum toEnum (float raw, Enum last) noexcept
@@ -142,6 +145,7 @@ BandValues BandModel::read (int band) const noexcept
     v.target = toEnum (get (BandParam::Target), StereoComponent::Side);
     v.character = toEnum (get (BandParam::Character), Character::Sharp);
     v.autoGain = get (BandParam::AutoGain) >= 0.5f;
+    v.sidechain = get (BandParam::Sidechain) >= 0.5f;
     v.speakers = plugin::readSpeakers (state.state, band);
     return v;
 }
@@ -456,27 +460,39 @@ void BandModel::setSpeakers (int band, const engine::SpeakerSelection& selection
 
 void BandModel::copyBand (int band) const
 {
+    juce::SystemClipboard::copyTextToClipboard (bandText (band));
+}
+
+juce::String BandModel::bandText (int band) const
+{
     juce::StringArray items;
     for (int p = 0; p < kNumBandParams; ++p)
         items.add (juce::String (parameter (band, static_cast<BandParam> (p)).getValue(), 9));
     items.add (plugin::speakerSelectionToString (speakers (band)));
-    juce::SystemClipboard::copyTextToClipboard (kClipboardPrefix + items.joinIntoString (","));
+    return kClipboardPrefix + items.joinIntoString (",");
 }
 
 bool BandModel::canPaste() const
 {
-    return juce::SystemClipboard::getTextFromClipboard().startsWith (kClipboardPrefix);
+    const auto text = juce::SystemClipboard::getTextFromClipboard();
+    return text.startsWith (kClipboardPrefix) || text.startsWith (kClipboardPrefixV1);
 }
 
 bool BandModel::pasteToBand (int band)
 {
-    const auto text = juce::SystemClipboard::getTextFromClipboard();
-    if (! text.startsWith (kClipboardPrefix))
+    return pasteBandText (band, juce::SystemClipboard::getTextFromClipboard());
+}
+
+bool BandModel::pasteBandText (int band, const juce::String& text)
+{
+    const bool v1 = text.startsWith (kClipboardPrefixV1);
+    if (! v1 && ! text.startsWith (kClipboardPrefix))
         return false;
 
     juce::StringArray items;
     items.addTokens (text.fromFirstOccurrenceOf (":", false, false), ",", {});
-    if (items.size() != kNumBandParams && items.size() != kNumBandParams + 1)
+    const int numParams = v1 ? kNumBandParamsV1 : kNumBandParams;
+    if (items.size() != numParams && items.size() != numParams + 1)
         return false;
 
     ScopedEdit edit (*this, "Paste Band");
@@ -485,12 +501,13 @@ bool BandModel::pasteToBand (int band)
         const auto param = static_cast<BandParam> (p);
         if (param == BandParam::Used)
             continue;
+        // Parameters newer than the text take their default.
         auto& target = parameter (band, param);
-        setValue (band, param, target.convertFrom0to1 (juce::jlimit (0.0f, 1.0f, items[p].getFloatValue())));
+        const float normalised = p < numParams ? juce::jlimit (0.0f, 1.0f, items[p].getFloatValue()) : target.getDefaultValue();
+        setValue (band, param, target.convertFrom0to1 (normalised));
     }
     // The speaker selection follows (texts copied before it existed give the default).
-    setSpeakers (band,
-                 items.size() > kNumBandParams ? plugin::speakerSelectionFromString (items[kNumBandParams]) : engine::SpeakerSelection {});
+    setSpeakers (band, items.size() > numParams ? plugin::speakerSelectionFromString (items[numParams]) : engine::SpeakerSelection {});
     return true;
 }
 } // namespace ssc::ui

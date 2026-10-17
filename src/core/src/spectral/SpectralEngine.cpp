@@ -75,6 +75,8 @@ void SpectralEngine::prepare (double sampleRate, int numChannels, int /*maxBlock
     inputRing.assign (ch, std::vector<double> (static_cast<std::size_t> (maxSize), 0.0));
     outputAccum.assign (ch, std::vector<float> (static_cast<std::size_t> (maxSize), 0.0f));
     spectra.assign (ch, std::vector<float> (static_cast<std::size_t> (maxSize + 2), 0.0f));
+    sidechainRing.assign (ch, std::vector<double> (static_cast<std::size_t> (maxSize), 0.0));
+    sidechainSpectra.assign (ch, std::vector<float> (static_cast<std::size_t> (maxSize + 2), 0.0f));
     frame.assign (static_cast<std::size_t> (maxSize), 0.0f);
     powerPrefix.assign (static_cast<std::size_t> (maxSize / 2 + 2), 0.0);
     binGridIndex.assign (static_cast<std::size_t> (maxSize / 2 + 1), 0);
@@ -154,6 +156,8 @@ void SpectralEngine::reset() noexcept
 {
     for (auto& r : inputRing)
         std::fill (r.begin(), r.end(), 0.0);
+    for (auto& r : sidechainRing)
+        std::fill (r.begin(), r.end(), 0.0);
     for (auto& a : outputAccum)
         std::fill (a.begin(), a.end(), 0.0f);
     ringPos = 0;
@@ -171,7 +175,7 @@ void SpectralEngine::reset() noexcept
 }
 
 void SpectralEngine::process (double* const* io, int numChannels, int numSamples, const engine::BandSettingsArray& bands,
-                              const engine::ChannelTopology& topology) noexcept
+                              const engine::ChannelTopology& topology, const double* const* sidechain) noexcept
 {
     numChannels = std::min (numChannels, channels);
     const int mask = fftSize - 1;
@@ -188,6 +192,8 @@ void SpectralEngine::process (double* const* io, int numChannels, int numSamples
 
             const double delayed = ring[pos]; // the input one frame ago: exact bypass with the same latency
             ring[pos] = io[ch][i];
+            // Without a sidechain the ring holds silence, which a band switched to External starts from.
+            sidechainRing[c][pos] = sidechain != nullptr ? sidechain[ch][i] : 0.0;
             const float processed = accum[pos];
             accum[pos] = 0.0f;
 
@@ -228,14 +234,26 @@ void SpectralEngine::updateWeights (BandState& state, const filters::BandShape& 
     }
 }
 
+void SpectralEngine::analyse (const std::vector<double>& ring, std::vector<float>& spectrum) noexcept
+{
+    // Frames are chronological from the oldest sample.
+    const auto& window = windows[static_cast<std::size_t> (sizeIndex)];
+    const int mask = fftSize - 1;
+    for (int j = 0; j < fftSize; ++j)
+        frame[static_cast<std::size_t> (j)] =
+            static_cast<float> (ring[static_cast<std::size_t> ((ringPos + j) & mask)]) * window[static_cast<std::size_t> (j)];
+    ffts[static_cast<std::size_t> (sizeIndex)].forward (frame.data(), spectrum.data());
+}
+
 void SpectralEngine::laneLevels (const engine::Lane& lane, const engine::BandSettings& band, float* out, float* absolute) noexcept
 {
     const int bins = fftSize / 2 + 1;
     const double binHz = fs / fftSize;
 
-    // Power per bin of the lane's spectrum, as a prefix sum.
-    const float* a = spectra[static_cast<std::size_t> (lane.a)].data();
-    const float* b = lane.b >= 0 ? spectra[static_cast<std::size_t> (lane.b)].data() : nullptr;
+    // Power per bin of the lane's spectrum (or of the sidechain's), as a prefix sum.
+    const auto& source = band.dynamics.sidechain ? sidechainSpectra : spectra;
+    const float* a = source[static_cast<std::size_t> (lane.a)].data();
+    const float* b = lane.b >= 0 ? source[static_cast<std::size_t> (lane.b)].data() : nullptr;
     powerPrefix[0] = 0.0;
     for (int k = 0; k < bins; ++k)
     {
@@ -312,14 +330,22 @@ void SpectralEngine::runFrame (const engine::BandSettingsArray& bands, const eng
     auto& fft = ffts[static_cast<std::size_t> (sizeIndex)];
     const int mask = fftSize - 1;
 
-    // Analysis of every channel (frames are chronological from the oldest sample).
+    // Analysis of every channel, and of the sidechain where a band detects from it.
+    std::array<bool, kMaxChannels> sidechainNeeded {};
+    for (const auto& band : bands)
+        if (band.isSpectral() && band.active && band.dynamics.sidechain)
+        {
+            const auto lanes = engine::makeLanes (band.component, band.channelMask, band.includeLfe, topology);
+            for (int l = 0; l < lanes.numLanes; ++l)
+                for (const int c : { lanes.lanes[static_cast<std::size_t> (l)].a, lanes.lanes[static_cast<std::size_t> (l)].b })
+                    if (c >= 0 && c < channels)
+                        sidechainNeeded[static_cast<std::size_t> (c)] = true;
+        }
     for (int ch = 0; ch < channels; ++ch)
     {
-        const auto& ring = inputRing[static_cast<std::size_t> (ch)];
-        for (int j = 0; j < fftSize; ++j)
-            frame[static_cast<std::size_t> (j)] =
-                static_cast<float> (ring[static_cast<std::size_t> ((ringPos + j) & mask)]) * window[static_cast<std::size_t> (j)];
-        fft.forward (frame.data(), spectra[static_cast<std::size_t> (ch)].data());
+        analyse (inputRing[static_cast<std::size_t> (ch)], spectra[static_cast<std::size_t> (ch)]);
+        if (sidechainNeeded[static_cast<std::size_t> (ch)])
+            analyse (sidechainRing[static_cast<std::size_t> (ch)], sidechainSpectra[static_cast<std::size_t> (ch)]);
     }
 
     std::fill (channelMask.begin(), channelMask.end(), 0.0f);

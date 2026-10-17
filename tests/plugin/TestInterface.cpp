@@ -254,12 +254,12 @@ TEST_CASE ("The band panel shows the knobs of the band's mode; details live in A
          { BandParam::Threshold, BandParam::Ratio, BandParam::Range, BandParam::Attack, BandParam::Release, BandParam::AutoGain })
         CHECK (contains (shown, p));
     for (const auto p : { BandParam::Selectivity, BandParam::Knee, BandParam::Lookahead, BandParam::Mix, BandParam::Link,
-                          BandParam::ThresholdMode, BandParam::Direction })
+                          BandParam::Sidechain, BandParam::ThresholdMode, BandParam::Direction })
         CHECK_FALSE (contains (shown, p));
     CHECK (shown.size() <= 14);
     auto detail = advanced.visibleParameters();
-    for (const auto p :
-         { BandParam::ThresholdMode, BandParam::Direction, BandParam::Knee, BandParam::Lookahead, BandParam::Mix, BandParam::Link })
+    for (const auto p : { BandParam::ThresholdMode, BandParam::Direction, BandParam::Knee, BandParam::Lookahead, BandParam::Mix,
+                          BandParam::Link, BandParam::Sidechain })
         CHECK (contains (detail, p));
     CHECK_FALSE (contains (detail, BandParam::Ratio));
     CHECK (panel.getPreferredSize().y == BandPanel::kDynamicHeight);
@@ -272,6 +272,7 @@ TEST_CASE ("The band panel shows the knobs of the band's mode; details live in A
     CHECK_FALSE (contains (shown, BandParam::Ratio));
     detail = advanced.visibleParameters();
     CHECK (contains (detail, BandParam::Ratio));
+    CHECK (contains (detail, BandParam::Sidechain));
     CHECK_FALSE (contains (detail, BandParam::Lookahead));
 
     // Shapes with a slope show it; the panel keeps its width when the mode changes.
@@ -319,6 +320,92 @@ TEST_CASE ("The Advanced button marks detector settings that differ from the mod
     CHECK_FALSE (BandPanel::advancedDiffersFromDefault (model, band));
     model.setMode (band, BandMode::Dynamic);
     CHECK (BandPanel::advancedDiffersFromDefault (model, band));
+
+    // The External sidechain counts too (DYN-4).
+    {
+        BandModel::ScopedEdit edit (model, "Reset");
+        model.setValue (band, BandParam::Lookahead, 0.0f);
+    }
+    CHECK_FALSE (BandPanel::advancedDiffersFromDefault (model, band));
+    {
+        BandModel::ScopedEdit edit (model, "Change Sidechain");
+        model.setValue (band, BandParam::Sidechain, 1.0f);
+    }
+    CHECK (BandPanel::advancedDiffersFromDefault (model, band));
+}
+
+TEST_CASE ("Sidechain: External is shown, a missing Sidechain input is pointed out, copy and paste keep it (DYN-4)", "[ui][sidechain]")
+{
+    JuceEnvironment env;
+    plugin::SscAudioProcessor processor;
+    BandModel model (processor.getValueTreeState(), processor.getUndoManager());
+    BandPanel panel (model);
+    BandAdvancedPanel advanced (model);
+    bool connected = false;
+    panel.sidechainConnected = advanced.sidechainConnected = [&connected] { return connected; };
+
+    const int band = model.createBand (Shape::Bell, 1000.0f, 0.0f);
+    model.setMode (band, BandMode::Dynamic);
+    CHECK_FALSE (model.band (band).sidechain);
+    CHECK_FALSE (advanced.showsSidechainHint());
+    CHECK_FALSE (panel.showsMissingSidechain());
+
+    auto edit = [&model, band] (BandParam p, float value) {
+        BandModel::ScopedEdit scoped (model, "Edit");
+        model.setValue (band, p, value);
+    };
+    // External while the host feeds no Sidechain input: both point it out.
+    edit (BandParam::Sidechain, 1.0f);
+    CHECK (model.band (band).sidechain);
+    CHECK (advanced.showsSidechainHint());
+    CHECK (panel.showsMissingSidechain());
+
+    // With the input connected the hint goes (at the next update).
+    connected = true;
+    edit (BandParam::Gain, 1.0f);
+    CHECK_FALSE (advanced.showsSidechainHint());
+    CHECK_FALSE (panel.showsMissingSidechain());
+
+    // Internal never hints; neither does a Static band (it has no detection).
+    connected = false;
+    edit (BandParam::Sidechain, 0.0f);
+    CHECK_FALSE (advanced.showsSidechainHint());
+    CHECK_FALSE (panel.showsMissingSidechain());
+    edit (BandParam::Sidechain, 1.0f);
+    model.setMode (band, BandMode::Static);
+    CHECK_FALSE (advanced.showsSidechainHint());
+    CHECK_FALSE (panel.showsMissingSidechain());
+
+    // The processor reports its bus: off by default, on once the host enables it.
+    CHECK_FALSE (processor.isSidechainConnected());
+    juce::AudioProcessor::BusesLayout layout;
+    layout.inputBuses.add (juce::AudioChannelSet::stereo());
+    layout.inputBuses.add (juce::AudioChannelSet::mono());
+    layout.outputBuses.add (juce::AudioChannelSet::stereo());
+    REQUIRE (processor.setBusesLayout (layout));
+    CHECK (processor.isSidechainConnected());
+
+    // Copy and paste carry the Sidechain; a band copied by 1.0 (no Sidechain) pastes it as Internal.
+    model.setMode (band, BandMode::Dynamic);
+    const auto text = model.bandText (band);
+    const int other = model.createBand (Shape::Bell, 300.0f, 0.0f);
+    REQUIRE (model.pasteBandText (other, text));
+    model.refresh();
+    CHECK (model.band (other).sidechain);
+    CHECK (model.band (other).mode == BandMode::Dynamic);
+
+    juce::StringArray items;
+    items.addTokens (text.fromFirstOccurrenceOf (":", false, false), ",", {});
+    REQUIRE (items.size() == plugin::kNumBandParams + 1);
+    items.remove (static_cast<int> (BandParam::Sidechain));
+    const auto old = "SamSpectralControl.band.v1:" + items.joinIntoString (",");
+    REQUIRE (model.pasteBandText (other, old));
+    model.refresh();
+    CHECK_FALSE (model.band (other).sidechain);
+    CHECK (model.band (other).mode == BandMode::Dynamic);
+    CHECK (model.band (other).frequency == Approx (1000.0f));
+    CHECK_FALSE (model.pasteBandText (other, "SamSpectralControl.band.v1:" + items.joinIntoString (",") + ",0.5,0.5"));
+    CHECK_FALSE (model.pasteBandText (other, "something else"));
 }
 
 TEST_CASE ("Preset comparisons: modified dot and an A/B copy only when the slots differ (research 15 d3, GLB-3)", "[ui][UX][GLB-3]")

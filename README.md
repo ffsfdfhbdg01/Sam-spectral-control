@@ -18,6 +18,7 @@ Korektor parametryczny z pasmami statycznymi, dynamicznymi i spektralno-dynamicz
 | M7 | Analizator (ustawienia, peak hold), poświata aktywności, podpowiedzi rezonansów, odczyty fazy i ringingu pasm, mierniki THD+N i aliasingu z podpowiedzią oversamplingu | ✅ |
 | M8 | Presety fabryczne i użytkownika, A/B, Undo/Redo w nagłówku, testy obciążeniowe, oversampling renderu offline, Delta, nakładka fazy całego EQ, korektor Minimum Phase High/Max, raporty pomiarów, instalatory (pkg / Inno Setup) i workflow wydania z podpisami, instrukcja (PL), licencje | ✅ |
 | UX | Przebudowa interfejsu ([research §15](docs/research/15-ux-ui.md)): trzy poziomy informacji, panel pasma pod węzłem z pokrętłami zależnymi od trybu, wysuwane panele Advanced (pasma i globalny), presety ‹ › ze znacznikiem zmian, animacje Full / Reduced / Off | ✅ |
+| po 1.0.0 | Solo z działaniem pasma i tylko na jego celu, słyszalny zakres Solo na wykresie; wejście Sidechain dla pasm Dynamic i Spectral ([CHANGELOG](CHANGELOG.md)) | ✅ (jeszcze niewydane) |
 
 Szczegółowy stan każdego wymagania: [docs/traceability.md](docs/traceability.md).
 
@@ -35,11 +36,12 @@ Pełna instrukcja obsługi: [docs/manual.md](docs/manual.md).
 | Częstotliwość / gain | przeciąganie węzła (Shift — precyzyjnie); dla kształtów bez gain pion zmienia Q |
 | Q | kółko myszy nad węzłem |
 | Włącz / wyłącz pasmo | podwójne kliknięcie węzła |
-| Solo (odsłuch obszaru pasma) | Alt/Option + przytrzymanie węzła albo 🎧 w panelu pasma (klik — zatrzaśnięcie, przytrzymanie — chwilowo) |
+| Solo (odsłuch obszaru pasma z jego działaniem, tylko na jego celu; wykres pokazuje słyszalny zakres) | Alt/Option + przytrzymanie węzła albo 🎧 w panelu pasma (klik — zatrzaśnięcie, przytrzymanie — chwilowo) |
 | Tryb pasma | przełącznik Static \| Dynamic \| Spectral w panelu pasma; pokrętła dynamiki pojawiają się w trybach Dynamic i Spectral |
-| Ustawienia specjalistyczne | **Advanced ›** w panelu pasma (detektor, odczyty) i **Advanced ▴** na pasku dolnym (Quality, oversampling, Max Lookahead, Auto Gain, mierniki) |
+| Ustawienia specjalistyczne | **Advanced ›** w panelu pasma (detektor, Sidechain Internal \| External, odczyty) i **Advanced ▴** na pasku dolnym (Quality, oversampling, Max Lookahead, Auto Gain, mierniki) |
+| Sidechain pasma | wejście **Sidechain** wtyczki (mono / stereo) kieruje się w hoście; pasmo Dynamic lub Spectral z **Sidechain: External** mierzy poziom w sidechainie, a przetwarza swój sygnał |
 | Zaznaczanie wielu pasm | prostokąt na tle, Cmd/Ctrl + klik; zaznaczone pasma przesuwają się razem |
-| Menu pasma | prawy przycisk: kształt, slope / Q, tryb, cel (All/L/R/M/S), Character, Auto Gain, bypass, solo, kopiuj/wklej, reset, usuń |
+| Menu pasma | prawy przycisk: kształt, slope / Q, tryb, cel (All/L/R/M/S), Character, Auto Gain, External Sidechain, bypass, solo, kopiuj/wklej, reset, usuń |
 | Usuń, Undo, Redo, zaznacz wszystko | Delete, Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z (lub Ctrl+Y), Cmd/Ctrl+A |
 | Wpisanie wartości | kliknięcie pola wartości pod pokrętłem (np. „1.5k”, „-3 dB”, „1.2 s”); podwójne kliknięcie pokrętła — wartość domyślna |
 

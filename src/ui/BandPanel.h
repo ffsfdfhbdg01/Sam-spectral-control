@@ -105,12 +105,17 @@ public:
 
     /** Source of the readouts of a band (polled for the Advanced indicator). */
     std::function<analysis::BandReadout (int band)> readoutProvider;
+    /** Whether the host feeds the Sidechain input (polled with the readouts). */
+    std::function<bool()> sidechainConnected;
 
     /** Band parameters with a control in the panel (research §15 e, E2). */
     std::vector<plugin::BandParam> visibleParameters() const;
 
     /** True when a setting of the Advanced flyout differs from its default for the band's mode. */
     static bool advancedDiffersFromDefault (const BandModel& model, int band);
+
+    /** True while the section title points out a band on External without a Sidechain input. */
+    bool showsMissingSidechain() const noexcept { return sidechainMissing; }
 
     static constexpr int kStaticHeight = 132;
     static constexpr int kDynamicHeight = 232;
@@ -124,6 +129,7 @@ private:
     void showMoreMenu();
     void openSpeakerPanel();
     void pollReadout();
+    void updateSidechainState();
     void notifyLayout();
 
     BandModel& model;
@@ -133,6 +139,7 @@ private:
     engine::ChannelTopology topology = engine::ChannelTopology::stereo();
     int numPairs = 1;
     bool readoutWarning = false;
+    bool sidechainMissing = false; ///< the band is set to External, the host feeds no Sidechain input
     bool soloHeld = false;
     bool soloWasOn = false;
     double soloPressMs = 0.0;
@@ -153,7 +160,7 @@ private:
 /**
     Advanced flyout of the focused band (research §15 d4): it slides out to the right of the band
     panel. Dynamic and Spectral bands: threshold mode, direction, knee, lookahead (Dynamic) or ratio
-    (Spectral), mix and detector link. Every band: its readouts (research §12c, PR-1) — mean excess
+    (Spectral), mix, detector link and sidechain (Internal or External, DYN-4). Every band: its readouts (research §12c, PR-1) — mean excess
     phase, group delay at fc, pre-/post-ring at −60 dB (and at the full Range for Dynamic bands, the
     STFT pre-echo for Spectral bands), highlighted when the ringing is likely audible
     (post > 50 ms, pre > 5 ms).
@@ -174,9 +181,14 @@ public:
 
     /** Source of the readouts of a band (polled 10 times a second while shown). */
     std::function<analysis::BandReadout (int band)> readoutProvider;
+    /** Whether the host feeds the Sidechain input (polled with the readouts); without it a band set
+        to External hears silence, which the flyout points out. */
+    std::function<bool()> sidechainConnected;
 
     /** Band parameters with a control in the flyout (tests). */
     std::vector<plugin::BandParam> visibleParameters() const;
+    /** True while the Sidechain choice points out that the host feeds no Sidechain input. */
+    bool showsSidechainHint() const noexcept { return sidechainHint; }
 
     /** Readout lines: label and value, e.g. {"Group delay", "0.12 ms"}. */
     static std::vector<std::pair<juce::String, juce::String>> readoutLines (const analysis::BandReadout& readout);
@@ -188,16 +200,19 @@ private:
     void bindBand();
     void updateFromModel();
     void pollReadout();
+    void updateSidechainHint();
+    void showSidechainHint (bool hint);
     bool showsDetector() const;
 
     BandModel& model;
     int band = -1;
     BandMode shownMode = BandMode::Static;
     analysis::BandReadout readout;
+    bool sidechainHint = false;
 
     SegmentedControl thresholdMode { { "Absolute", "Relative" } }, direction { { "Above", "Below" } };
     BandKnob knee, lookahead, ratio, mix;
-    BandChoiceButton link;
+    BandChoiceButton link, sidechain;
     juce::TimedCallback readoutTimer { [this] { pollReadout(); } };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BandAdvancedPanel)

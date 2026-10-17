@@ -71,9 +71,13 @@ public:
     int getLatencySamples() const noexcept { return fftSize; }
     int getHopSize() const noexcept { return hop; }
 
-    /** Processes the channels in place; everything is delayed by getLatencySamples(). */
+    /**
+        Processes the channels in place; everything is delayed by getLatencySamples(). sidechain
+        (optional, one per channel, aligned with them) is what bands set to the external sidechain
+        detect: their levels and threshold come from its spectrum, the mask applies to the channels.
+    */
     void process (double* const* channels, int numChannels, int numSamples, const engine::BandSettingsArray& bands,
-                  const engine::ChannelTopology& topology) noexcept;
+                  const engine::ChannelTopology& topology, const double* const* sidechain = nullptr) noexcept;
 
     /** Largest gain change of a band over its region (dB, signed); any thread (DYN-11). */
     float getBandGainDb (int band) const noexcept { return bandGains[static_cast<std::size_t> (band)].load (std::memory_order_relaxed); }
@@ -100,6 +104,7 @@ private:
     void runFrame (const engine::BandSettingsArray& bands, const engine::ChannelTopology& topology) noexcept;
     void updateWeights (BandState& state, const filters::BandShape& shape) noexcept;
     void laneLevels (const engine::Lane& lane, const engine::BandSettings& band, float* levelsOut, float* absoluteOut) noexcept;
+    void analyse (const std::vector<double>& ring, std::vector<float>& spectrum) noexcept;
     void applyMask (const float* maskDb, float* gainsOut) noexcept;
 
     double fs = 48000.0;
@@ -118,7 +123,9 @@ private:
     int ringPos = 0;
     int hopCounter = 0;
     std::vector<float> frame;
-    std::vector<std::vector<float>> spectra; ///< per channel, interleaved complex, N + 2
+    std::vector<std::vector<float>> spectra;          ///< per channel, interleaved complex, N + 2
+    std::vector<std::vector<double>> sidechainRing;   ///< the external sidechain, as inputRing
+    std::vector<std::vector<float>> sidechainSpectra; ///< as spectra, for the channels a sidechain band needs
 
     std::vector<GridPoint> grid;
     int numGrid = 0;

@@ -713,6 +713,10 @@ void EqDisplay::showBandMenu (int band)
     menu.addItem ("Auto Gain", v.mode != BandMode::Static, v.autoGain,
                   forTargets ("Toggle Auto Gain",
                               [on = ! v.autoGain] (BandModel& m, int b) { m.setValue (b, BandParam::AutoGain, on ? 1.0f : 0.0f); }));
+    menu.addItem ("External Sidechain", v.mode != BandMode::Static, v.sidechain,
+                  forTargets ("Change Sidechain", [external = ! v.sidechain] (BandModel& m, int b) {
+                      m.setValue (b, BandParam::Sidechain, external ? 1.0f : 0.0f);
+                  }));
     menu.addSeparator();
     menu.addItem ("Bypass", true, ! v.on,
                   forTargets ("Toggle Band", [on = ! v.on] (BandModel& m, int b) { m.setValue (b, BandParam::On, on ? 1.0f : 0.0f); }));

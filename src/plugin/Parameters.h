@@ -52,6 +52,7 @@ enum class BandParam
     Mix,
     Selectivity,
     Link,
+    Sidechain, ///< detection source of Dynamic and Spectral bands: the band's own signal or the sidechain input
     Count
 };
 
@@ -73,6 +74,7 @@ namespace labels
     const juce::StringArray& thresholdModes();
     const juce::StringArray& directions();
     const juce::StringArray& links();
+    const juce::StringArray& sidechainSources(); ///< "Internal", "External"
     const juce::StringArray& phaseModes();
     const juce::StringArray& analogModels();
     const juce::StringArray& qualities();

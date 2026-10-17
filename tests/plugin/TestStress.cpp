@@ -57,6 +57,7 @@ bool setLayout (SscAudioProcessor& p, const S& set)
 {
     juce::AudioProcessor::BusesLayout layout;
     layout.inputBuses.add (set);
+    layout.inputBuses.add (juce::AudioChannelSet::disabled()); // sidechain
     layout.outputBuses.add (set);
     return p.setBusesLayout (layout);
 }

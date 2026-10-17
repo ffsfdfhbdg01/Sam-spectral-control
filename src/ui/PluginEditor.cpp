@@ -112,6 +112,8 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
     };
     bandPanel.readoutProvider = readouts;
     bandAdvanced.readoutProvider = readouts;
+    bandPanel.sidechainConnected = [this] { return sscProcessor.isSidechainConnected(); };
+    bandAdvanced.sidechainConnected = bandPanel.sidechainConnected;
     bandPanel.onLayoutChanged = [this] {
         sscProcessor.getValueTreeState().state.setProperty (plugin::kUiBandAdvanced, bandPanel.isAdvancedOpen(), nullptr);
         layoutPanels (true);

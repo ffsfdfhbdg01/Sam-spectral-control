@@ -12,7 +12,8 @@ namespace ssc::plugin
 SscAudioProcessor::SscAudioProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput ("Input", juce::AudioChannelSet::stereo(), true)
-                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                          .withInput ("Sidechain", juce::AudioChannelSet::stereo(), false)),
       state (*this, nullptr, kStateType, createParameterLayout())
 {
     params.attach (state);
@@ -132,6 +133,9 @@ bool SscAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) cons
     if (in.getAmbisonicOrder() >= 0)
         return false;
 
+    // Sidechain (detection of Dynamic and Spectral bands): off, or one or two channels of any kind.
+    if (layouts.inputBuses.size() > 1 && layouts.getChannelSet (true, 1).size() > 2)
+        return false;
     return true;
 }
 
@@ -239,15 +243,15 @@ void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) cons
         d.mix = 0.01 * value (BandParam::Mix);
         d.selectivity = 0.01 * value (BandParam::Selectivity);
         d.link = choice (get (BandParam::Link), DetectorLink::All);
+        d.sidechain = isOn (get (BandParam::Sidechain));
         d.autoGain = isOn (get (BandParam::AutoGain));
         d.autoGainSeconds = loudness::autoGainSeconds (choice (params.autoGainSpeed, AutoGainSpeed::Stable));
     }
 }
 
 template <typename Sample>
-void SscAudioProcessor::pushAnalyzerTap (const juce::AudioBuffer<Sample>& buffer, bool post) noexcept
+void SscAudioProcessor::pushAnalyzerTap (const juce::AudioBuffer<Sample>& buffer, int numChannels, bool post) noexcept
 {
-    const int numChannels = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
     if (numChannels == 0 || tapScratch.empty())
         return;
@@ -282,16 +286,32 @@ void SscAudioProcessor::processImpl (juce::AudioBuffer<Sample>& buffer, bool for
     if (buffer.getNumSamples() > 0)
         timer.emplace (loadMeasurer, buffer.getNumSamples());
 
-    for (int ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
+    // The main bus (the first channels of the buffer) is processed in place; the sidechain bus only
+    // feeds the detection of bands set to it. Channel pointers, not bus buffers: a bus buffer of
+    // 32 channels would allocate.
+    const int numChannels = std::min (getMainBusNumOutputChannels(), buffer.getNumChannels());
+    for (int ch = getMainBusNumInputChannels(); ch < numChannels; ++ch)
         buffer.clear (ch, 0, buffer.getNumSamples());
+    const Sample* sidechain[2] = { nullptr, nullptr };
+    int numSidechain = 0;
+    if (getBusCount (true) > 1 && getBus (true, 1)->isEnabled())
+    {
+        const int channels = std::min (2, getChannelCountOfBus (true, 1));
+        for (int k = 0; k < channels; ++k)
+        {
+            const int index = getChannelIndexInProcessBlockBuffer (true, 1, k);
+            if (index >= 0 && index < buffer.getNumChannels())
+                sidechain[numSidechain++] = buffer.getReadPointer (index);
+        }
+    }
 
-    pushAnalyzerTap (buffer, false);
+    pushAnalyzerTap (buffer, numChannels, false);
 
     readBandSettings (bandSettings);
-    engine.process (buffer.getArrayOfWritePointers(), buffer.getNumChannels(), buffer.getNumSamples(), readGlobalParams (forceBypass),
-                    bandSettings);
+    engine.process (buffer.getArrayOfWritePointers(), numChannels, buffer.getNumSamples(), readGlobalParams (forceBypass), bandSettings,
+                    numSidechain > 0 ? sidechain : nullptr, numSidechain);
 
-    pushAnalyzerTap (buffer, true);
+    pushAnalyzerTap (buffer, numChannels, true);
 }
 
 void SscAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -312,6 +332,11 @@ void SscAudioProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, 
 void SscAudioProcessor::processBlockBypassed (juce::AudioBuffer<double>& buffer, juce::MidiBuffer&)
 {
     processImpl (buffer, true);
+}
+
+bool SscAudioProcessor::isSidechainConnected() const
+{
+    return getBusCount (true) > 1 && getBus (true, 1)->isEnabled();
 }
 
 juce::AudioProcessorParameter* SscAudioProcessor::getBypassParameter() const
@@ -341,6 +366,18 @@ void SscAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
     auto tree = juce::ValueTree::fromXml (*xml);
     if (! migrateState (tree))
         return;
+
+    // A state saved before a parameter existed (the bands' Sidechain came after 1.0) sets it to its
+    // default, not leaving it at the value this instance happens to have.
+    for (auto* parameter : getParameters())
+        if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (parameter);
+            ranged != nullptr && ! tree.getChildWithProperty ("id", ranged->getParameterID()).isValid())
+        {
+            juce::ValueTree param ("PARAM");
+            param.setProperty ("id", ranged->getParameterID(), nullptr);
+            param.setProperty ("value", ranged->convertFrom0to1 (ranged->getDefaultValue()), nullptr);
+            tree.appendChild (param, nullptr);
+        }
 
     state.replaceState (tree);
     refreshSpeakers();

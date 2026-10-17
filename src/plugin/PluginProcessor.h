@@ -83,6 +83,8 @@ public:
 
     /** Oversampling factor of the band chain from the parameters, limited by the sample rate; any thread. */
     int getOversamplingFactor() const noexcept;
+    /** True while the host feeds the Sidechain input bus (message thread). */
+    bool isSidechainConnected() const;
 
     /** True when the Natural Phase corrector runs (Natural Phase, Analog Feel at High/Max); any thread. */
     bool isPhaseCorrected() const noexcept;
@@ -109,8 +111,9 @@ private:
     template <typename Sample>
     void processImpl (juce::AudioBuffer<Sample>& buffer, bool forceBypass) noexcept SSC_REALTIME;
 
+    /** Mono sum of the main bus (numChannels first channels) for the analyzer. */
     template <typename Sample>
-    void pushAnalyzerTap (const juce::AudioBuffer<Sample>& buffer, bool post) noexcept;
+    void pushAnalyzerTap (const juce::AudioBuffer<Sample>& buffer, int numChannels, bool post) noexcept;
 
     engine::GlobalParams readGlobalParams (bool forceBypass) const noexcept;
     void readBandSettings (engine::BandSettingsArray& bands) const noexcept;

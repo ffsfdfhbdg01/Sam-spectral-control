@@ -34,6 +34,15 @@ public:
         writePos = 0;
     }
 
+    /** Silences what the next calls read from before them (the last `delay` samples written), so
+        that the output starts from silence. */
+    void clearPast() noexcept
+    {
+        for (auto& line : lines)
+            for (std::size_t i = 1; i <= static_cast<std::size_t> (delay); ++i)
+                line[(writePos - i) & mask] = T {};
+    }
+
     void setDelay (int samples) noexcept
     {
         assert (samples >= 0 && samples <= maxDelay);
