@@ -136,6 +136,8 @@ private:
     float mainSpectrumDbAt (const plugin::SpectrumFrame&, float hz) const noexcept;
     /** Tooltip of the resonance hint under a point, or empty. */
     juce::String hintTooltipAt (juce::Point<float>) const;
+    /** Solo: dims what the soloed band's region filter removes and marks its audible range. */
+    void paintSoloRange (juce::Graphics&);
     void paintBandCurves (juce::Graphics&) const;
     void paintComposite (juce::Graphics&) const;
     void paintGhost (juce::Graphics&) const;
@@ -171,6 +173,10 @@ private:
     int dragBand = -1;
     bool dragFine = false;
     bool soloHeld = false;
+    // The soloed band's region filter on the curve grid, as a gain 0 … 1 (cached per shape).
+    int soloCacheBand = -1;
+    filters::BandShape soloCacheShape;
+    std::vector<float> soloGain;
     bool dragEditOpen = false;
     std::array<BandValues, kNumBands> dragStartValues {};
     std::bitset<kNumBands> lassoBase;

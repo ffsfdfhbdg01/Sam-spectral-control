@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "plugin/Parameters.h"
+#include "ssc/engine/BandProcessor.h"
 #include "ui/Theme.h"
 
 namespace ssc::ui
@@ -776,6 +777,7 @@ void EqDisplay::paint (juce::Graphics& g)
         }
     }
 
+    paintSoloRange (g);
     paintBandCurves (g);
     paintPhaseOverlay (g);
     paintGhost (g);
@@ -791,6 +793,99 @@ void EqDisplay::paint (juce::Graphics& g)
         g.setColour (colours::accent.withAlpha (0.6f));
         g.drawRect (lasso, 1.0f);
     }
+}
+
+void EqDisplay::paintSoloRange (juce::Graphics& g)
+{
+    const int band = model.getSoloBand();
+    if (band < 0 || ! model.band (band).active())
+        return;
+    const auto& v = model.band (band);
+
+    // The region the engine plays while soloing (engine::auditionShapeFor), as the bands are heard.
+    const auto region = engine::auditionShapeFor (v.toShape());
+    if (band != soloCacheBand || ! (region == soloCacheShape) || soloGain.size() != static_cast<std::size_t> (curves.numPoints()))
+    {
+        const auto db = curves.responseOf (region);
+        soloGain.resize (db.size());
+        for (std::size_t i = 0; i < db.size(); ++i)
+            soloGain[i] = juce::jlimit (0.0f, 1.0f, juce::Decibels::decibelsToGain (db[i], ResponseCurves::kFloorDb));
+        soloCacheBand = band;
+        soloCacheShape = region;
+    }
+    const int n = juce::jmin (curves.numValidPoints(), static_cast<int> (soloGain.size()));
+    if (n < 2)
+        return;
+
+    // What the region filter removes is dimmed in proportion; what it passes takes the band's tint.
+    const float height = static_cast<float> (getHeight());
+    const auto colour = bandColour (band);
+    constexpr float kDim = 0.62f, kTint = 0.07f;
+    auto gainAt = [this] (int i) { return soloGain[static_cast<std::size_t> (i)]; };
+    const float firstX = xForFrequency (curves.frequency (0));
+    if (firstX > 0.0f)
+    {
+        g.setColour (colours::background.withAlpha (kDim * (1.0f - gainAt (0))));
+        g.fillRect (0.0f, 0.0f, firstX, height);
+    }
+    for (int i = 0; i + 1 < n; ++i)
+    {
+        const float x0 = xForFrequency (curves.frequency (i));
+        const float x1 = xForFrequency (curves.frequency (i + 1));
+        const float a = 0.5f * (gainAt (i) + gainAt (i + 1));
+        g.setColour (colours::background.withAlpha (kDim * (1.0f - a)));
+        g.fillRect (x0, 0.0f, x1 - x0, height);
+        g.setColour (colour.withAlpha (kTint * a));
+        g.fillRect (x0, 0.0f, x1 - x0, height);
+    }
+    const float lastX = xForFrequency (curves.frequency (n - 1));
+    if (lastX < static_cast<float> (getWidth()))
+    {
+        g.setColour (colours::background.withAlpha (kDim)); // above Nyquist nothing is heard
+        g.fillRect (lastX, 0.0f, static_cast<float> (getWidth()) - lastX, height);
+    }
+
+    // The edges of the audible range: where the region filter is 3 dB down.
+    constexpr float kEdge = 0.70710678f;
+    float lowHz = 0.0f, highHz = 0.0f;
+    for (int i = 0; i + 1 < n; ++i)
+    {
+        const float a0 = gainAt (i), a1 = gainAt (i + 1);
+        if ((a0 - kEdge) * (a1 - kEdge) >= 0.0f || juce::approximatelyEqual (a0, a1))
+            continue;
+        const float t = (kEdge - a0) / (a1 - a0);
+        const float hz = curves.frequency (i) * std::pow (curves.frequency (i + 1) / curves.frequency (i), t);
+        (a1 > a0 ? lowHz : highHz) = hz;
+        g.setColour (colour.withAlpha (0.6f));
+        const float x = xForFrequency (hz);
+        g.drawLine (x, 0.0f, x, height, 1.0f);
+    }
+
+    // What is heard: band, target and range.
+    juce::String range;
+    if (lowHz > 0.0f && highHz > lowHz)
+        range = plugin::format::frequency (lowHz) + juce::String::fromUTF8 (" \xe2\x80\x93 ") + plugin::format::frequency (highHz);
+    else if (lowHz > 0.0f)
+        range = juce::String::fromUTF8 ("\xe2\x89\xa5 ") + plugin::format::frequency (lowHz);
+    else if (highHz > 0.0f)
+        range = juce::String::fromUTF8 ("\xe2\x89\xa4 ") + plugin::format::frequency (highHz);
+    auto target = plugin::labels::targets()[static_cast<int> (v.target)];
+    if (! v.speakers.isDefault())
+        target << " (selected speakers)";
+    const auto dot = juce::String::fromUTF8 ("   \xc2\xb7   ");
+    juce::String text = "Solo" + dot + "Band " + juce::String (band + 1) + dot + target;
+    if (range.isNotEmpty())
+        text << dot << range;
+    const auto font = uiFont (12.0f);
+    const float width = juce::GlyphArrangement::getStringWidth (font, text) + 20.0f;
+    const auto box = juce::Rectangle<float> (width, 22.0f).withCentre ({ static_cast<float> (getWidth()) * 0.5f, 17.0f });
+    g.setColour (colours::popover.withAlpha (0.92f));
+    g.fillRoundedRectangle (box, 5.0f);
+    g.setColour (colour);
+    g.drawRoundedRectangle (box, 5.0f, 1.0f);
+    g.setColour (colours::text);
+    g.setFont (font);
+    g.drawText (text, box, juce::Justification::centred);
 }
 
 void EqDisplay::paintPhaseOverlay (juce::Graphics& g) const

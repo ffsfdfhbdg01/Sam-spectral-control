@@ -104,7 +104,6 @@ void Engine::prepare (const EngineConfig& config)
     curveLanes.fill ({});
     spectralEnabled = false;
     const int maxSpectralLatency = spectral::fftSizeFor (Quality::Max, cfg.sampleRate);
-    soloDelay.prepare (cfg.numChannels, maxOsLatency + maxCorrection + maxSpectralLatency, chunkSize);
 
     latencySamples.store (0, std::memory_order_relaxed);
     dryDelay.prepare (cfg.numChannels, maxLookaheadSamples + maxOsLatency + maxCorrection + maxSpectralLatency, chunkSize);
@@ -134,7 +133,6 @@ void Engine::reset() noexcept
         std::fill (h.begin(), h.end(), 0.0);
     soloProcessor->reset();
     spectralEngine->reset();
-    soloDelay.reset();
     autoGain->reset();
     osBypassDelay.reset();
     renderPadDelay.reset();
@@ -474,7 +472,6 @@ void Engine::configure (const GlobalParams& params, const BandSettingsArray& ban
 
     lookaheadSamples = lookahead;
     osBypassDelay.setDelay (lookahead + osLatency);
-    soloDelay.setDelay (sharedOsLatency + correctionLatency + spectralLatency);
     dryDelay.setDelay (latency);
     latencySamples.store (latency, std::memory_order_relaxed);
 }
@@ -497,7 +494,15 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
     const bool soloing = params.soloBand >= 0 && params.soloBand < kNumBands && bands[static_cast<std::size_t> (params.soloBand)].active;
     soloAmount.setTarget (soloing ? 1.0 : 0.0);
     if (soloing)
-        lastSoloShape = auditionShapeFor (bands[static_cast<std::size_t> (params.soloBand)].shape);
+    {
+        // The band's region, on its target (channels and stereo component).
+        const auto& soloed = bands[static_cast<std::size_t> (params.soloBand)];
+        soloAudition.active = true;
+        soloAudition.shape = auditionShapeFor (soloed.shape);
+        soloAudition.component = soloed.component;
+        soloAudition.channelMask = soloed.channelMask;
+        soloAudition.includeLfe = soloed.includeLfe;
+    }
 
     configure (params, bands);
     const BandSettingsArray& heard = useHeardCopy ? *heardBands : bands; // as heard (Analog Feel model)
@@ -631,23 +636,10 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
     if (inputSanitised)
         nonFiniteEvents.fetch_add (1, std::memory_order_relaxed);
 
-    // Solo auditions the lookahead-delayed input at the base rate.
+    // Solo works on what is heard, after the output stage below.
     const bool soloActive = soloAmount.isSmoothing() || soloAmount.getCurrent() > 0.0;
-    if (soloActive)
-    {
-        if (! soloWasActive)
-        {
-            soloProcessor->reset();
-            soloDelay.reset();
-        }
-        for (int ch = 0; ch < numChannels; ++ch)
-        {
-            const auto& h = history[static_cast<std::size_t> (ch)];
-            auto& s = solo[static_cast<std::size_t> (ch)];
-            for (std::size_t i = 0; i < n; ++i)
-                s[i] = h[static_cast<std::size_t> ((historyWrite + static_cast<int> (i) - lookaheadSamples) & historyMask)];
-        }
-    }
+    if (soloActive && ! soloWasActive)
+        soloProcessor->reset();
     soloWasActive = soloActive;
 
     // Exactly delayed input for the channels that bypass oversampling (CH-6).
@@ -697,38 +689,17 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
     // Dry path aligned with the processed path (latency).
     dryDelay.processInPlace (dryPointers.data(), numChannels, numSamples);
 
-    // Global Auto Gain on the processed channels, before Solo, so the audition is unaffected (AG-5).
-    // Delta is heard without it: the difference shows what the EQ changes, not the level make-up.
+    // Global Auto Gain on the processed channels. Delta and Solo are heard without it (AG-5): they
+    // show what the EQ changes, not the level make-up.
     const bool autoGainActive = autoGainSettings.enabled || std::abs (autoGain->getCorrectionDb()) > 0.0f;
-    const bool deltaCopy = autoGainActive && (delta.isSmoothing() || delta.getCurrent() > 0.0);
-    if (deltaCopy)
+    const bool keepUnadjusted = autoGainActive && (delta.isSmoothing() || delta.getCurrent() > 0.0 || soloActive);
+    if (keepUnadjusted)
         for (int ch = 0; ch < numChannels; ++ch)
             std::copy_n (wet[static_cast<std::size_t> (ch)].begin(), n, deltaWet[static_cast<std::size_t> (ch)].begin());
     if (autoGainActive)
         autoGain->process (dryPointers.data(), wetPointers.data(), numChannels, numSamples, autoGainSettings, autoGainWeights,
                            autoGainCovered);
-    const auto& deltaSource = deltaCopy ? deltaWet : wet;
-
-    // Solo: crossfade the processed signal with the band's audition filter applied to the input.
-    if (soloActive)
-    {
-        BandSettings audition;
-        audition.active = true;
-        audition.shape = lastSoloShape;
-        soloProcessor->process (audition, cfg.topology, soloPointers.data(), numChannels, numSamples, controlBlock);
-        soloDelay.processInPlace (soloPointers.data(), numChannels, numSamples);
-        for (std::size_t i = 0; i < n; ++i)
-        {
-            const double s = soloAmount.next();
-            for (int ch = 0; ch < numChannels; ++ch)
-            {
-                const auto c = static_cast<std::size_t> (ch);
-                wet[c][i] = wet[c][i] * (1.0 - s) + solo[c][i] * s;
-                if (deltaCopy)
-                    deltaWet[c][i] = deltaWet[c][i] * (1.0 - s) + solo[c][i] * s;
-            }
-        }
-    }
+    const auto& deltaSource = keepUnadjusted ? deltaWet : wet;
 
     // A filter that produced a non-finite or runaway value is restarted and the block muted.
     double energy = 0.0;
@@ -749,8 +720,9 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         nonFiniteEvents.fetch_add (1, std::memory_order_relaxed);
     }
 
-    const bool identity = ! outputGain.isSmoothing() && ! mix.isSmoothing() && ! bypass.isSmoothing() && ! delta.isSmoothing()
-        && outputGain.getCurrent() == 1.0 && mix.getCurrent() == 1.0 && bypass.getCurrent() == 0.0 && delta.getCurrent() == 0.0;
+    const bool identity = ! soloActive && ! outputGain.isSmoothing() && ! mix.isSmoothing() && ! bypass.isSmoothing()
+        && ! delta.isSmoothing() && outputGain.getCurrent() == 1.0 && mix.getCurrent() == 1.0 && bypass.getCurrent() == 0.0
+        && delta.getCurrent() == 0.0;
     if (identity)
     {
         for (int ch = 0; ch < numChannels; ++ch)
@@ -774,6 +746,41 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         outputGain.skip (numSamples);
         mix.skip (numSamples);
         delta.skip (numSamples);
+        soloAmount.skip (numSamples);
+        return;
+    }
+
+    if (soloActive)
+    {
+        // What is heard, and the same without the Auto Gain correction as the source of Solo (AG-5).
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            const double g = outputGain.next();
+            const double m = mix.next();
+            const double dl = delta.next();
+            for (int ch = 0; ch < numChannels; ++ch)
+            {
+                const auto c = static_cast<std::size_t> (ch);
+                const double d = dry[c][i];
+                const double processed = wet[c][i];
+                const double unadjusted = deltaSource[c][i];
+                const double changed = d - (unadjusted * m + d * (1.0 - m));
+                wet[c][i] = ((processed * m + d * (1.0 - m)) * (1.0 - dl) + changed * dl) * g;
+                solo[c][i] = ((unadjusted * m + d * (1.0 - m)) * (1.0 - dl) + changed * dl) * g;
+            }
+        }
+        auditionSolo (numChannels, numSamples);
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            const double s = soloAmount.next();
+            const double b = bypass.next();
+            for (int ch = 0; ch < numChannels; ++ch)
+            {
+                const auto c = static_cast<std::size_t> (ch);
+                const double heard = wet[c][i] * (1.0 - s) + solo[c][i] * s;
+                channels[ch][i] = static_cast<Sample> (heard * (1.0 - b) + dry[c][i] * b);
+            }
+        }
         return;
     }
 
@@ -794,6 +801,53 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
             const double heard = (mixed * (1.0 - dl) + changed * dl) * g;
             channels[ch][i] = static_cast<Sample> (heard * (1.0 - b) + d * b);
         }
+    }
+}
+
+void Engine::auditionSolo (int numChannels, int numSamples) noexcept
+{
+    const auto n = static_cast<std::size_t> (numSamples);
+
+    // Only the band's target is heard: channels it does not cover are silent, and a Mid or Side
+    // target keeps its component alone (the other one is zero, so the region filter decodes to it).
+    const auto lanes = makeLanes (soloAudition.component, soloAudition.channelMask, soloAudition.includeLfe, cfg.topology);
+    std::array<bool, kMaxChannels> covered {};
+    for (int l = 0; l < lanes.numLanes; ++l)
+    {
+        const auto& lane = lanes.lanes[static_cast<std::size_t> (l)];
+        const bool pair = lane.kind == Lane::Kind::Mid || lane.kind == Lane::Kind::Side;
+        if (lane.a < 0 || lane.a >= numChannels || (pair && (lane.b < 0 || lane.b >= numChannels)))
+            continue;
+        covered[static_cast<std::size_t> (lane.a)] = true;
+        if (! pair)
+            continue;
+        covered[static_cast<std::size_t> (lane.b)] = true;
+        auto& a = solo[static_cast<std::size_t> (lane.a)];
+        auto& b = solo[static_cast<std::size_t> (lane.b)];
+        const double sign = lane.kind == Lane::Kind::Mid ? 1.0 : -1.0;
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            const double component = 0.5 * (a[i] + sign * b[i]);
+            a[i] = component;
+            b[i] = sign * component;
+        }
+    }
+    for (int ch = 0; ch < numChannels; ++ch)
+        if (! covered[static_cast<std::size_t> (ch)])
+            std::fill_n (solo[static_cast<std::size_t> (ch)].begin(), n, 0.0);
+
+    // The band's region (auditionShapeFor), on the same lanes.
+    soloProcessor->process (soloAudition, cfg.topology, soloPointers.data(), numChannels, numSamples, controlBlock);
+
+    double energy = 0.0;
+    for (int ch = 0; ch < numChannels; ++ch)
+        for (std::size_t i = 0; i < n; ++i)
+            energy += solo[static_cast<std::size_t> (ch)][i] * solo[static_cast<std::size_t> (ch)][i];
+    if (! std::isfinite (energy))
+    {
+        soloProcessor->reset();
+        for (int ch = 0; ch < numChannels; ++ch)
+            std::fill_n (solo[static_cast<std::size_t> (ch)].begin(), n, 0.0);
     }
 }
 

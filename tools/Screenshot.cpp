@@ -2,9 +2,9 @@
 // Usage: ssc_screenshot <output.png> [width height] [paramId=value ...] [select=<band 1-24>]
 //        [layout=stereo|5.1|7.1.4|9.1.6] [speakers=<band 1-24>:<roles hex>] [speakerpanel=<band 1-24>]
 //        [analyzer.mode|resolution|speed|tilt|range|peak|glow|freeze|hints|phase=<value>] [profile=<frames>]
-//        [advanced=0|1] [globaladvanced=0|1] [motion=0|1|2]
+//        [advanced=0|1] [globaladvanced=0|1] [motion=0|1|2] [solo=<band 1-24>]
 // advanced opens the band's Advanced flyout, globaladvanced the global Advanced panel; motion sets
-// the animations (0 Full, 1 Reduced, 2 Off).
+// the animations (0 Full, 1 Reduced, 2 Off); solo auditions that band (its audible range is drawn).
 // profile paints the editor that many times while audio plays and prints the paint times (VIS-6);
 // seconds=<s> sets how long the test programme plays before the snapshot (default 3).
 // speakerpanel renders that band's loudspeaker panel instead of the editor.
@@ -78,6 +78,7 @@ int main (int argc, char** argv)
     int selectBand = -1;
     int speakerPanelBand = -1;
     int profileFrames = 0;
+    int soloBand = -1;
     double playSeconds = 3.0;
     for (; argIndex < argc; ++argIndex)
     {
@@ -86,6 +87,8 @@ int main (int argc, char** argv)
         const auto value = assignment.fromFirstOccurrenceOf ("=", false, false).getFloatValue();
         if (paramId == "select")
             selectBand = juce::roundToInt (value) - 1;
+        else if (paramId == "solo")
+            soloBand = juce::roundToInt (value) - 1;
         else if (paramId == "layout")
             continue;
         else if (paramId == "profile")
@@ -167,6 +170,11 @@ int main (int argc, char** argv)
     {
         ssc->getBandModel().refresh();
         ssc->getBandModel().select (selectBand, false);
+    }
+    if (auto* ssc = dynamic_cast<ssc::ui::SscEditor*> (editor.get()); ssc != nullptr && soloBand >= 0)
+    {
+        ssc->getBandModel().refresh();
+        ssc->getBandModel().setSoloBand (soloBand);
     }
 
     // Rendered offscreen: no window manager or vblank needed.

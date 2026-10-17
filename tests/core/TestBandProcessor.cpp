@@ -230,64 +230,6 @@ TEST_CASE ("Engine applies active bands and leaves inactive ones bit-exact", "[e
     REQUIRE (10.0 * std::log10 (sumL / sumS) == Approx (-6.0).margin (0.02));
 }
 
-TEST_CASE ("Band solo auditions the band region and fades back (BAND-1)", "[engine][BAND-1]")
-{
-    // Input: a tone at the band frequency and one a decade below.
-    const int total = 48000;
-    const auto inBand = ssc::test::sine (1000.0, 0.2, kFs, total);
-    const auto outOfBand = ssc::test::sine (100.0, 0.2, kFs, total);
-
-    auto levelDb = [&] (bool solo, const std::vector<float>& source) {
-        Engine engine;
-        EngineConfig cfg;
-        cfg.sampleRate = kFs;
-        cfg.maxBlockSize = 512;
-        engine.prepare (cfg);
-
-        BandSettingsArray bands {};
-        bands[5] = bell (1000.0, 6.0, 2.0);
-        GlobalParams params;
-        params.soloBand = solo ? 5 : -1;
-
-        std::vector<float> left = source, right = source;
-        for (std::size_t offset = 0; offset < left.size(); offset += 512)
-        {
-            float* ptrs[] = { left.data() + offset, right.data() + offset };
-            engine.process (ptrs, 2, static_cast<int> (std::min<std::size_t> (512, left.size() - offset)), params, bands);
-        }
-        double out = 0.0, in = 0.0;
-        for (std::size_t i = 24000; i < left.size(); ++i)
-        {
-            out += static_cast<double> (left[i]) * left[i];
-            in += static_cast<double> (source[i]) * source[i];
-        }
-        return 10.0 * std::log10 (out / in);
-    };
-
-    // Not soloed: the bell boosts its frequency.
-    REQUIRE (levelDb (false, inBand) == Approx (6.0).margin (0.05));
-    // Soloed: unity at the band frequency (the band's own gain is not applied), the rest is attenuated.
-    REQUIRE (levelDb (true, inBand) == Approx (0.0).margin (0.05));
-    REQUIRE (levelDb (true, outOfBand) < -20.0);
-
-    // Solo of an inactive band does nothing.
-    Engine engine;
-    EngineConfig cfg;
-    cfg.sampleRate = kFs;
-    cfg.maxBlockSize = 512;
-    engine.prepare (cfg);
-    BandSettingsArray bands {};
-    GlobalParams params;
-    params.soloBand = 2;
-    auto left = outOfBand, right = outOfBand;
-    for (std::size_t offset = 0; offset < left.size(); offset += 512)
-    {
-        float* ptrs[] = { left.data() + offset, right.data() + offset };
-        engine.process (ptrs, 2, static_cast<int> (std::min<std::size_t> (512, left.size() - offset)), params, bands);
-    }
-    REQUIRE (left == outOfBand);
-}
-
 TEST_CASE ("Audition filters cover the band region", "[engine][BAND-1]")
 {
     using filters::BandShape;

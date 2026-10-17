@@ -39,7 +39,7 @@ struct GlobalParams
     bool bypass = false;
     bool delta = false; ///< hear what the plugin changes: (dry − mixed output) × output gain (GLB-2)
     Quality quality = Quality::Normal;
-    int soloBand = -1;           ///< band auditioned on its own (−1 = none); see auditionShapeFor()
+    int soloBand = -1;           ///< band auditioned on its own (−1 = none): its region of what is heard, on its target only
     double maxLookaheadMs = 0.0; ///< delay of the main path; Dynamic bands look ahead up to this (DYN-8)
     bool autoGain = false;       ///< global Auto Gain (AG-1)
     AutoGainWeighting autoGainWeighting = AutoGainWeighting::Fletcher;
@@ -104,10 +104,13 @@ constexpr int controlBlockFor (Quality q) noexcept
 
     Signal flow (ARC-2, ADR-0008, ADR-0005, ADR-0011):
     input → Max Lookahead delay → [upsample] → bands (IIR, dynamics, Character) → [downsample]
-          → [Natural Phase corrector] → spectral engine → Auto Gain → Solo
+          → [Natural Phase corrector] → spectral engine → Auto Gain → output → Solo
     out = (mix * processed + (1 - mix) * dry) * outputGain, crossfaded with the latency-aligned
-    dry signal when bypassed; Delta replaces it with (dry − mix * processed − (1 − mix) * dry) * outputGain. Channels that no band processes
-   bypass oversampling exactly (CH-6). Latency = lookahead + oversampling + corrector + spectral frame.
+    dry signal when bypassed; Delta replaces it with (dry − mix * processed − (1 − mix) * dry) * outputGain.
+    Solo plays the band's region of that signal (computed without the Auto Gain correction, AG-5)
+    on the band's target only: the other channels and the other stereo component are silent.
+    Channels that no band processes bypass oversampling exactly (CH-6). Latency = lookahead +
+    oversampling + corrector + spectral frame; Solo adds none.
 
     prepare() allocates for every oversampling factor, phase mode and Quality, so process()
     stays real-time safe when they change.
@@ -209,13 +212,15 @@ private:
     int maxLookaheadSamples = 0;
     // Large state lives on the heap, so an Engine fits on any thread's stack (Windows: 1 MB).
     std::unique_ptr<std::array<BandProcessor, kNumBands>> bandProcessors = std::make_unique<std::array<BandProcessor, kNumBands>>();
+    // Solo (BAND-1): the band's region of what is heard, on the band's target only.
+    void auditionSolo (int numChannels, int numSamples) noexcept;
     std::unique_ptr<BandProcessor> soloProcessor = std::make_unique<BandProcessor>();
     std::vector<std::vector<double>> solo;
     std::vector<double*> soloPointers;
     std::vector<std::vector<double>> deltaWet; ///< processed signal without the Auto Gain correction (AG-5)
     LinearSmoother<double> soloAmount;
     bool soloWasActive = false;
-    filters::BandShape lastSoloShape;
+    BandSettings soloAudition; ///< region filter of the soloed band, with the band's target
     int controlBlock = 16;
     MultiChannelDelay<double> dryDelay;
 
@@ -237,7 +242,6 @@ private:
     std::vector<std::vector<double>> bandCurvesDb; ///< [band][ERB band]
     std::vector<double> channelCurveDb;            ///< scratch [ERB band]
     bool spectralEnabled = false;
-    MultiChannelDelay<double> soloDelay;
 
     // Oversampling of the band chain (ADR-0008): one oversampler per filter type, factor and Quality.
     int maxFactor = 1;
