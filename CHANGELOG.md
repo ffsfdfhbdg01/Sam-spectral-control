@@ -5,10 +5,14 @@ Wszystkie istotne zmiany Sam Spectral Control. Format: [Keep a Changelog](https:
 ## [Unreleased]
 
 ### Dodane
+- **Kompresja w górę** (upward compression) w pasmach Dynamic i Spectral: przełącznik **Down | Up** w nagłówku rzędu dynamiki panelu pasma (obok Auto Gain) i podmenu *Direction* w menu węzła. Up z Ratio powyżej 1:1 podnosi obszar pasma, gdy jest cichszy niż próg (najwyżej o Range), a głośne fragmenty zostawia; Up z Ratio poniżej 1:1 to ekspansja w górę, Down — kompresja albo ekspansja w dół (jak bramka). Nagłówek rzędu dynamiki nazywa działanie (**UPWARD COMPRESSION**, **EXPANSION**, **UPWARD EXPANSION**).
 - **Sidechain** pasm Dynamic i Spectral (DYN-4): opcjonalne wejście **Sidechain** wtyczki (mono lub stereo, domyślnie wyłączone) i wybór **Sidechain: Internal | External** w panelu Advanced pasma oraz *External Sidechain* w menu węzła. Pasmo z External mierzy poziom w sidechainie (na swoim celu: Left, Right, Mid, Side, All; sidechain mono steruje wszystkimi kanałami), a przetwarza własny sygnał; pasma Spectral biorą poziomy z widma sidechaina. Sidechain jest wyrównany w czasie z torem głównym (Lookahead, oversampling, Natural Phase) i nie dodaje latencji. Panel pasma pokazuje **· SIDECHAIN**, a bez sygnału na wejściu — bursztynowe **SIDECHAIN: NO INPUT**.
 - Solo pokazuje na wykresie słyszalny zakres: przyciemnia to, czego nie słychać, zaznacza granice (−3 dB) i podaje pasmo, cel i zakres (jak w Pro-Q 4).
 
 ### Zmienione
+- **Direction** pasma to teraz **Down** (pasmo tnie) / **Up** (podbija) zamiast Above / Below; po której stronie progu pasmo działa, wynika z Ratio. Przełącznik przeszedł z panelu Advanced do panelu pasma.
+- **Attack i Release** odpowiadają teraz zawsze na rosnący i malejący poziom (DYN-6). W kompresji w górę podbicie znika przy głośnym wejściu z czasem Attack — wcześniej z czasem Release, przez co początek każdego głośnego dźwięku po cichym fragmencie był podbijany o pełny Range; ekspansja w dół (bramka) otwiera się z czasem Attack. Kompresja i ekspansja powyżej progu działają jak dotąd.
+- Stan zapisu ma wersję 2: projekty, presety, porównanie A/B i skopiowane pasma z 1.0 są przy wczytaniu przeliczane i brzmią tak samo (Direction: Above / Below → Down / Up według Ratio; w pasmach działających poniżej progu Attack i Release zamieniają się miejscami, w granicach swoich zakresów). Wersja 1.0 nie wczyta stanu zapisanego przez nowszą wersję.
 - **Solo** pasma brzmi tak głośno, jak pasmo naprawdę gra w miksie: z jego wzmocnieniem i działaniem Dynamic lub Spectral (podbicie głośniej, cięcie ciszej) zamiast stałego poziomu filtra pasmowego, i tylko na celu pasma — Mid daje samą składową środkową, Side samą boczną, Left / Right tylko ten kanał, w surround tylko głośniki pasma. Auto Gain nie zmienia poziomu Solo.
 - Stan zapisany przez 1.0 (bez parametru Sidechain) wczytuje się z Sidechain Internal; schowek pasma (*Copy* / *Paste*) ma nowy format, starszy nadal da się wkleić.
 

@@ -62,6 +62,7 @@ Source: "..\..\docs\images\editor.png"; DestDir: "{app}\images"; Components: doc
 Source: "..\..\docs\images\editor-advanced.png"; DestDir: "{app}\images"; Components: docs; Flags: ignoreversion
 Source: "..\..\docs\images\sidechain.png"; DestDir: "{app}\images"; Components: docs; Flags: ignoreversion
 Source: "..\..\docs\images\solo.png"; DestDir: "{app}\images"; Components: docs; Flags: ignoreversion
+Source: "..\..\docs\images\upward.png"; DestDir: "{app}\images"; Components: docs; Flags: ignoreversion
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{commoncf64}\VST3\{#AppName}.vst3"

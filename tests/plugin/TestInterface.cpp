@@ -239,28 +239,30 @@ TEST_CASE ("The band panel shows the knobs of the band's mode; details live in A
     for (const auto p : { BandParam::Mode, BandParam::On, BandParam::Shape, BandParam::Frequency, BandParam::Gain, BandParam::Q,
                           BandParam::Target, BandParam::Character })
         CHECK (contains (shown, p));
-    for (const auto p : { BandParam::Threshold, BandParam::Ratio, BandParam::Range, BandParam::Attack, BandParam::Release,
-                          BandParam::Selectivity, BandParam::AutoGain, BandParam::Slope, BandParam::Knee, BandParam::Lookahead })
+    for (const auto p :
+         { BandParam::Threshold, BandParam::Ratio, BandParam::Range, BandParam::Attack, BandParam::Release, BandParam::Selectivity,
+           BandParam::AutoGain, BandParam::Slope, BandParam::Knee, BandParam::Lookahead, BandParam::Direction })
         CHECK_FALSE (contains (shown, p));
     CHECK (shown.size() <= 11);
     CHECK (advanced.visibleParameters().empty());
     CHECK (panel.getPreferredSize().y == BandPanel::kStaticHeight);
 
-    // Dynamic: Threshold, Ratio, Range, Attack, Release and Auto Gain; knee, lookahead, mix, link,
-    // threshold mode and direction in Advanced.
+    // Dynamic: Threshold, Ratio, Range, Attack, Release, Direction (Down | Up) and Auto Gain; knee,
+    // lookahead, mix, link, sidechain and threshold mode in Advanced.
     model.setMode (band, BandMode::Dynamic);
     shown = panel.visibleParameters();
-    for (const auto p :
-         { BandParam::Threshold, BandParam::Ratio, BandParam::Range, BandParam::Attack, BandParam::Release, BandParam::AutoGain })
+    for (const auto p : { BandParam::Threshold, BandParam::Ratio, BandParam::Range, BandParam::Attack, BandParam::Release,
+                          BandParam::AutoGain, BandParam::Direction })
         CHECK (contains (shown, p));
     for (const auto p : { BandParam::Selectivity, BandParam::Knee, BandParam::Lookahead, BandParam::Mix, BandParam::Link,
-                          BandParam::Sidechain, BandParam::ThresholdMode, BandParam::Direction })
+                          BandParam::Sidechain, BandParam::ThresholdMode })
         CHECK_FALSE (contains (shown, p));
-    CHECK (shown.size() <= 14);
+    CHECK (shown.size() <= 15);
     auto detail = advanced.visibleParameters();
-    for (const auto p : { BandParam::ThresholdMode, BandParam::Direction, BandParam::Knee, BandParam::Lookahead, BandParam::Mix,
-                          BandParam::Link, BandParam::Sidechain })
+    for (const auto p :
+         { BandParam::ThresholdMode, BandParam::Knee, BandParam::Lookahead, BandParam::Mix, BandParam::Link, BandParam::Sidechain })
         CHECK (contains (detail, p));
+    CHECK_FALSE (contains (detail, BandParam::Direction));
     CHECK_FALSE (contains (detail, BandParam::Ratio));
     CHECK (panel.getPreferredSize().y == BandPanel::kDynamicHeight);
     CHECK (advanced.getPreferredHeight() <= BandPanel::kDynamicHeight);
@@ -270,6 +272,7 @@ TEST_CASE ("The band panel shows the knobs of the band's mode; details live in A
     shown = panel.visibleParameters();
     CHECK (contains (shown, BandParam::Selectivity));
     CHECK_FALSE (contains (shown, BandParam::Ratio));
+    CHECK (contains (shown, BandParam::Direction));
     detail = advanced.visibleParameters();
     CHECK (contains (detail, BandParam::Ratio));
     CHECK (contains (detail, BandParam::Sidechain));
@@ -321,12 +324,15 @@ TEST_CASE ("The Advanced button marks detector settings that differ from the mod
     model.setMode (band, BandMode::Dynamic);
     CHECK (BandPanel::advancedDiffersFromDefault (model, band));
 
-    // The External sidechain counts too (DYN-4).
+    // Direction is on the panel itself, so Up lights no dot.
     {
         BandModel::ScopedEdit edit (model, "Reset");
         model.setValue (band, BandParam::Lookahead, 0.0f);
+        model.setValue (band, BandParam::Direction, 1.0f);
     }
     CHECK_FALSE (BandPanel::advancedDiffersFromDefault (model, band));
+
+    // The External sidechain counts (DYN-4).
     {
         BandModel::ScopedEdit edit (model, "Change Sidechain");
         model.setValue (band, BandParam::Sidechain, 1.0f);
@@ -540,4 +546,41 @@ TEST_CASE ("The editor docks its panels clear of each other and closes while the
     CHECK_FALSE (static_cast<bool> (state[plugin::kUiGlobalAdvanced]));
     CHECK (static_cast<int> (state[plugin::kUiMotion]) == static_cast<int> (motion::Level::Full));
     processor.releaseResources();
+}
+
+TEST_CASE ("Down | Up on the dynamics title line: Up is upward compression, named in the title (DYN-5)", "[ui][DYN-5]")
+{
+    JuceEnvironment env;
+    plugin::SscAudioProcessor processor;
+    BandModel model (processor.getValueTreeState(), processor.getUndoManager());
+    BandPanel panel (model);
+
+    CHECK (BandPanel::dynamicsKind (false, false) == "COMPRESSION");
+    CHECK (BandPanel::dynamicsKind (true, false) == "UPWARD COMPRESSION");
+    CHECK (BandPanel::dynamicsKind (false, true) == "EXPANSION");
+    CHECK (BandPanel::dynamicsKind (true, true) == "UPWARD EXPANSION");
+
+    const int band = model.createBand (Shape::Bell, 1000.0f, 0.0f);
+    CHECK_FALSE (contains (panel.visibleParameters(), BandParam::Direction)); // Static
+    model.setMode (band, BandMode::Dynamic);
+    CHECK (contains (panel.visibleParameters(), BandParam::Direction));
+    CHECK_FALSE (model.band (band).upward);
+
+    // The model follows the parameter (also from the host or undo) and the ratio's side of 1:1.
+    {
+        BandModel::ScopedEdit edit (model, "Change Direction");
+        model.setValue (band, BandParam::Direction, 1.0f);
+    }
+    CHECK (model.band (band).upward);
+    CHECK_FALSE (model.band (band).expand);
+    {
+        BandModel::ScopedEdit edit (model, "Change Ratio");
+        model.setValue (band, BandParam::Ratio, 0.5f);
+    }
+    CHECK (model.band (band).expand);
+    REQUIRE (processor.getUndoManager().undo());
+    REQUIRE (processor.getUndoManager().undo());
+    model.refresh();
+    CHECK_FALSE (model.band (band).upward);
+    CHECK_FALSE (model.band (band).expand);
 }

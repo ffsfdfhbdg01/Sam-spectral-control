@@ -249,7 +249,7 @@ namespace labels
     }
     const juce::StringArray& directions()
     {
-        static const juce::StringArray s { "Above", "Below" };
+        static const juce::StringArray s { "Down", "Up" };
         return s;
     }
     const juce::StringArray& links()

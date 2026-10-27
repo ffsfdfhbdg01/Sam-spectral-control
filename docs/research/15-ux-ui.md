@@ -157,7 +157,7 @@ Zakres skali EQ jest w prawym górnym rogu wykresu, obok skali dB (F10). Progi o
 - **Wymiary**: szerokość 488 px (600 px w surround, z Speakers), wysokość 132 px (Static) albo 232 px (Dynamic, Spectral). Przy zmianie trybu panel zmienia tylko wysokość, nigdy szerokości (w 1.0 skakał z 482 na 684 px).
 - **Gałki**: EQ ok. 46 px, dynamika ok. 38 px, Advanced ok. 32 px; łuk w kolorze pasma (podobieństwo z węzłem, A8), Gain od 0 dB w obie strony; podpis nad gałką, wartość pod nią (kliknięcie — wpisanie wartości, dwuklik — wartość domyślna).
 - **Tryb**: segmenty Dynamic i Spectral są nieaktywne dla kształtów bez wzmocnienia (podpowiedź mówi dlaczego). Przełączenie na Spectral z nieruszonym progiem Dynamic ustawia Relative +6 dB i odwrotnie (DYN-4, bez zmian).
-- **Liczba kontrolek parametrów**: Static 8 (w 1.0: 11–12 kontrolek, w tym 3 listy bez podpisu), Dynamic i Spectral 14 (w 1.0: 23–24). Test `TestInterface` sprawdza, które parametry ma każdy tryb.
+- **Liczba kontrolek parametrów**: Static 8 (w 1.0: 11–12 kontrolek, w tym 3 listy bez podpisu), Dynamic i Spectral 14 (w 1.0: 23–24), po 1.0.0 — 15, bo kierunek **Down | Up** (kompresja w górę) przeszedł z Advanced do panelu pasma: to wybór tego, co pasmo robi, a nie szczegół detektora. Test `TestInterface` sprawdza, które parametry ma każdy tryb.
 
 ### d6. Wysuwany panel Advanced pasma
 
@@ -204,7 +204,7 @@ Odczyty mierników odświeżają się także przy zamkniętym panelu (kropka na 
 |---|---|---|---|
 | **Chip** (`ChipButton`) | włącza / wyłącza funkcję albo panel | obrys; *on*: wypełnienie w kolorze semantycznym; może mieć ikonę (›, ▴) i kropkę | Auto Gain, Delta, Analyzer, Advanced |
 | **Ikona** (`IconButton`) | akcje i stany elementu | 28 × 28 px, tło tylko na hover; *on*: ikona i tło w kolorze stanu; lampka/kropka w rogu | ‹ ›, ⧉, ↶ ↷, ⚙, ?, ⋯, ⏻ pasma (czerwona lampka), 🎧 (bursztyn) |
-| **Segmented** (`SegmentedControl`) | 2–3 wykluczające się opcje | wspólny kontener, przesuwany wskaźnik (140 ms), strzałki ← → z klawiatury, nieaktywne segmenty pomijane | A \| B, Static \| Dynamic \| Spectral, Absolute \| Relative, Above \| Below |
+| **Segmented** (`SegmentedControl`) | 2–3 wykluczające się opcje | wspólny kontener, przesuwany wskaźnik (140 ms), strzałki ← → z klawiatury, nieaktywne segmenty pomijane | A \| B, Static \| Dynamic \| Spectral, Absolute \| Relative, Down \| Up |
 | **Value button** (`ValueButton`, `ChoiceParameterButton`, `BandChoiceButton`) | wybór z listy, zmieniany rzadziej | podpis 11 px nad wartością, ▾ tuż za wartością, bez ramki; menu pod przyciskiem | Phase, Model, Quality, Oversampling, Offline, Weighting, Speed, Shape, Slope, Target, Character, Link, zakres EQ |
 | **Split button** | funkcja + jej ustawienia | dwa chipy połączone krawędzią | Analyzer ▾ |
 | **Pole presetu** (`PresetNameButton`) | nazwa i menu presetów | pole z obrysem, kropka „zmieniony” | Default • |
@@ -245,7 +245,7 @@ Krzywe: *wejście* `cubic-bezier(0, 0, 0.2, 1)`, *wyjście* `cubic-bezier(0.4, 0
 | 3 | inne pasmo, dół ↔ góra, zmiana trybu (wysokość) | przesunięcie i rozmiar | 180 ms | standard | natychmiast |
 | 4 | Advanced pasma: otwarcie / zamknięcie | wysunięcie spod panelu + przenikanie | 160–180 ms (przenikanie 140 ms) / 140 ms | wejście, standard / wyjście | przenikanie ≤ 100 ms |
 | 5 | globalny Advanced: otwarcie / zamknięcie | wysunięcie zza dolnego paska + przenikanie | 200 ms (przenikanie 120 ms) / 150 ms | wejście / wyjście | przenikanie ≤ 100 ms |
-| 6 | segmented (tryb, A/B, Abs/Rel, Above/Below) | przesunięcie wskaźnika | 140 ms | standard | natychmiast |
+| 6 | segmented (tryb, A/B, Abs/Rel, Down/Up) | przesunięcie wskaźnika | 140 ms | standard | natychmiast |
 | 7 | zmiana latencji | bursztynowy chip statusu przez 3 s | — | — | bez zmian |
 
 *Off* = wszystko natychmiast. Reguły z pierwszej wersji zostają: krzywa i wartości nigdy nie są animowane (rysowane od razu), każda animacja startuje od bieżącej wartości i nie blokuje wejścia, bez odbić i pętli.
@@ -287,7 +287,7 @@ Krzywe: *wejście* `cubic-bezier(0, 0, 0.2, 1)`, *wyjście* `cubic-bezier(0.4, 0
 | # | Kryterium | Sprawdzenie | Wynik |
 |---|---|---|---|
 | E1 | Grupy w paskach oddzielone ≥ 16 px i linią; sekcje paneli podpisane | zrzuty `ssc_screenshot` | spełnione (`editor.png`, `editor-advanced.png`) |
-| E2 | Panel pasma pokazuje tylko parametry swojego trybu: Static ≤ 11, Dynamic i Spectral ≤ 14 kontrolek parametrów; żadnej listy bez podpisu | test `TestInterface` | spełnione: 8 i 14 |
+| E2 | Panel pasma pokazuje tylko parametry swojego trybu: Static ≤ 11, Dynamic i Spectral ≤ 14 kontrolek parametrów (po 1.0.0 ≤ 15: Down \| Up); żadnej listy bez podpisu | test `TestInterface` | spełnione: 8 i 15 |
 | E3 | Tekst ≥ 4,5:1 do swojej warstwy; wskaźniki stanu ≥ 3:1; tor gałki ≥ 2:1 | test tokenów (`contrastRatio`) | spełnione (§d10) |
 | E4 | Cele kliknięcia ≥ 24 × 24 px | przegląd, test segmentów | przyciski 28 × 28, segmenty i chipy wysokie na 26–28 px |
 | E5 | Przy 860 × 480 żadna etykieta nie jest ucięta | zrzut `editor-860x480.png` | spełnione (krótkie nazwy trybów fazy, zwarty chip statusu) |

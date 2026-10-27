@@ -70,6 +70,16 @@ struct GainComputer
     }
 };
 
+/**
+    Threshold side of a band from the way it changes the gain (the band's Direction): Down cuts —
+    compression above the threshold, expansion (R < 1) below it, like a gate; Up boosts — upward
+    compression below the threshold (quiet parts are lifted), upward expansion above it.
+*/
+inline Direction thresholdSideFor (bool upward, double ratio) noexcept
+{
+    return upward == (ratio >= 1.0) ? Direction::Below : Direction::Above;
+}
+
 /** One-pole coefficient for a time constant (63 % of a step after `seconds`). */
 inline double onePoleCoefficient (double seconds, double sampleRate) noexcept
 {
@@ -77,8 +87,12 @@ inline double onePoleCoefficient (double seconds, double sampleRate) noexcept
 }
 
 /**
-    Decoupled attack/release smoothing of a gain change in dB: attack while the change grows in
-    magnitude, release while it returns towards 0 dB. Attack and release are time constants.
+    Decoupled attack/release smoothing of a gain change in dB. Attack is the response to a rising
+    level and release to a falling one, whichever way the band acts: compression (slope c < 0) takes
+    gain away as the level rises — more cut above the threshold, less boost below it — expansion
+    (c > 0) adds gain. So a downward compressor cuts with the attack, an upward compressor takes its
+    boost back with the attack (a loud onset is not lifted) and a gate opens with the attack.
+    Attack and release are time constants.
 */
 struct GainSmoother
 {
@@ -92,9 +106,10 @@ struct GainSmoother
         releaseCoeff = onePoleCoefficient (releaseSeconds, updateRate);
     }
 
-    double process (double targetDb) noexcept
+    /** `slope` is the gain computer's c = 1/R − 1: a rising level moves the gain in its sign. */
+    double process (double targetDb, double slope) noexcept
     {
-        const double a = std::abs (targetDb) > std::abs (state) ? attackCoeff : releaseCoeff;
+        const double a = (targetDb - state) * slope > 0.0 ? attackCoeff : releaseCoeff;
         state = a * state + (1.0 - a) * targetDb;
         return state;
     }

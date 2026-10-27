@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "TestSignals.h"
+#include "ssc/dynamics/Dynamics.h"
 #include "ssc/engine/Engine.h"
 #include "ssc/util/Math.h"
 
@@ -197,4 +198,28 @@ TEST_CASE ("Channels without spectral lanes are delayed bit-exactly (CH-6)", "[e
     const auto latency = static_cast<std::size_t> (engine.getLatencySamples());
     for (std::size_t i = latency; i < input.size(); ++i)
         REQUIRE (right[i] == input[i - latency]);
+}
+
+TEST_CASE ("Spectral band Up lifts a quiet tone and leaves a loud one (DYN-5)", "[engine][spectral][DYN-5]")
+{
+    // Upward compression in the spectrum: 4:1 below −20 dBFS, at most 12 dB.
+    auto band = spectralBell (1000.0, 1.0);
+    band.dynamics.direction = dynamics::thresholdSideFor (true, 4.0);
+    band.dynamics.rangeDb = 12.0;
+    BandSettingsArray bands {};
+    bands[0] = band;
+
+    for (const double levelDb : { -50.0, -6.0 })
+    {
+        CAPTURE (levelDb);
+        StereoEngine engine;
+        auto left = test::sine (1000.0, dbToGain (levelDb), kFs, 96000);
+        std::vector<double> l (left.begin(), left.end());
+        auto r = l;
+        const auto input = l;
+        engine.run (l, r, GlobalParams {}, bands);
+        const auto latency = static_cast<std::size_t> (engine.getLatencySamples());
+        const double change = gainToDb (toneAmplitude (l, 1000.0, 48000 + latency, 32768) / toneAmplitude (input, 1000.0, 48000, 32768));
+        CHECK (change == Approx (levelDb < -20.0 ? 12.0 : 0.0).margin (0.5));
+    }
 }

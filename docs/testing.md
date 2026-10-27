@@ -33,6 +33,7 @@ Testy ręczne, których nie da się wykonać w CI (Atmos, AAX, interakcja w DAW)
 8. Skalowanie okna, HiDPI, kilka instancji jednocześnie, zamykanie i otwieranie edytora podczas odtwarzania.
 9. Sidechain (DYN-4): wejście Sidechain wtyczki widoczne w hoście i domyślnie nieaktywne; po skierowaniu na nie śladu mono i stereo pasmo Dynamic i Spectral z **Sidechain: External** reaguje na ten ślad, a nie na własny sygnał; bez sygnału panel pasma pokazuje **SIDECHAIN: NO INPUT**; latencja kompensowana jak bez sidechaina; projekt z 1.0.0 otwiera się z Sidechain Internal.
 10. Solo pasma: odsłuch tak głośny, jak pasmo w miksie (podbicie głośniej, cięcie ciszej, praca Dynamic/Spectral słyszalna), pasmo Mid/Side/Left/Right gra tylko swoją składową, wykres pokazuje słyszalny zakres.
+11. Kompresja w górę: pasmo Dynamic z **Up** podnosi ciche fragmenty (np. wybrzmienia, cichy wokal), głośne zostawia; głośny początek po ciszy nie jest podbity; projekt z 1.0.0 z pasmem Below brzmi po wczytaniu tak samo jak w 1.0.0.
 
 ## Testy obciążeniowe — automatyczne (TST-4)
 
@@ -50,7 +51,7 @@ Testy ręczne, których nie da się wykonać w CI (Atmos, AAX, interakcja w DAW)
 
 ### Real-time safety — RealtimeSanitizer (PLT-5)
 
-Preset `rtsan` (Clang 20, `-fsanitize=realtime`): `SscAudioProcessor::processImpl` i `Engine::process` są oznaczone `SSC_REALTIME` (`[[clang::nonblocking]]`), więc każda alokacja, blokada lub wywołanie blokujące w ich trakcie przerywa test z raportem. Pod RTSan przechodzą wszystkie testy rdzenia i wtyczki (196, w tym TST-4 i testy sidechaina); w CI robi to zadanie „Real-time safety”. Lokalnie:
+Preset `rtsan` (Clang 20, `-fsanitize=realtime`): `SscAudioProcessor::processImpl` i `Engine::process` są oznaczone `SSC_REALTIME` (`[[clang::nonblocking]]`), więc każda alokacja, blokada lub wywołanie blokujące w ich trakcie przerywa test z raportem. Pod RTSan przechodzą wszystkie testy rdzenia i wtyczki (206, w tym TST-4 i testy sidechaina); w CI robi to zadanie „Real-time safety”. Lokalnie:
 
 ```bash
 CC=clang-20 CXX=clang++-20 cmake --preset rtsan
@@ -60,7 +61,7 @@ ctest --preset rtsan
 
 ### Pamięć — ASan/UBSan
 
-Preset `sanitize` (także w `tools/ci/local-check.sh`) obejmuje testy rdzenia DSP (137). Testy wtyczki, łącznie z interfejsem (`[ui]`, `[UX]`), sprawdza się pod ASan/UBSan na żądanie, w buildzie Debug z instrumentacją także kodu JUCE (na 4 rdzeniach budowa ok. 5 min, testy ok. 4 min):
+Preset `sanitize` (także w `tools/ci/local-check.sh`) obejmuje testy rdzenia DSP (142). Testy wtyczki, łącznie z interfejsem (`[ui]`, `[UX]`), sprawdza się pod ASan/UBSan na żądanie, w buildzie Debug z instrumentacją także kodu JUCE (na 4 rdzeniach budowa ok. 5 min, testy ok. 4 min):
 
 ```bash
 SAN="-fsanitize=address,undefined -fno-omit-frame-pointer"

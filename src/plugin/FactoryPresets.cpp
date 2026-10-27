@@ -21,7 +21,7 @@ namespace
         ThresholdMode thresholdMode = ThresholdMode::Absolute;
         float thresholdDb = -20.0f;
         float ratio = 2.0f;
-        Direction direction = Direction::Above;
+        bool upward = false; ///< Direction Up (boost) instead of Down (cut)
         float rangeDb = 12.0f;
         float attackMs = 5.0f;
         float releaseMs = 100.0f;
@@ -65,7 +65,7 @@ namespace
                 set (param (BandParam::ThresholdMode), static_cast<float> (b.thresholdMode));
                 set (param (BandParam::Threshold), b.thresholdDb);
                 set (param (BandParam::Ratio), b.ratio);
-                set (param (BandParam::Direction), static_cast<float> (b.direction));
+                set (param (BandParam::Direction), b.upward ? 1.0f : 0.0f);
                 set (param (BandParam::Range), b.rangeDb);
                 set (param (BandParam::Attack), b.attackMs);
                 set (param (BandParam::Release), b.releaseMs);

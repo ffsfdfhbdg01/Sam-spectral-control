@@ -391,7 +391,7 @@ void BandProcessor::runDetection (const BandSettings& settings, const Instance& 
             {
                 auto& d = dynLanes[static_cast<std::size_t> (l)];
                 const double linked = levels[static_cast<std::size_t> (representative[static_cast<std::size_t> (l)])];
-                const double target = d.smoother.process (computer (linked));
+                const double target = d.smoother.process (computer (linked), computer.slope);
 
                 // Automatic make-up (AG-2): the energy-weighted mean of the change, averaged with the
                 // Auto Gain speed and frozen in silence (below −70 dBFS), is given back.

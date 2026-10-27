@@ -278,3 +278,84 @@ TEST_CASE ("Dynamic bands stay finite and bounded for random settings", "[engine
         REQUIRE (engine.getNonFiniteEvents() == 0);
     }
 }
+
+TEST_CASE ("Upward compression lifts a quiet band and takes the lift back at once on a loud onset (DYN-5, DYN-6)",
+           "[engine][dynamic][DYN-5][DYN-6]")
+{
+    // A 1 kHz tone, quiet (−50 dBFS) for 1 s, then loud (−10 dBFS) for 1 s, then quiet again.
+    auto band = dynamicBell (1000.0, 0.0, 1.0);
+    band.dynamics.thresholdDb = -30.0;
+    band.dynamics.ratio = 4.0;
+    band.dynamics.rangeDb = 12.0;
+    band.dynamics.attackMs = 5.0;
+    band.dynamics.releaseMs = 200.0;
+    BandSettingsArray bands {};
+
+    const int second = static_cast<int> (kFs);
+    auto input = sineAt (1000.0, -50.0, 3 * second);
+    const auto loud = sineAt (1000.0, -10.0, 3 * second);
+    std::copy (loud.begin() + second, loud.begin() + 2 * second, input.begin() + second);
+
+    // Change in dB of the tone over 5 ms windows.
+    auto change = [&input] (const std::vector<double>& out, int from) {
+        const auto a = static_cast<std::size_t> (from);
+        return rmsDb (out, a, a + 240) - rmsDb (input, a, a + 240);
+    };
+    for (const auto direction : { Direction::Below, Direction::Above })
+    {
+        CAPTURE (direction == Direction::Below);
+        band.dynamics.direction = direction == Direction::Below ? dynamics::thresholdSideFor (true, 4.0) : Direction::Above;
+        bands[0] = band;
+        StereoEngine engine;
+        auto left = input;
+        auto right = input;
+        engine.run (left, right, GlobalParams {}, bands);
+
+        if (direction == Direction::Below)
+        {
+            // Quiet: lifted by the whole Range (4:1 would give 15 dB).
+            CHECK (change (left, second - 2400) == Approx (12.0).margin (0.3));
+            // The loud onset is not lifted: the boost goes with the 5 ms attack.
+            CHECK (change (left, second + 960) < 0.5);
+            CHECK (change (left, second + 24000) == Approx (0.0).margin (0.1));
+            // Quiet again: the boost comes back with the 200 ms release, not at once.
+            CHECK (change (left, 2 * second + 2400) < 6.0);
+            CHECK (change (left, 3 * second - 2400) == Approx (12.0).margin (0.3));
+        }
+        else
+        {
+            // Downward compression of the same tone: nothing while quiet, 15 dB off… limited to 12.
+            CHECK (change (left, second - 2400) == Approx (0.0).margin (0.1));
+            CHECK (change (left, second + 24000) == Approx (-12.0).margin (0.3));
+        }
+    }
+}
+
+TEST_CASE ("Expansion below the threshold opens with the attack and closes with the release (DYN-6)", "[engine][dynamic][DYN-6]")
+{
+    auto band = dynamicBell (1000.0, 0.0, 1.0);
+    band.dynamics.thresholdDb = -30.0;
+    band.dynamics.ratio = 0.5;
+    band.dynamics.direction = dynamics::thresholdSideFor (false, 0.5);
+    band.dynamics.rangeDb = 12.0;
+    band.dynamics.attackMs = 5.0;
+    band.dynamics.releaseMs = 200.0;
+    BandSettingsArray bands {};
+    bands[0] = band;
+
+    const int second = static_cast<int> (kFs);
+    auto input = sineAt (1000.0, -50.0, 2 * second);
+    const auto loud = sineAt (1000.0, -10.0, 2 * second);
+    std::copy (loud.begin() + second, loud.end(), input.begin() + second);
+    StereoEngine engine;
+    auto left = input;
+    auto right = input;
+    engine.run (left, right, GlobalParams {}, bands);
+
+    auto change = [&input, &left] (int from) {
+        const auto a = static_cast<std::size_t> (from);
+        return rmsDb (left, a, a + 240) - rmsDb (input, a, a + 240);
+    };
+    CHECK (change (second - 2400) == Approx (-12.0).margin (0.3)); // closed
+    CHECK (change (second + 960) > -0.5);                          // open 20 ms after the onset
+}

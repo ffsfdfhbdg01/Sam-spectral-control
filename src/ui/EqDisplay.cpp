@@ -686,6 +686,14 @@ void EqDisplay::showBandMenu (int band)
     }
     menu.addSubMenu ("Mode", modes);
 
+    // Down cuts, Up boosts (upward compression lifts what stays under the threshold).
+    juce::PopupMenu directions;
+    for (const bool up : { false, true })
+        directions.addItem (
+            juce::String (up ? "Up (boost)" : "Down (cut)"), true, v.upward == up,
+            forTargets ("Change Direction", [up] (BandModel& m, int b) { m.setValue (b, BandParam::Direction, up ? 1.0f : 0.0f); }));
+    menu.addSubMenu ("Direction", directions, v.mode != BandMode::Static);
+
     juce::PopupMenu targetMenu;
     for (int i = 0; i < plugin::labels::targets().size(); ++i)
     {

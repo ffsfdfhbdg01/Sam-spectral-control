@@ -29,6 +29,7 @@ namespace
     constexpr int kSectionHeight = 22;
     constexpr int kDynamicsRowHeight = 68;
     constexpr int kStereoWidth = 488;
+    constexpr int kDirectionWidth = 92; ///< Down | Up on the dynamics title line
 
     // Advanced flyout.
     constexpr int kFlyPadX = 12;
@@ -267,9 +268,9 @@ BandPanel::BandPanel (BandModel& m)
 {
     setOpaque (false);
     for (auto* c : std::initializer_list<juce::Component*> {
-             &modeSelector, &advancedButton, &bypassButton, &soloButton, &moreButton, &shape,      &slope,
-             &target,       &character,      &speakers,     &freq,       &gain,       &q,          &autoGainButton,
-             &threshold,    &ratio,          &range,        &attack,     &release,    &selectivity })
+             &modeSelector, &advancedButton, &bypassButton, &soloButton, &moreButton, &shape,       &slope,
+             &target,       &character,      &speakers,     &freq,       &gain,       &q,           &autoGainButton,
+             &threshold,    &ratio,          &range,        &attack,     &release,    &selectivity, &directionSelector })
         addAndMakeVisible (c);
     speakers.setVisible (false);
 
@@ -325,6 +326,20 @@ BandPanel::BandPanel (BandModel& m)
 
     autoGainButton.setTooltip ("Band Auto Gain: compensates the average gain change of this band, "
                                "so it changes the tone but not the average level");
+
+    directionSelector.setItemTooltip (0,
+                                      "Down: the band cuts. Compression of what goes over the threshold; with a ratio "
+                                      "under 1:1, expansion of what stays under it (like a gate)");
+    directionSelector.setItemTooltip (1,
+                                      "Up: the band boosts. Upward compression lifts what stays under the threshold "
+                                      "(quiet parts and details) by up to Range; with a ratio under 1:1, upward "
+                                      "expansion lifts what goes over it");
+    directionSelector.onChange = [this] (int index) {
+        if (band < 0)
+            return;
+        BandModel::ScopedEdit edit (model, "Change Direction");
+        model.setValue (band, BandParam::Direction, static_cast<float> (index));
+    };
     autoGainButton.onClick = [this] {
         if (band < 0)
             return;
@@ -500,6 +515,8 @@ void BandPanel::updateFromModel()
     ratio.setVisible (shownMode == BandMode::Dynamic);
     selectivity.setVisible (shownMode == BandMode::Spectral);
     autoGainButton.setVisible (dynamics);
+    directionSelector.setVisible (dynamics);
+    directionSelector.setSelectedIndex (v.upward ? 1 : 0, juce::dontSendNotification);
     slope.setVisible (slopeShown);
     freq.setVisible (true);
 
@@ -524,7 +541,7 @@ bool BandPanel::advancedDiffersFromDefault (const BandModel& model, int band)
     const auto modeDefault = mode == BandMode::Spectral ? ThresholdMode::Relative : ThresholdMode::Absolute;
     if (choiceIndex (model, band, BandParam::ThresholdMode) != static_cast<int> (modeDefault))
         return true;
-    for (const auto p : { BandParam::Direction, BandParam::Knee, BandParam::Mix, BandParam::Link, BandParam::Sidechain })
+    for (const auto p : { BandParam::Knee, BandParam::Mix, BandParam::Link, BandParam::Sidechain })
         if (differsFromDefault (model, band, p))
             return true;
     return differsFromDefault (model, band, mode == BandMode::Dynamic ? BandParam::Lookahead : BandParam::Ratio);
@@ -535,7 +552,7 @@ void BandPanel::updateIndicator()
     const bool differs = advancedDiffersFromDefault (model, band);
     advancedButton.setIndicator (differs || readoutWarning ? colours::accent : juce::Colours::transparentBlack);
     juce::String tip = shownMode == BandMode::Static ? "Advanced: readouts of the band (phase, group delay, ringing)"
-                                                     : "Advanced: detector settings (threshold mode, direction, knee, "
+                                                     : "Advanced: detector settings (threshold mode, knee, "
             + juce::String (shownMode == BandMode::Dynamic ? "lookahead" : "ratio") + ", mix, link, sidechain) and readouts of the band";
     if (differs)
         tip << "\nThe dot: a detector setting differs from its default.";
@@ -569,9 +586,16 @@ void BandPanel::updateSidechainState()
     }
 }
 
+juce::String BandPanel::dynamicsKind (bool upward, bool expand)
+{
+    return juce::String (upward ? "UPWARD " : "") + (expand ? "EXPANSION" : "COMPRESSION");
+}
+
 std::vector<BandParam> BandPanel::visibleParameters() const
 {
     std::vector<BandParam> params { BandParam::Mode, BandParam::On };
+    if (directionSelector.isVisible())
+        params.push_back (BandParam::Direction);
     for (const auto* c : { &shape, &slope, &target, &character })
         if (c->isVisible())
             params.push_back (c->getParam());
@@ -633,6 +657,8 @@ void BandPanel::resized()
     area.removeFromTop (kSectionGap);
     auto section = area.removeFromTop (kSectionHeight);
     autoGainButton.setBounds (section.removeFromRight (autoGainButton.getIdealWidth()));
+    section.removeFromRight (8);
+    directionSelector.setBounds (section.removeFromRight (kDirectionWidth));
     area.removeFromTop (4);
     auto row = area.removeFromTop (kDynamicsRowHeight).withWidth (kStereoWidth - 2 * kPad);
     auto& second = shownMode == BandMode::Spectral ? selectivity : ratio;
@@ -662,14 +688,23 @@ void BandPanel::paint (juce::Graphics& g)
     if (shownMode != BandMode::Static)
     {
         const int y = kTop + kHeaderHeight + kRowGap + kEqRowHeight + kSectionGap;
-        auto text = juce::String (shownMode == BandMode::Spectral ? "SPECTRAL DYNAMICS" : "DYNAMICS");
-        if (band >= 0 && model.band (band).sidechain)
-            text << "  " << juce::String::fromUTF8 ("\xc2\xb7") << (sidechainMissing ? "  SIDECHAIN: NO INPUT" : "  SIDECHAIN");
+        // What the band does (but plain compression, the usual case) and where it listens; the mode
+        // name goes first when the line is too short.
+        const auto& v = model.band (band);
+        const auto dot = "  " + juce::String::fromUTF8 ("\xc2\xb7") + "  ";
+        juce::String details;
+        if (v.upward || v.expand)
+            details << dot << dynamicsKind (v.upward, v.expand);
+        if (v.sidechain)
+            details << dot << (sidechainMissing ? "SIDECHAIN: NO INPUT" : "SIDECHAIN");
         const auto font = uiFont (10.5f, true);
-        const auto line = juce::Rectangle<int> (kPad, y, autoGainButton.getX() - 10 - kPad, kSectionHeight);
+        const auto line = juce::Rectangle<int> (kPad, y, directionSelector.getX() - 10 - kPad, kSectionHeight);
+        auto text = juce::String (shownMode == BandMode::Spectral ? "SPECTRAL DYNAMICS" : "DYNAMICS") + details;
+        if (details.isNotEmpty() && juce::GlyphArrangement::getStringWidth (font, text) > static_cast<float> (line.getWidth()))
+            text = details.substring (dot.length());
         g.setFont (font);
         g.setColour (sidechainMissing ? colours::accent : colours::textDim);
-        g.drawText (text, line, juce::Justification::centredLeft, false);
+        g.drawText (text, line, juce::Justification::centredLeft, true);
         g.setColour (colours::panelEdge);
         g.fillRect (juce::Rectangle<float> (static_cast<float> (line.getX()) + juce::GlyphArrangement::getStringWidth (font, text) + 8.0f,
                                             static_cast<float> (line.getCentreY()), 0.0f, 1.0f)
@@ -689,13 +724,11 @@ BandAdvancedPanel::BandAdvancedPanel (BandModel& m)
       sidechain (m, BandParam::Sidechain, "Sidechain")
 {
     setOpaque (false);
-    for (auto* c :
-         std::initializer_list<juce::Component*> { &thresholdMode, &direction, &knee, &lookahead, &ratio, &mix, &link, &sidechain })
+    for (auto* c : std::initializer_list<juce::Component*> { &thresholdMode, &knee, &lookahead, &ratio, &mix, &link, &sidechain })
         addAndMakeVisible (c);
 
     thresholdMode.setTooltip ("Threshold Mode. Absolute: in dBFS. Relative: above the neighbouring spectrum, "
                               "nearly independent of the loudness of the material");
-    direction.setTooltip ("Direction. Above: acts while the level exceeds the threshold. Below: while it stays under it");
     lookahead.getSlider().setTooltip ("Lookahead: the band reacts before a transient; raises Max Lookahead (latency) when needed");
     link.setTooltip ("Link: channels (or M/S components) that share the detection. Independent, Pair, Group (default) or All");
     showSidechainHint (false);
@@ -705,12 +738,6 @@ BandAdvancedPanel::BandAdvancedPanel (BandModel& m)
             return;
         BandModel::ScopedEdit edit (model, "Change Threshold Mode");
         model.setValue (band, BandParam::ThresholdMode, static_cast<float> (index));
-    };
-    direction.onChange = [this] (int index) {
-        if (band < 0)
-            return;
-        BandModel::ScopedEdit edit (model, "Change Direction");
-        model.setValue (band, BandParam::Direction, static_cast<float> (index));
     };
 
     model.addListener (this);
@@ -765,7 +792,6 @@ void BandAdvancedPanel::updateFromModel()
     if (band < 0)
         return;
     thresholdMode.setSelectedIndex (choiceIndex (model, band, BandParam::ThresholdMode), juce::dontSendNotification);
-    direction.setSelectedIndex (choiceIndex (model, band, BandParam::Direction), juce::dontSendNotification);
     for (auto* k : { &knee, &lookahead, &ratio, &mix })
         k->refresh();
     link.refresh();
@@ -776,7 +802,7 @@ void BandAdvancedPanel::updateFromModel()
     const bool modeChanged = mode != shownMode;
     shownMode = mode;
     const bool detector = showsDetector();
-    for (auto* c : std::initializer_list<juce::Component*> { &thresholdMode, &direction, &knee, &mix, &link, &sidechain })
+    for (auto* c : std::initializer_list<juce::Component*> { &thresholdMode, &knee, &mix, &link, &sidechain })
         c->setVisible (detector);
     lookahead.setVisible (shownMode == BandMode::Dynamic);
     ratio.setVisible (shownMode == BandMode::Spectral);
@@ -798,8 +824,6 @@ std::vector<BandParam> BandAdvancedPanel::visibleParameters() const
     std::vector<BandParam> params;
     if (thresholdMode.isVisible())
         params.push_back (BandParam::ThresholdMode);
-    if (direction.isVisible())
-        params.push_back (BandParam::Direction);
     for (const auto* k : { &knee, &lookahead, &ratio, &mix })
         if (k->isVisible())
             params.push_back (k->getParam());
@@ -816,11 +840,7 @@ void BandAdvancedPanel::resized()
     if (! showsDetector())
         return;
 
-    auto segments = area.removeFromTop (kSegmentRowHeight);
-    auto left = segments.removeFromLeft ((segments.getWidth() - 8) / 2);
-    segments.removeFromLeft (8);
-    thresholdMode.setBounds (left.withTrimmedTop (13));
-    direction.setBounds (segments.withTrimmedTop (13));
+    thresholdMode.setBounds (area.removeFromTop (kSegmentRowHeight).withTrimmedTop (13));
 
     area.removeFromTop (8);
     auto knobs = area.removeFromTop (kFlyKnobRowHeight);
@@ -937,7 +957,6 @@ void BandAdvancedPanel::paint (juce::Graphics& g)
     if (showsDetector())
     {
         captionText (g, "Threshold", thresholdMode.getBounds().withY (thresholdMode.getY() - 14).withHeight (13));
-        captionText (g, "Direction", direction.getBounds().withY (direction.getY() - 14).withHeight (13));
         area.setTop (link.getBottom() + 4);
         g.setColour (colours::panelEdge);
         g.fillRect (area.removeFromTop (1).toFloat());

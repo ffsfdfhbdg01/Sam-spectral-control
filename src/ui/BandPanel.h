@@ -76,8 +76,9 @@ private:
     paste, reset, delete). EQ row: shape and slope, Freq / Gain / Q, target and Character (and the
     speakers in surround). Dynamic and Spectral bands add a dynamics row whose knobs follow the
     mode: Dynamic — Threshold, Ratio, Range, Attack, Release; Spectral — Threshold, Selectivity,
-    Range, Attack, Release; with the band's Auto Gain. The detector details and the readouts live
-    in the Advanced flyout (BandAdvancedPanel). All edits go through BandModel (undo).
+    Range, Attack, Release; with the band's Direction (Down | Up: cut or boost, e.g. upward
+    compression) and Auto Gain on its title line. The detector details and the readouts live in
+    the Advanced flyout (BandAdvancedPanel). All edits go through BandModel (undo).
 */
 class BandPanel final : public juce::Component, private BandModel::Listener
 {
@@ -117,6 +118,10 @@ public:
     /** True while the section title points out a band on External without a Sidechain input. */
     bool showsMissingSidechain() const noexcept { return sidechainMissing; }
 
+    /** What a Dynamic or Spectral band does, for its section title: "COMPRESSION" (Down, ratio over
+        1:1), "UPWARD COMPRESSION" (Up), "EXPANSION" (Down, ratio under 1:1) or "UPWARD EXPANSION". */
+    static juce::String dynamicsKind (bool upward, bool expand);
+
     static constexpr int kStaticHeight = 132;
     static constexpr int kDynamicHeight = 232;
 
@@ -151,6 +156,7 @@ private:
     ValueButton speakers { "Speakers" };
     BandKnob freq, gain, q;
     ChipButton autoGainButton { "Auto Gain" };
+    SegmentedControl directionSelector { { "Down", "Up" } };
     BandKnob threshold, ratio, range, attack, release, selectivity;
     juce::TimedCallback readoutTimer { [this] { pollReadout(); } };
 
@@ -159,8 +165,8 @@ private:
 
 /**
     Advanced flyout of the focused band (research §15 d4): it slides out to the right of the band
-    panel. Dynamic and Spectral bands: threshold mode, direction, knee, lookahead (Dynamic) or ratio
-    (Spectral), mix, detector link and sidechain (Internal or External, DYN-4). Every band: its readouts (research §12c, PR-1) — mean excess
+    panel. Dynamic and Spectral bands: threshold mode, knee, lookahead (Dynamic) or ratio (Spectral),
+    mix, detector link and sidechain (Internal or External, DYN-4). Every band: its readouts (research §12c, PR-1) — mean excess
     phase, group delay at fc, pre-/post-ring at −60 dB (and at the full Range for Dynamic bands, the
     STFT pre-echo for Spectral bands), highlighted when the ringing is likely audible
     (post > 50 ms, pre > 5 ms).
@@ -210,7 +216,7 @@ private:
     analysis::BandReadout readout;
     bool sidechainHint = false;
 
-    SegmentedControl thresholdMode { { "Absolute", "Relative" } }, direction { { "Above", "Below" } };
+    SegmentedControl thresholdMode { { "Absolute", "Relative" } };
     BandKnob knee, lookahead, ratio, mix;
     BandChoiceButton link, sidechain;
     juce::TimedCallback readoutTimer { [this] { pollReadout(); } };

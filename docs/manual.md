@@ -152,7 +152,7 @@ Niektóre hosty przechwytują skróty klawiszowe; wtedy użyj przycisków Undo/R
 
 ### Menu pasma (prawy przycisk)
 
-*Shape*, *Slope* (dla cięć, półek i Band Pass) albo *Q* (gotowe wartości 0,5–16), *Mode*, *Target*, *Character*, *Auto Gain*, *External Sidechain* (detekcja z wejścia sidechain, [rozdz. 6](#sidechain)), *Bypass*, *Solo*, *Copy*, *Paste*, *Reset* (wartości domyślne pasma), *Delete*. Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem; *Auto Gain* i *External Sidechain* — tylko w tych trybach.
+*Shape*, *Slope* (dla cięć, półek i Band Pass) albo *Q* (gotowe wartości 0,5–16), *Mode*, *Direction* (*Down* / *Up*, [rozdz. 6](#kompresja-w-górę)), *Target*, *Character*, *Auto Gain*, *External Sidechain* (detekcja z wejścia sidechain, [rozdz. 6](#sidechain)), *Bypass*, *Solo*, *Copy*, *Paste*, *Reset* (wartości domyślne pasma), *Delete*. Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem; *Direction*, *Auto Gain* i *External Sidechain* — tylko w tych trybach.
 
 ### Panel pasma
 
@@ -162,10 +162,10 @@ Kliknięcie węzła pokazuje panel pasma pod węzłem (gdy zasłaniałby węzeł
 |---|---|---|---|
 | Nagłówek | kolor i numer pasma; tryb **Static \| Dynamic \| Spectral**; **Advanced ›**; ⏻ — włączenie / wyłączenie pasma (czerwona lampka: wyłączone); 🎧 — Solo (kliknięcie: zostaje włączone, przytrzymanie: tylko na czas trzymania); ⋯ — *Copy*, *Paste*, *Reset*, *Delete* | jak Static | jak Static |
 | Rząd EQ | **Shape**, **Slope** (cięcia, półki, Band Pass), **Freq**, **Gain**, **Q**, **Target**, **Character** (w surround także **Speakers**) | jak Static | jak Static |
-| Rząd dynamiki | — | **Threshold**, **Ratio**, **Range**, **Attack**, **Release** i przycisk **Auto Gain** | **Threshold**, **Selectivity**, **Range**, **Attack**, **Release** i przycisk **Auto Gain** |
-| Panel **Advanced** pasma | odczyty | **Threshold Mode**, **Direction**, **Knee**, **Lookahead**, **Mix**, **Link**, **Sidechain**, odczyty | **Threshold Mode**, **Direction**, **Knee**, **Ratio**, **Mix**, **Link**, **Sidechain**, odczyty |
+| Rząd dynamiki | — | **Threshold**, **Ratio**, **Range**, **Attack**, **Release**; w jego nagłówku **Down \| Up** i **Auto Gain** | **Threshold**, **Selectivity**, **Range**, **Attack**, **Release**; w jego nagłówku **Down \| Up** i **Auto Gain** |
+| Panel **Advanced** pasma | odczyty | **Threshold Mode**, **Knee**, **Lookahead**, **Mix**, **Link**, **Sidechain**, odczyty | **Threshold Mode**, **Knee**, **Ratio**, **Mix**, **Link**, **Sidechain**, odczyty |
 
-Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem. Gdy pasmo słucha wejścia sidechain, nagłówek rzędu dynamiki ma dopisek **· SIDECHAIN** ([rozdz. 6](#sidechain)). **Advanced ›** wysuwa panel z boku panelu pasma — zwykle z prawej, z lewej, gdy z prawej zasłaniałby węzeł — i zostaje otwarty także dla kolejnych pasm, aż się go zamknie (**‹**). Kropka na **Advanced** oznacza ustawienie detektora inne niż domyślne dla trybu pasma (np. Threshold Mode Absolute w paśmie Spectral) albo ostrzeżenie o słyszalnym ringingu ([rozdz. 12](#odczyty-pasma)).
+Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem. Nagłówek rzędu dynamiki nazywa działanie pasma, gdy nie jest to zwykła kompresja (**UPWARD COMPRESSION**, **EXPANSION**, **UPWARD EXPANSION**), a gdy pasmo słucha wejścia sidechain, ma dopisek **SIDECHAIN** ([rozdz. 6](#sidechain)). **Advanced ›** wysuwa panel z boku panelu pasma — zwykle z prawej, z lewej, gdy z prawej zasłaniałby węzeł — i zostaje otwarty także dla kolejnych pasm, aż się go zamknie (**‹**). Kropka na **Advanced** oznacza ustawienie detektora inne niż domyślne dla trybu pasma (np. Threshold Mode Absolute w paśmie Spectral) albo ostrzeżenie o słyszalnym ringingu ([rozdz. 12](#odczyty-pasma)).
 
 Pokrętła reagują na przeciąganie (z *Shift* — precyzyjnie); **dwuklik** przywraca wartość domyślną; wartość pod pokrętłem można kliknąć i wpisać. Częstotliwość przyjmuje zapisy `1500`, `1.5k`, `1.5 kHz`; czasy — `12`, `12 ms`, `1.2 s`.
 
@@ -198,7 +198,7 @@ Filtry są projektowane tak, by ich amplituda odpowiadała prototypom analogowym
 
 Dynamic i Spectral są dostępne dla kształtów ze wzmocnieniem (Bell, półki, Tilt Shelf, Flat Tilt). Pasmo dynamiczne pokazuje na wykresie bieżące wzmocnienie, a jego obszar świeci, gdy pracuje.
 
-W panelu pasma rząd dynamiki zawiera to, czym ustawia się dany tryb (Dynamic: Threshold, Ratio, Range, Attack, Release; Spectral: Threshold, Selectivity, Range, Attack, Release), a pozostałe parametry z tabeli niżej są w panelu **Advanced** pasma ([rozdz. 4](#panel-pasma)).
+W panelu pasma rząd dynamiki zawiera to, czym ustawia się dany tryb (Dynamic: Threshold, Ratio, Range, Attack, Release; Spectral: Threshold, Selectivity, Range, Attack, Release), a w jego nagłówku jest kierunek **Down | Up** i **Auto Gain**; pozostałe parametry z tabeli niżej są w panelu **Advanced** pasma ([rozdz. 4](#panel-pasma)).
 
 **Wzmocnienie pasma = Gain + część dynamiczna** (w granicach ±Range, pomnożona przez Mix pasma). Gain 0 dB i Range 6 dB to pasmo, które samo w sobie nic nie robi, a tłumi lub podbija do 6 dB tylko wtedy, gdy zadziała próg.
 
@@ -209,10 +209,10 @@ W panelu pasma rząd dynamiki zawiera to, czym ustawia się dany tryb (Dynamic: 
 | **Threshold Mode** | Absolute / Relative | Absolute — próg w dBFS; Relative — próg względem otoczenia w widmie: działa na to, co wystaje ponad sąsiednie częstotliwości, prawie niezależnie od głośności materiału |
 | **Threshold** | −80…+30 dB (Dynamic: Absolute −20 dB; Spectral: Relative +6 dB) | próg |
 | **Ratio** | 0,1:1 … ∞:1 (2:1) | > 1 — kompresja, < 1 — ekspansja; 1:1 — brak działania |
-| **Direction** | Above / Below | działanie powyżej albo poniżej progu |
+| **Direction** | Down / Up (Down) | Down — pasmo tnie, Up — podbija (np. kompresja w górę); strona progu wynika z Ratio, patrz tabela niżej |
 | **Range** | 0–30 dB (12 dB) | największa zmiana wzmocnienia |
 | **Knee** | 0–24 dB (6 dB) | łagodność wejścia w działanie |
-| **Attack**, **Release** | 0,05–500 ms (5 ms), 1–5000 ms (100 ms) | stałe czasowe (63 % zmiany) |
+| **Attack**, **Release** | 0,05–500 ms (5 ms), 1–5000 ms (100 ms) | stałe czasowe (63 % zmiany): Attack — reakcja na **rosnący** poziom, Release — na malejący, w każdym kierunku (kompresor w dół tnie z czasem Attack, kompresor w górę z czasem Attack zabiera podbicie przy głośnym wejściu, bramka otwiera się z czasem Attack) |
 | **Lookahead** | 0–20 ms (0) | tylko Dynamic: pasmo „widzi” sygnał z wyprzedzeniem i reaguje przed transjentem |
 | **Mix** | 0–100 % (100 %) | ile działania dynamicznego trafia do wzmocnienia pasma (bez interferencji z sygnałem suchym, bo skaluje wzmocnienie, a nie miesza sygnały) |
 | **Selectivity** | 0–100 % (50 %) | tylko Spectral: jak wąsko w częstotliwości działa maska — wyżej = bardziej „chirurgicznie” |
@@ -221,10 +221,26 @@ W panelu pasma rząd dynamiki zawiera to, czym ustawia się dany tryb (Dynamic: 
 
 Po przełączeniu pasma w tryb Spectral z nieruszonym progiem Dynamic (Absolute −20 dB) wtyczka ustawia Relative +6 dB — i odwrotnie.
 
-| Direction | Ratio > 1 | Ratio < 1 |
+| Direction | Ratio > 1 (kompresja) | Ratio < 1 (ekspansja) |
 |---|---|---|
-| **Above** | tłumi, gdy poziom przekracza próg (kompresja w dół — de-esser, poskramianie rezonansów) | podbija powyżej progu (ekspansja w górę) |
-| **Below** | podbija, gdy poziom spada poniżej progu (kompresja w górę) | tłumi poniżej progu (ekspansja w dół, jak bramka) |
+| **Down** | tłumi to, co przekracza próg (kompresja — de-esser, poskramianie rezonansów) | tłumi to, co jest poniżej progu (ekspansja w dół, jak bramka) |
+| **Up** | podbija to, co jest poniżej progu (**kompresja w górę**) | podbija to, co przekracza próg (ekspansja w górę) |
+
+### Kompresja w górę
+
+![Pasmo Dynamic z Direction Up: podniesione pasmo 9 kHz, w nagłówku rzędu dynamiki UPWARD COMPRESSION](images/upward.png)
+
+**Up** z Ratio powyżej 1:1 podnosi obszar pasma, kiedy jest cichszy niż próg: o (próg − poziom) · (1 − 1/Ratio), najwyżej o **Range**. Głośne fragmenty (powyżej progu) zostają bez zmian, więc różnica między cichymi a głośnymi maleje „od dołu” — wychodzą szczegóły, pogłos, cichsze sylaby, a szczyty się nie zmieniają. Przykłady: podniesienie wybrzmień i detali w górnym paśmie, wyciągnięcie dołu basu, gdy gra cicho, równowaga barwy wokalu między cichymi i głośnymi frazami.
+
+- **Threshold**: kilka dB poniżej poziomu głośnych fragmentów w obszarze pasma; wszystko, co pod nim, jest podnoszone.
+- **Ratio** 2:1–4:1 i **Range** 3–9 dB na początek; Range ogranicza podbicie.
+- **Attack** (np. 1–10 ms) — jak szybko podbicie znika, kiedy wchodzi głośny dźwięk; krótki chroni transjenty przed podbiciem. **Release** (np. 100–500 ms) — jak szybko podbicie wraca w cichych fragmentach; dłuższy oznacza mniej „pompowania”.
+- W pauzach i ciszy poziom jest poniżej progu, więc pasmo podnosi też szum tła — najwyżej o Range. Przy zaszumionym materiale użyj mniejszego Range.
+- W trybie **Spectral** Up podnosi tylko te częstotliwości w obszarze pasma, które są pod progiem. Z progiem **Relative** ustaw go poniżej 0 dB (np. −6 dB): podnosi wtedy tylko częstotliwości wyraźnie cichsze od otoczenia, czyli wypełnia „dziury” w widmie. Domyślne +6 dB podniosłoby prawie cały obszar.
+- Z **Sidechain: External** pasmo Up podnosi się, gdy sidechain cichnie — np. gitara w pauzach wokalu (odwrotność duckingu).
+- **Auto Gain** pasma oddaje średnie podbicie, więc pasmo zmienia dynamikę, a nie średni poziom.
+
+Projekty, presety i skopiowane pasma z wersji 1.0 (gdzie zamiast Down / Up był wybór Above / Below) są przy wczytaniu przeliczane i brzmią tak samo: w pasmach, które działały poniżej progu, wartości Attack i Release zamieniają się miejscami, bo w 1.0 Attack oznaczał narastanie zmiany, a nie reakcję na rosnący poziom.
 
 ### Lookahead i Max Lookahead
 
@@ -238,10 +254,10 @@ Pasmo Dynamic lub Spectral z **Sidechain: External** (panel **Advanced** pasma a
 
 - **Wejście Sidechain** to dodatkowa magistrala wejściowa wtyczki — mono albo stereo, domyślnie wyłączona. Włącza się ją i kieruje na nią sygnał w hoście: np. w Cubase przyciskiem sidechain w nagłówku okna wtyczki, w Studio One, Reaperze, Ableton Live czy Bitwigu wyborem źródła sidechain dla wtyczki (nazwy w hostach się różnią: *Sidechain*, *Side-Chain*, *Aux input*).
 - Detekcja bierze z sidechaina to samo, co zwykle ze swojego sygnału: obszar wokół częstotliwości pasma (z jego Q i Selectivity) na **celu** pasma. **Left** słucha lewego kanału sidechaina, **Right** — prawego, **Mid** — (L + R)/2, **Side** — (L − R)/2, **All** — lewy kanał lewego, prawy prawego. Sidechain mono steruje wszystkimi kanałami. W surround lewe kanały par (L, Ls, Ltf…) słuchają lewego kanału sidechaina, prawe — prawego, a kanały bez pary (C, LFE) — jego środka (L + R)/2.
-- Pozostałe parametry dynamiki (Threshold, Ratio, Range, Attack, Release, Knee, Direction, Lookahead, Link) działają jak zwykle. Próg **Relative** w paśmie Spectral liczy się względem otoczenia w widmie sidechaina.
+- Pozostałe parametry dynamiki (Threshold, Ratio, Direction, Range, Attack, Release, Knee, Lookahead, Link) działają jak zwykle. Próg **Relative** w paśmie Spectral liczy się względem otoczenia w widmie sidechaina.
 - Sidechain jest wyrównany w czasie z torem głównym (także przy Lookahead, oversamplingu i Natural Phase) i nie dodaje latencji.
 - Sidechaina nie słychać na wyjściu. **Solo** i **Delta** pokazują, co pasmo robi z własnym sygnałem.
-- Gdy pasmo ma External, a host nie podaje nic na wejście Sidechain, detekcja „słyszy” ciszę: przy Direction Above pasmo nic nie robi, przy Below działa w pełnym Range. Nagłówek rzędu dynamiki pokazuje wtedy bursztynowe **SIDECHAIN: NO INPUT**, a wybór **Sidechain** w panelu Advanced — bursztynowy podpis i kropkę.
+- Gdy pasmo ma External, a host nie podaje nic na wejście Sidechain, detekcja „słyszy” ciszę: kompresja (Down) nic nie robi, a kompresja w górę i ekspansja w dół działają w pełnym Range. Nagłówek rzędu dynamiki pokazuje wtedy bursztynowe **SIDECHAIN: NO INPUT**, a wybór **Sidechain** w panelu Advanced — bursztynowy podpis i kropkę.
 
 ### Spectral
 
@@ -493,6 +509,7 @@ Najwięcej kosztują: liczba kanałów, oversampling, pasma Dynamic i Spectral o
 | Wtyczki nie ma w hoście | ponowne skanowanie wtyczek; czy host skanuje folder VST3 z [rozdz. 1](#1-instalacja); czy host jest 64-bitowy |
 | macOS blokuje instalator | używaj pakietu podpisanego i notaryzowanego; kompilacje testowe bez podpisu są blokowane przez Gatekeeper |
 | Cisza lub dziwny dźwięk | czy nie jest włączona **Delta** albo **Solo** pasma; czy **Mix** nie jest na 0 %; czy pasma mają właściwy **Target** / głośniki |
+| Kompresja w górę podbija szum w pauzach | to jej natura: poniżej progu pasmo podnosi wszystko, najwyżej o Range — zmniejsz Range; dłuższy Release zmniejsza „oddychanie” szumu w krótkich przerwach ([rozdz. 6](#kompresja-w-górę)) |
 | Pasmo z Sidechain External nie działa | czy host kieruje sygnał na wejście Sidechain wtyczki (bursztynowe **SIDECHAIN: NO INPUT** w panelu pasma oznacza, że wejście jest wyłączone); czy sidechain ma energię w obszarze pasma i przekracza próg |
 | Nieoczekiwane wcięcia przy Mix < 100 % | interferencje suchego i przetworzonego sygnału — użyj Mix pasma albo zmniejsz Gain pasm ([rozdz. 11](#11-ustawienia-globalne-i-odsłuch)) |
 | Rozjazd w czasie z innymi ścieżkami | czy host ma włączoną kompensację latencji (PDC); latencja zmienia się przy zmianie trybu fazy, Quality, oversamplingu, pierwszego/ostatniego pasma Spectral i Max Lookahead |

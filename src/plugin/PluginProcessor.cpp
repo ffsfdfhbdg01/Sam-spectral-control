@@ -5,6 +5,7 @@
 #include "plugin/ChannelLayout.h"
 #include "plugin/SpeakerState.h"
 #include "plugin/StateMigration.h"
+#include "ssc/dynamics/Dynamics.h"
 #include "ui/PluginEditor.h"
 
 namespace ssc::plugin
@@ -234,7 +235,8 @@ void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) cons
         d.thresholdMode = choice (get (BandParam::ThresholdMode), ThresholdMode::Relative);
         d.thresholdDb = value (BandParam::Threshold);
         d.ratio = value (BandParam::Ratio);
-        d.direction = choice (get (BandParam::Direction), Direction::Below);
+        // Down / Up and the ratio (compression or expansion) give the side of the threshold it acts on.
+        d.direction = dynamics::thresholdSideFor (isOn (get (BandParam::Direction)), d.ratio);
         d.rangeDb = value (BandParam::Range);
         d.attackMs = value (BandParam::Attack);
         d.releaseMs = value (BandParam::Release);

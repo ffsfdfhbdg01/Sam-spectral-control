@@ -43,7 +43,8 @@ enum class BandParam
     ThresholdMode,
     Threshold,
     Ratio,
-    Direction,
+    Direction, ///< Down: the band cuts (compression above the threshold, expansion below it); Up: it boosts (upward
+               ///< compression below the threshold, upward expansion above it)
     Range,
     Attack,
     Release,

@@ -27,6 +27,8 @@ struct BandValues
     Character character = Character::Clear;
     bool autoGain = false;
     bool sidechain = false;            ///< detection from the Sidechain input (Dynamic and Spectral bands)
+    bool upward = false;               ///< Direction Up: the band boosts (upward compression or expansion)
+    bool expand = false;               ///< Ratio under 1:1: expansion instead of compression
     engine::SpeakerSelection speakers; ///< loudspeakers of the band (state, not a parameter; CH-4)
 
     bool active() const noexcept { return used && on; }
@@ -37,7 +39,7 @@ struct BandValues
         constexpr std::equal_to<float> same;
         return used == o.used && on == o.on && shape == o.shape && same (frequency, o.frequency) && same (gain, o.gain) && same (q, o.q)
             && slope == o.slope && mode == o.mode && target == o.target && character == o.character && autoGain == o.autoGain
-            && sidechain == o.sidechain && speakers == o.speakers;
+            && sidechain == o.sidechain && upward == o.upward && expand == o.expand && speakers == o.speakers;
     }
 };
 

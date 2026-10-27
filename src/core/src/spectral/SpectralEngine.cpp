@@ -392,6 +392,7 @@ void SpectralEngine::runFrame (const engine::BandSettingsArray& bands, const eng
         const auto computer = dynamics::GainComputer::make (dyn.thresholdDb, dyn.ratio, dyn.kneeDb, dyn.rangeDb, dyn.direction);
         const auto attack = static_cast<float> (dynamics::onePoleCoefficient (0.001 * dyn.attackMs, 1.0 / hopSeconds));
         const auto release = static_cast<float> (dynamics::onePoleCoefficient (0.001 * dyn.releaseMs, 1.0 / hopSeconds));
+        const auto slope = static_cast<float> (computer.slope);
         const auto mix = static_cast<float> (std::clamp (dyn.mix, 0.0, 1.0));
 
         // Levels per lane, then the loudest level of each link set.
@@ -457,7 +458,7 @@ void SpectralEngine::runFrame (const engine::BandSettingsArray& bands, const eng
                 const float weight = state.weights[i];
                 const float target = weight > 1.0e-4f ? weight * static_cast<float> (computer (level[i])) : 0.0f;
                 float& g = gains[i];
-                const float a = std::abs (target) > std::abs (g) ? attack : release;
+                const float a = (target - g) * slope > 0.0f ? attack : release; // attack: a rising level
                 g = a * g + (1.0f - a) * target;
                 if (dyn.autoGain && weight > 1.0e-4f)
                 {

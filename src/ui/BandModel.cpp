@@ -1,6 +1,7 @@
 #include "ui/BandModel.h"
 
 #include "plugin/SpeakerState.h"
+#include "plugin/StateMigration.h"
 
 #include <utility>
 
@@ -14,7 +15,8 @@ using plugin::kNumBandParams;
 namespace
 {
     constexpr const char* kClipboardPrefix = "SamSpectralControl.band.v2:";
-    /** Texts copied by 1.0: the parameters before Sidechain, then the speakers. */
+    /** Texts copied by 1.0: the parameters before Sidechain, then the speakers; Direction and the
+        times as version 1 of the state had them. */
     constexpr const char* kClipboardPrefixV1 = "SamSpectralControl.band.v1:";
     constexpr int kNumBandParamsV1 = static_cast<int> (BandParam::Sidechain);
 
@@ -146,6 +148,8 @@ BandValues BandModel::read (int band) const noexcept
     v.character = toEnum (get (BandParam::Character), Character::Sharp);
     v.autoGain = get (BandParam::AutoGain) >= 0.5f;
     v.sidechain = get (BandParam::Sidechain) >= 0.5f;
+    v.upward = get (BandParam::Direction) >= 0.5f;
+    v.expand = get (BandParam::Ratio) < 1.0f;
     v.speakers = plugin::readSpeakers (state.state, band);
     return v;
 }
@@ -495,17 +499,29 @@ bool BandModel::pasteBandText (int band, const juce::String& text)
     if (items.size() != numParams && items.size() != numParams + 1)
         return false;
 
-    ScopedEdit edit (*this, "Paste Band");
+    // Plain values; parameters newer than the text take their default.
+    std::array<float, kNumBandParams> plain {};
     for (int p = 0; p < kNumBandParams; ++p)
     {
-        const auto param = static_cast<BandParam> (p);
-        if (param == BandParam::Used)
-            continue;
-        // Parameters newer than the text take their default.
-        auto& target = parameter (band, param);
+        auto& target = parameter (band, static_cast<BandParam> (p));
         const float normalised = p < numParams ? juce::jlimit (0.0f, 1.0f, items[p].getFloatValue()) : target.getDefaultValue();
-        setValue (band, param, target.convertFrom0to1 (normalised));
+        plain[static_cast<std::size_t> (p)] = target.convertFrom0to1 (normalised);
     }
+    if (v1)
+    {
+        // Copied by 1.0: its direction and times as this version reads them (same sound).
+        auto at = [&plain] (BandParam p) -> float& { return plain[static_cast<std::size_t> (p)]; };
+        const auto now = plugin::migrateBandDirection (
+            { at (BandParam::Direction), at (BandParam::Ratio), at (BandParam::Attack), at (BandParam::Release) });
+        at (BandParam::Direction) = now.direction;
+        at (BandParam::Attack) = now.attackMs;
+        at (BandParam::Release) = now.releaseMs;
+    }
+
+    ScopedEdit edit (*this, "Paste Band");
+    for (int p = 0; p < kNumBandParams; ++p)
+        if (static_cast<BandParam> (p) != BandParam::Used)
+            setValue (band, static_cast<BandParam> (p), plain[static_cast<std::size_t> (p)]);
     // The speaker selection follows (texts copied before it existed give the default).
     setSpeakers (band, items.size() > numParams ? plugin::speakerSelectionFromString (items[numParams]) : engine::SpeakerSelection {});
     return true;

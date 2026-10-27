@@ -10,6 +10,7 @@ target_sources(ssc_plugin_tests PRIVATE
     TestInterface.cpp
     TestStress.cpp
     TestSidechainBus.cpp
+    TestDirection.cpp
     ../AllocationCounter.cpp
     ${SSC_PLUGIN_SOURCES})
 
