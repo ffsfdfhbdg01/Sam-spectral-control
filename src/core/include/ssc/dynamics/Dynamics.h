@@ -49,6 +49,9 @@ struct GainComputer
     {
         const double over = levelDb - thresholdDb;
         const double halfKnee = 0.5 * kneeDb;
+        // 2W, never a literal zero: with W = 0 the knee branches are not taken, but MSVC still warns
+        // about a division by zero there once a constant 0 dB knee is inlined (C4723).
+        const double twiceKnee = 2.0 * std::max (kneeDb, 1.0e-12);
         double gain = 0.0;
 
         if (above)
@@ -56,14 +59,14 @@ struct GainComputer
             if (over > halfKnee)
                 gain = slope * over;
             else if (over >= -halfKnee && kneeDb > 0.0)
-                gain = slope * (over + halfKnee) * (over + halfKnee) / (2.0 * kneeDb);
+                gain = slope * (over + halfKnee) * (over + halfKnee) / twiceKnee;
         }
         else
         {
             if (over < -halfKnee)
                 gain = slope * over;
             else if (over <= halfKnee && kneeDb > 0.0)
-                gain = -slope * (halfKnee - over) * (halfKnee - over) / (2.0 * kneeDb);
+                gain = -slope * (halfKnee - over) * (halfKnee - over) / twiceKnee;
         }
 
         return std::clamp (gain, -rangeDb, rangeDb);
