@@ -20,9 +20,9 @@ Dla tagu workflow odmawia wydania, dopóki:
 ## Kroki wydania
 
 1. Decyzje (od 1.0.0 podjęte, 2026-10-10): licencja AGPLv3 ([ADR-0002](decisions/0002-licencja-juce.md)) — `LICENSE` (pełny tekst), `packaging/LICENSE.txt` (nota, adres kodu źródłowego i pełny tekst; pokazywany i instalowany przez instalatory), sekcja JUCE w `THIRD-PARTY-NOTICES.txt` odsyła do niego i do kodu źródłowego; identyfikatory zamrożone ([ADR-0016](decisions/0016-identyfikatory-nazwy.md)).
-2. Testy w hostach według [testing.md](testing.md) (TST-3) — przed wydaniem zwykłym; 1.0.0 jest wstępne i ich jeszcze nie ma.
+2. Testy w hostach według [testing.md](testing.md) (TST-3) — przed wydaniem zwykłym; 1.0.0 i 1.1.0 są wstępne i ich jeszcze nie ma.
 3. Wersja w `CMakeLists.txt` i sekcja w `CHANGELOG.md` z datą: `## [X.Y.Z] - RRRR-MM-DD`.
-4. `git tag vX.Y.Z && git push origin vX.Y.Z` albo *Actions → Release → Run workflow* z zaznaczonym **publish** (workflow sam tworzy tag `vX.Y.Z` na tym commicie — tak powstało 1.0.0) → workflow „Release” (bramka, build, testy, pluginval, walidator VST3, instalatory, archiwum źródeł) → opublikowane wydanie GitHub → sprawdzenie instalatorów (instalacja, deinstalacja, `spctl`/właściwości pliku). Wydanie można potem edytować albo cofnąć do szkicu na GitHubie. Ręczne uruchomienie bez **publish** buduje i sprawdza instalatory (artefakty przebiegu) bez wydania.
+4. `git tag vX.Y.Z && git push origin vX.Y.Z` albo *Actions → Release → Run workflow* z zaznaczonym **publish** (workflow sam tworzy tag `vX.Y.Z` na tym commicie — tak powstały 1.0.0 i 1.1.0) → workflow „Release” (bramka, build, testy, pluginval, walidator VST3, instalatory, archiwum źródeł) → opublikowane wydanie GitHub → sprawdzenie instalatorów (instalacja, deinstalacja, `spctl`/właściwości pliku). Wydanie można potem edytować albo cofnąć do szkicu na GitHubie. Ręczne uruchomienie bez **publish** buduje i sprawdza instalatory (artefakty przebiegu) bez wydania.
 
 Archiwum źródeł to kod odpowiadający binarkom w rozumieniu AGPLv3 (§6): wszystkie pliki z `git ls-files --recurse-submodules` (wtyczka, JUCE, pffft, Catch2), w katalogu `SamSpectralControl-X.Y.Z/`; buduje się z niego tak samo jak z repozytorium (`cmake -S SamSpectralControl-X.Y.Z -B build`).
 
@@ -73,7 +73,7 @@ Microsoft Defender SmartScreen ocenia pobierane pliki według reputacji, którą
 
 - `THIRD-PARTY-NOTICES.txt` w katalogu głównym generuje `python3 tools/third-party-notices.py` z plików licencji w `external/` (wersje z `external/JUCE/JUCE.spdx.json` i commitów submodułów). Lista odpowiada temu, co jest w binarce: JUCE, pffft, zlib, HarfBuzz, SheenBidi, LunaSVG, PlutoVG, libpng, biblioteka JPEG IJG, VST 3 SDK, rozszerzenia PreSonus (domena publiczna) i — tylko w komponencie Audio Unit — AudioUnitSDK. Nieużywane kodeki JUCE (FLAC, Ogg Vorbis, Opus, MP3) i WebP są wyłączone w `src/CMakeLists.txt`, więc ich kod nie trafia do wtyczki (sprawdzone `nm` na binarce).
 - Po aktualizacji JUCE lub pffft: `python3 tools/third-party-notices.py` i commit; `--check` (krok CI na Linuksie i `local-check.sh`) wykrywa nieaktualny plik.
-- Instalatory zawsze instalują `LICENSE.txt` i `THIRD-PARTY-NOTICES.txt`; instrukcja [manual.md](manual.md) trafia obok jako `Manual.md` razem z `images/editor.png` i `images/editor-advanced.png` (? → *User Manual* w nagłówku otwiera ten plik). Zrzuty ekranu odświeża się po zmianach interfejsu (build z `-DSSC_BUILD_TOOLS=ON`, na Linuksie pod `xvfb-run -a`):
+- Instalatory zawsze instalują `LICENSE.txt` i `THIRD-PARTY-NOTICES.txt`; instrukcja [manual.md](manual.md) trafia obok jako `Manual.md` razem z obrazami, do których się odwołuje (`images/editor.png`, `editor-advanced.png`, `sidechain.png`, `solo.png`, `upward.png`; lista w `packaging/windows/SamSpectralControl.iss` i `packaging/macos/build-pkg.sh`) (? → *User Manual* w nagłówku otwiera ten plik). Zrzuty ekranu odświeża się po zmianach interfejsu (build z `-DSSC_BUILD_TOOLS=ON`, na Linuksie pod `xvfb-run -a`):
 
 ```bash
 BANDS="b01_used=1 b01_shape=3 b01_freq=60 b01_slope=3 b02_used=1 b02_freq=250 b02_gain=-3 b02_q=1.2 \

@@ -4,6 +4,10 @@ Wszystkie istotne zmiany Sam Spectral Control. Format: [Keep a Changelog](https:
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-27
+
+Odsłuch Solo taki, jak pasmo brzmi w miksie, wejście sidechain dla pasm Dynamic i Spectral oraz kompresja w górę. Projekty i presety z 1.0.0 wczytują się i brzmią tak samo. Instalatory nadal nie są podpisane cyfrowo — to wydanie wstępne.
+
 ### Dodane
 - **Kompresja w górę** (upward compression) w pasmach Dynamic i Spectral: przełącznik **Down | Up** w nagłówku rzędu dynamiki panelu pasma (obok Auto Gain) i podmenu *Direction* w menu węzła. Up z Ratio powyżej 1:1 podnosi obszar pasma, gdy jest cichszy niż próg (najwyżej o Range), a głośne fragmenty zostawia; Up z Ratio poniżej 1:1 to ekspansja w górę, Down — kompresja albo ekspansja w dół (jak bramka). Nagłówek rzędu dynamiki nazywa działanie (**UPWARD COMPRESSION**, **EXPANSION**, **UPWARD EXPANSION**).
 - **Sidechain** pasm Dynamic i Spectral (DYN-4): opcjonalne wejście **Sidechain** wtyczki (mono lub stereo, domyślnie wyłączone) i wybór **Sidechain: Internal | External** w panelu Advanced pasma oraz *External Sidechain* w menu węzła. Pasmo z External mierzy poziom w sidechainie (na swoim celu: Left, Right, Mid, Side, All; sidechain mono steruje wszystkimi kanałami), a przetwarza własny sygnał; pasma Spectral biorą poziomy z widma sidechaina. Sidechain jest wyrównany w czasie z torem głównym (Lookahead, oversampling, Natural Phase) i nie dodaje latencji. Panel pasma pokazuje **· SIDECHAIN**, a bez sygnału na wejściu — bursztynowe **SIDECHAIN: NO INPUT**.

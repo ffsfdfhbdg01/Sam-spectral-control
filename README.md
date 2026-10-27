@@ -18,13 +18,13 @@ Korektor parametryczny z pasmami statycznymi, dynamicznymi i spektralno-dynamicz
 | M7 | Analizator (ustawienia, peak hold), poświata aktywności, podpowiedzi rezonansów, odczyty fazy i ringingu pasm, mierniki THD+N i aliasingu z podpowiedzią oversamplingu | ✅ |
 | M8 | Presety fabryczne i użytkownika, A/B, Undo/Redo w nagłówku, testy obciążeniowe, oversampling renderu offline, Delta, nakładka fazy całego EQ, korektor Minimum Phase High/Max, raporty pomiarów, instalatory (pkg / Inno Setup) i workflow wydania z podpisami, instrukcja (PL), licencje | ✅ |
 | UX | Przebudowa interfejsu ([research §15](docs/research/15-ux-ui.md)): trzy poziomy informacji, panel pasma pod węzłem z pokrętłami zależnymi od trybu, wysuwane panele Advanced (pasma i globalny), presety ‹ › ze znacznikiem zmian, animacje Full / Reduced / Off | ✅ |
-| po 1.0.0 | Solo z działaniem pasma i tylko na jego celu, słyszalny zakres Solo na wykresie; wejście Sidechain dla pasm Dynamic i Spectral; kompresja w górę (Down \| Up) ([CHANGELOG](CHANGELOG.md)) | ✅ (jeszcze niewydane) |
+| 1.1.0 | Solo z działaniem pasma i tylko na jego celu, słyszalny zakres Solo na wykresie; wejście Sidechain dla pasm Dynamic i Spectral; kompresja w górę (Down \| Up) ([CHANGELOG](CHANGELOG.md)) | ✅ |
 
 Szczegółowy stan każdego wymagania: [docs/traceability.md](docs/traceability.md).
 
 ## Pobieranie
 
-Instalatory wersji **1.0.0** dla macOS (`.pkg`, Apple silicon i Intel) i Windows (`.exe`, x64) są na stronie [Releases](https://github.com/ffsfdfhbdg01/Sam-spectral-control/releases), razem z archiwum pełnego kodu źródłowego i sumami SHA-256. Pierwsze wydanie nie jest podpisane cyfrowo (wydanie wstępne): macOS i Windows ostrzegają przed jego uruchomieniem, a notatki wydania opisują, jak przejść przez te ostrzeżenia. Na Linuksie wtyczkę buduje się ze źródeł (niżej). Jak powstaje wydanie: [docs/release.md](docs/release.md).
+Instalatory wersji **1.1.0** dla macOS (`.pkg`, Apple silicon i Intel) i Windows (`.exe`, x64) są na stronie [Releases](https://github.com/ffsfdfhbdg01/Sam-spectral-control/releases), razem z archiwum pełnego kodu źródłowego i sumami SHA-256. Wydania nie są jeszcze podpisane cyfrowo (wydania wstępne): macOS i Windows ostrzegają przed uruchomieniem instalatora, a notatki wydania opisują, jak przejść przez te ostrzeżenia. Na Linuksie wtyczkę buduje się ze źródeł (niżej). Jak powstaje wydanie: [docs/release.md](docs/release.md).
 
 ## Obsługa (skrót)
 

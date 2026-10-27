@@ -1,4 +1,4 @@
-# Sam Spectral Control 1.0 — instrukcja obsługi
+# Sam Spectral Control 1.1 — instrukcja obsługi
 
 Sam Spectral Control to korektor (EQ) z 24 pasmami, z których każde może działać statycznie, dynamicznie albo spektralnie. Ma trzy tryby fazy (Minimum Phase, Natural Phase, Analog Feel), oversampling, Auto Gain, nasycenie pasm (Character), obsługę stereo M/S oraz układów surround i Atmos (m.in. 7.1.4 i 9.1.6, do 32 kanałów), a także analizator widma, odczyty fazy i ringingu oraz mierniki zniekształceń.
 
@@ -35,7 +35,7 @@ Interfejs wtyczki jest po angielsku — nazwy przycisków i parametrów podajemy
 
 ### macOS
 
-Uruchom `SamSpectralControl-1.0.0-macOS.pkg`. W kroku *Customize* można wybrać komponenty:
+Uruchom `SamSpectralControl-1.1.0-macOS.pkg`. W kroku *Customize* można wybrać komponenty:
 
 | Komponent | Miejsce instalacji |
 |---|---|
@@ -47,11 +47,11 @@ Deinstalacja: uruchom `Uninstall Sam Spectral Control.command` z folderu `/Libra
 
 ### Windows
 
-Uruchom `SamSpectralControl-1.0.0-Windows.exe`. Wtyczka trafia do `C:\Program Files\Common Files\VST3\Sam Spectral Control.vst3`, a licencje i (opcjonalnie) instrukcja do `C:\Program Files\Sam Audio\Sam Spectral Control`. Deinstalacja: *Ustawienia → Aplikacje → Zainstalowane aplikacje → Sam Spectral Control*.
+Uruchom `SamSpectralControl-1.1.0-Windows.exe`. Wtyczka trafia do `C:\Program Files\Common Files\VST3\Sam Spectral Control.vst3`, a licencje i (opcjonalnie) instrukcja do `C:\Program Files\Sam Audio\Sam Spectral Control`. Deinstalacja: *Ustawienia → Aplikacje → Zainstalowane aplikacje → Sam Spectral Control*.
 
 ### Ostrzeżenia systemu przy instalatorach bez podpisu
 
-Wydanie 1.0.0 nie jest podpisane cyfrowo (wydanie wstępne), więc systemy ostrzegają przed pierwszym uruchomieniem instalatora. Sumę SHA-256 pobranego pliku można porównać z `SHA256SUMS.txt` ze strony wydania (macOS: `shasum -a 256 <plik>`, Windows: `certutil -hashfile <plik> SHA256`).
+Wydanie 1.1.0 nie jest podpisane cyfrowo (wydanie wstępne), więc systemy ostrzegają przed pierwszym uruchomieniem instalatora. Sumę SHA-256 pobranego pliku można porównać z `SHA256SUMS.txt` ze strony wydania (macOS: `shasum -a 256 <plik>`, Windows: `certutil -hashfile <plik> SHA256`).
 
 - **macOS**: po dwukliku pojawia się komunikat, że Apple nie może sprawdzić pliku. Zamknij go, otwórz *Ustawienia systemowe → Prywatność i ochrona*, w sekcji *Ochrona* kliknij *Otwórz mimo to* przy nazwie instalatora i potwierdź hasłem. W macOS 15 i nowszych otwieranie przez Control-klik już nie omija tej blokady.
 - **Windows**: SmartScreen pokazuje okno „System Windows ochronił ten komputer” — wybierz *Więcej informacji → Uruchom mimo to*. Także podpisane instalatory nowego wydawcy mogą przez pierwsze tygodnie wywoływać to ostrzeżenie, zanim zbudują reputację.
@@ -492,7 +492,7 @@ Najwięcej kosztują: liczba kanałów, oversampling, pasma Dynamic i Spectral o
 
 ## 18. Znane ograniczenia
 
-- Formaty: VST3; Audio Unit tylko w kompilacjach, które go zawierają (macOS); AAX i CLAP poza zakresem wersji 1.0.
+- Formaty: VST3; Audio Unit tylko w kompilacjach, które go zawierają (macOS); AAX i CLAP poza zakresem obecnej wersji.
 - Jedno wejście sidechain (mono lub stereo), wspólne dla wszystkich pasm; analizator nie pokazuje widma sidechaina.
 - Pasma Spectral mają dużą latencję (ramka STFT); tryb niskiej latencji dla Spectral jest planowany.
 - Podpowiedzi rezonansów są rzadkie poniżej ok. 400 Hz.

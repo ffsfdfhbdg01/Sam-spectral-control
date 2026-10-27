@@ -157,7 +157,7 @@ Zakres skali EQ jest w prawym górnym rogu wykresu, obok skali dB (F10). Progi o
 - **Wymiary**: szerokość 488 px (600 px w surround, z Speakers), wysokość 132 px (Static) albo 232 px (Dynamic, Spectral). Przy zmianie trybu panel zmienia tylko wysokość, nigdy szerokości (w 1.0 skakał z 482 na 684 px).
 - **Gałki**: EQ ok. 46 px, dynamika ok. 38 px, Advanced ok. 32 px; łuk w kolorze pasma (podobieństwo z węzłem, A8), Gain od 0 dB w obie strony; podpis nad gałką, wartość pod nią (kliknięcie — wpisanie wartości, dwuklik — wartość domyślna).
 - **Tryb**: segmenty Dynamic i Spectral są nieaktywne dla kształtów bez wzmocnienia (podpowiedź mówi dlaczego). Przełączenie na Spectral z nieruszonym progiem Dynamic ustawia Relative +6 dB i odwrotnie (DYN-4, bez zmian).
-- **Liczba kontrolek parametrów**: Static 8 (w 1.0: 11–12 kontrolek, w tym 3 listy bez podpisu), Dynamic i Spectral 14 (w 1.0: 23–24), po 1.0.0 — 15, bo kierunek **Down | Up** (kompresja w górę) przeszedł z Advanced do panelu pasma: to wybór tego, co pasmo robi, a nie szczegół detektora. Test `TestInterface` sprawdza, które parametry ma każdy tryb.
+- **Liczba kontrolek parametrów**: Static 8 (w 1.0: 11–12 kontrolek, w tym 3 listy bez podpisu), Dynamic i Spectral 14 (w 1.0: 23–24), w 1.1.0 — 15, bo kierunek **Down | Up** (kompresja w górę) przeszedł z Advanced do panelu pasma: to wybór tego, co pasmo robi, a nie szczegół detektora. Test `TestInterface` sprawdza, które parametry ma każdy tryb.
 
 ### d6. Wysuwany panel Advanced pasma
 
@@ -287,7 +287,7 @@ Krzywe: *wejście* `cubic-bezier(0, 0, 0.2, 1)`, *wyjście* `cubic-bezier(0.4, 0
 | # | Kryterium | Sprawdzenie | Wynik |
 |---|---|---|---|
 | E1 | Grupy w paskach oddzielone ≥ 16 px i linią; sekcje paneli podpisane | zrzuty `ssc_screenshot` | spełnione (`editor.png`, `editor-advanced.png`) |
-| E2 | Panel pasma pokazuje tylko parametry swojego trybu: Static ≤ 11, Dynamic i Spectral ≤ 14 kontrolek parametrów (po 1.0.0 ≤ 15: Down \| Up); żadnej listy bez podpisu | test `TestInterface` | spełnione: 8 i 15 |
+| E2 | Panel pasma pokazuje tylko parametry swojego trybu: Static ≤ 11, Dynamic i Spectral ≤ 14 kontrolek parametrów (w 1.1.0 ≤ 15: Down \| Up); żadnej listy bez podpisu | test `TestInterface` | spełnione: 8 i 15 |
 | E3 | Tekst ≥ 4,5:1 do swojej warstwy; wskaźniki stanu ≥ 3:1; tor gałki ≥ 2:1 | test tokenów (`contrastRatio`) | spełnione (§d10) |
 | E4 | Cele kliknięcia ≥ 24 × 24 px | przegląd, test segmentów | przyciski 28 × 28, segmenty i chipy wysokie na 26–28 px |
 | E5 | Przy 860 × 480 żadna etykieta nie jest ucięta | zrzut `editor-860x480.png` | spełnione (krótkie nazwy trybów fazy, zwarty chip statusu) |

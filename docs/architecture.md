@@ -1,6 +1,6 @@
 # Architektura — Sam Spectral Control
 
-Status: **zrealizowana w M1–M8 (wersja 1.0.0)**. Dokument realizuje ARC-1…ARC-6 z [PROMPT.md](../PROMPT.md). Uzasadnienia decyzji są w [ADR](decisions/), a podstawy merytoryczne w [research](research/); tam też, w sekcjach „Realizacja w M…”, są odstępstwa od propozycji z M0 i wyniki pomiarów.
+Status: **zrealizowana w M1–M8 (wersja 1.0.0), rozszerzona w 1.1.0** (Solo na celu pasma, sidechain, kompresja w górę). Dokument realizuje ARC-1…ARC-6 z [PROMPT.md](../PROMPT.md). Uzasadnienia decyzji są w [ADR](decisions/), a podstawy merytoryczne w [research](research/); tam też, w sekcjach „Realizacja w M…”, są odstępstwa od propozycji z M0 i wyniki pomiarów.
 
 ## 1. Zasady nadrzędne
 

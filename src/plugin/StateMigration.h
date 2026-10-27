@@ -6,7 +6,7 @@ namespace ssc::plugin
 {
 /**
     Current version of the saved state. Bump when the layout changes and add a migration step.
-    1: version 1.0. 2: the bands' Direction is Down / Up (it was the threshold side, Above / Below),
+    1: version 1.0. 2 (version 1.1): the bands' Direction is Down / Up (it was the threshold side, Above / Below),
     and attack and release answer a rising and a falling level.
 */
 inline constexpr int kStateVersion = 2;
