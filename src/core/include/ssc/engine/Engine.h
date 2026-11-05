@@ -40,6 +40,7 @@ struct GlobalParams
     bool delta = false; ///< hear what the plugin changes: (dry − mixed output) × output gain (GLB-2)
     Quality quality = Quality::Normal;
     int soloBand = -1;           ///< band auditioned on its own (−1 = none): its region of what is heard, on its target only
+    bool soloDelta = false;      ///< the soloed band plays only what the plug-in changes in its region (band Delta)
     double maxLookaheadMs = 0.0; ///< delay of the main path; Dynamic bands look ahead up to this (DYN-8)
     bool autoGain = false;       ///< global Auto Gain (AG-1)
     AutoGainWeighting autoGainWeighting = AutoGainWeighting::Fletcher;
@@ -235,7 +236,7 @@ private:
     std::vector<std::vector<double>> solo;
     std::vector<double*> soloPointers;
     std::vector<std::vector<double>> deltaWet; ///< processed signal without the Auto Gain correction (AG-5)
-    LinearSmoother<double> soloAmount;
+    LinearSmoother<double> soloAmount, soloDeltaAmount;
     bool soloWasActive = false;
     BandSettings soloAudition; ///< region filter of the soloed band, with the band's target
     int controlBlock = 16;

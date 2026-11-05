@@ -4,6 +4,18 @@ Wszystkie istotne zmiany Sam Spectral Control. Format: [Keep a Changelog](https:
 
 ## [Unreleased]
 
+### Dodane
+- **Delta pasma**: przycisk △ obok słuchawek (Solo) w panelu pasma i pozycja *Delta* w menu węzła — odsłuch tylko tego, co wtyczka zmienia w obszarze pasma (to, co tnie lub dodaje), na celu pasma; kliknięcie zostawia włączone, przytrzymanie działa tylko na czas trzymania. Solo i Delta pasma wykluczają się; etykieta na wykresie: *Delta · Band …*.
+- **Ikony kształtów** pasm (Bell, półki, cięcia, Notch, Band Pass, Tilt Shelf, Flat Tilt, All Pass) w wyborze **Shape** panelu, w jego menu i w podmenu *Shape* menu węzła.
+- **Kliknięcie w podpowiedź rezonansu** dodaje pasmo, które go wycina: Bell Q 8 na częstotliwości rezonansu, obniżony o tyle, o ile rezonans wystaje (3–18 dB), od razu zaznaczony; jeden krok Undo.
+- **Okres fali** w panelu pasma: po prawej stronie rzędu EQ **Period** (1000 / f ms), a w pasmach Dynamic i Spectral także **Attack =** — Attack w okresach fali częstotliwości pasma, jako pomoc przy ustawianiu Attack.
+- **Release w nutach (tryb rytmiczny)**: przełącznik ♪ przy Release pasm Dynamic i Spectral; pokrętło wybiera wartość rytmiczną 1/64T … 1/1D (z ikoną nuty, z triolami i kropkami), a czas wynika z tempa projektu odczytywanego z hosta (bez tempa — ostatnie znane, na początku 120 BPM). Nowe parametry pasma **Release Sync** i **Release Note** (automatyzowalne).
+
+### Zmienione
+- **Pasmo Spectral działa w obszarze swojego Q i Slope jak pasmo Dynamic**: poziom każdej częstotliwości jest mierzony przez ten sam filtr obszaru pasma, którego używa detekcja Dynamic. Dotąd próg porównywany był z pełnym poziomem częstotliwości, więc głośne składowe na zboczach wąskiego pasma były tłumione mocniej niż w paśmie Dynamic (np. Bell 2 kHz Q 2 o oktawę od środka: −2,0 dB zamiast −0,8 dB) i pasmo działało szerzej, niż wskazywały Q i Slope. Przy pełnym działaniu kształt tłumienia był i jest taki jak kształt pasma Static.
+- Panel pasma jest szerszy o kolumnę okresu fali (526 px w mono i stereo).
+- Schowek pasma (*Copy* / *Paste*) ma format w wersji 3 (z nowymi parametrami); teksty z 1.0 i 1.1 nadal da się wkleić (Release Sync wyłączony).
+
 ## [1.1.0] - 2026-10-27
 
 Odsłuch Solo taki, jak pasmo brzmi w miksie, wejście sidechain dla pasm Dynamic i Spectral oraz kompresja w górę. Projekty i presety z 1.0.0 wczytują się i brzmią tak samo. Instalatory nadal nie są podpisane cyfrowo — to wydanie wstępne.

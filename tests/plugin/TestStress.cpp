@@ -490,7 +490,7 @@ TEST_CASE ("TST-4: fast automation of every parameter stays finite, allocation-f
                 for (int k = 0; k < 3; ++k)
                     other[static_cast<int> (rng() % static_cast<unsigned> (other.size()))]->setValueNotifyingHost (unit (rng));
             if (block % 40 == 0)
-                p.setSoloBand (static_cast<int> (rng() % 14) - 2);
+                p.setSoloBand (static_cast<int> (rng() % 14) - 2, rng() % 2 == 0);
 
             const auto r = play (p, noise, sizes.next(), BlockSizes::fixed (256), position, 0.5f);
             total.finite = total.finite && r.finite;

@@ -169,7 +169,7 @@ TEST_CASE ("The band panel docks under its node and never covers it (research 15
                     {
                         BandPanelDockRequest r;
                         r.area = area;
-                        r.panelSize = { 488, panelHeight };
+                        r.panelSize = { BandPanel::kStereoWidth, panelHeight };
                         r.flyoutSize = flyout ? juce::Point<int> (BandAdvancedPanel::kWidth, panelHeight) : juce::Point<int>();
                         r.node = { static_cast<float> (ix) * 1100.0f / 40.0f, static_cast<float> (iy) * 564.0f / 30.0f };
                         r.bottomInset = globalPanel ? 92 : 22;
@@ -189,7 +189,7 @@ TEST_CASE ("The band panel docks under its node and never covers it (research 15
     // Centred under the node when nothing is in the way; the flyout opens to the right.
     BandPanelDockRequest r;
     r.area = area;
-    r.panelSize = { 488, BandPanel::kStaticHeight };
+    r.panelSize = { BandPanel::kStereoWidth, BandPanel::kStaticHeight };
     r.flyoutSize = { BandAdvancedPanel::kWidth, BandPanel::kStaticHeight };
     r.node = { 400.0f, 80.0f };
     auto dock = dockBandPanel (r);
@@ -207,7 +207,7 @@ TEST_CASE ("The band panel docks under its node and never covers it (research 15
 
     // Near the right edge the pair moves left; the flyout opens to the left when it would cover the node.
     r.node = { 1050.0f, 300.0f };
-    r.panelSize = { 488, BandPanel::kDynamicHeight };
+    r.panelSize = { BandPanel::kStereoWidth, BandPanel::kDynamicHeight };
     r.flyoutSize = { BandAdvancedPanel::kWidth, BandPanel::kDynamicHeight };
     dock = dockBandPanel (r);
     CHECK_FALSE (dock.coversNode);
@@ -257,7 +257,7 @@ TEST_CASE ("The band panel shows the knobs of the band's mode; details live in A
     for (const auto p : { BandParam::Selectivity, BandParam::Knee, BandParam::Lookahead, BandParam::Mix, BandParam::Link,
                           BandParam::Sidechain, BandParam::ThresholdMode })
         CHECK_FALSE (contains (shown, p));
-    CHECK (shown.size() <= 15);
+    CHECK (shown.size() <= 16); // the Release counts its rhythm switch (note values)
     auto detail = advanced.visibleParameters();
     for (const auto p :
          { BandParam::ThresholdMode, BandParam::Knee, BandParam::Lookahead, BandParam::Mix, BandParam::Link, BandParam::Sidechain })
@@ -403,6 +403,8 @@ TEST_CASE ("Sidechain: External is shown, a missing Sidechain input is pointed o
     juce::StringArray items;
     items.addTokens (text.fromFirstOccurrenceOf (":", false, false), ",", {});
     REQUIRE (items.size() == plugin::kNumBandParams + 1);
+    items.remove (static_cast<int> (BandParam::ReleaseNote)); // newer than 1.0
+    items.remove (static_cast<int> (BandParam::ReleaseSync));
     items.remove (static_cast<int> (BandParam::Sidechain));
     const auto old = "SamSpectralControl.band.v1:" + items.joinIntoString (",");
     REQUIRE (model.pasteBandText (other, old));
@@ -583,4 +585,74 @@ TEST_CASE ("Down | Up on the dynamics title line: Up is upward compression, name
     model.refresh();
     CHECK_FALSE (model.band (band).upward);
     CHECK_FALSE (model.band (band).expand);
+}
+
+TEST_CASE ("Delta beside Solo: a click latches the band's Delta, a second click releases it (BAND-1, GLB-2)", "[ui][GLB-2]")
+{
+    JuceEnvironment env;
+    plugin::SscAudioProcessor processor;
+    BandModel model (processor.getValueTreeState(), processor.getUndoManager());
+    model.onSoloChanged = [&processor] (int band, bool delta) { processor.setSoloBand (band, delta); };
+    BandPanel panel (model);
+    panel.setSize (panel.getPreferredSize().x, panel.getPreferredSize().y);
+
+    const int band = model.createBand (Shape::Bell, 1000.0f, -6.0f);
+    REQUIRE (panel.getBand() == band);
+
+    auto button = [&panel] (const juce::String& name) -> juce::Button* {
+        for (auto* child : panel.getChildren())
+            if (auto* b = dynamic_cast<juce::Button*> (child); b != nullptr && b->getName() == name)
+                return b;
+        return nullptr;
+    };
+    auto* solo = button ("Solo");
+    auto* delta = button ("Delta");
+    REQUIRE (solo != nullptr);
+    REQUIRE (delta != nullptr);
+    CHECK (delta->isVisible());
+    CHECK (delta->getX() > solo->getX()); // right of the headphones
+    auto click = [] (juce::Button& b) {
+        b.setState (juce::Button::buttonDown);
+        b.setState (juce::Button::buttonNormal);
+    };
+
+    click (*delta);
+    CHECK (model.getSoloBand() == band);
+    CHECK (model.isSoloDelta());
+    CHECK (processor.getSoloBand() == band);
+    CHECK (processor.isSoloDelta());
+    CHECK (delta->getToggleState());
+    CHECK_FALSE (solo->getToggleState());
+
+    // Solo of the same band takes over from Delta; Delta takes over from Solo.
+    click (*solo);
+    CHECK (model.getSoloBand() == band);
+    CHECK_FALSE (model.isSoloDelta());
+    CHECK (solo->getToggleState());
+    CHECK_FALSE (delta->getToggleState());
+    click (*delta);
+    CHECK (model.isSoloDelta());
+
+    click (*delta);
+    CHECK (model.getSoloBand() == -1);
+    CHECK (processor.getSoloBand() == -1);
+    CHECK_FALSE (delta->getToggleState());
+}
+
+TEST_CASE ("Shape menus show an icon for every band shape (BAND-4)", "[ui][BAND-4]")
+{
+    JuceEnvironment env;
+    for (int i = 0; i <= static_cast<int> (Shape::AllPass); ++i)
+    {
+        const auto shape = static_cast<Shape> (i);
+        CAPTURE (i);
+        const auto path = shapeIconPath (shape, { 0.0f, 0.0f, 16.0f, 16.0f });
+        CHECK_FALSE (path.isEmpty());
+        CHECK (juce::Rectangle<float> (-1.0f, -1.0f, 18.0f, 18.0f).contains (path.getBounds()));
+        CHECK (shapeIconDrawable (shape, colours::text) != nullptr);
+    }
+    // Mirrored pairs differ.
+    CHECK_FALSE (shapeIconPath (Shape::LowCut, { 0, 0, 16, 16 }).getBounds() == juce::Rectangle<float>());
+    CHECK (shapeIconPath (Shape::LowShelf, { 0, 0, 16, 16 }).toString() != shapeIconPath (Shape::HighShelf, { 0, 0, 16, 16 }).toString());
+    CHECK (shapeIconPath (Shape::LowCut, { 0, 0, 16, 16 }).toString() != shapeIconPath (Shape::HighCut, { 0, 0, 16, 16 }).toString());
 }

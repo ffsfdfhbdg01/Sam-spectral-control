@@ -138,8 +138,140 @@ juce::Path iconPath (Icon icon, juce::Rectangle<float> area)
             p.startNewSubPath (g (12.0f, 4.0f));
             p.lineTo (g (4.0f, 12.0f));
             break;
+        case Icon::Delta:
+            p.startNewSubPath (g (8.0f, 3.0f));
+            p.lineTo (g (13.6f, 13.0f));
+            p.lineTo (g (2.4f, 13.0f));
+            p.closeSubPath();
+            break;
+        case Icon::Note: break; // drawn by drawNote()
     }
     return p;
+}
+
+void drawNote (juce::Graphics& g, const NoteGlyph& note, juce::Rectangle<float> area, juce::Colour colour)
+{
+    const Grid grid (area);
+    const float stroke = juce::jmax (1.1f, grid (1.25f));
+    g.setColour (colour);
+
+    // Head (tilted ellipse), hollow for whole and half notes.
+    const auto head = juce::Rectangle<float> (grid (5.4f), grid (3.9f)).withCentre (grid (6.0f, 12.2f));
+    juce::Path headPath;
+    headPath.addEllipse (head);
+    headPath.applyTransform (juce::AffineTransform::rotation (-0.35f, head.getCentreX(), head.getCentreY()));
+    if (note.division <= 2)
+        g.strokePath (headPath, juce::PathStrokeType (stroke));
+    else
+        g.fillPath (headPath);
+
+    // Stem and flags (one for an eighth, two for a sixteenth…).
+    if (note.division >= 2)
+    {
+        const auto stemBottom = grid (8.5f, 11.6f);
+        const auto stemTop = grid (8.5f, 2.2f);
+        g.drawLine ({ stemBottom, stemTop }, stroke);
+        int flags = 0;
+        for (int d = note.division; d >= 8; d /= 2)
+            ++flags;
+        for (int f = 0; f < flags; ++f)
+        {
+            juce::Path flag;
+            const float y = 2.2f + 2.4f * static_cast<float> (f);
+            flag.startNewSubPath (grid (8.5f, y));
+            flag.cubicTo (grid (9.4f, y + 1.6f), grid (12.6f, y + 2.0f), grid (11.6f, y + 5.0f));
+            g.strokePath (flag, juce::PathStrokeType (stroke, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+    }
+    if (note.dotted)
+        g.fillEllipse (juce::Rectangle<float> (grid (1.9f), grid (1.9f)).withCentre (grid (11.6f, 12.6f)));
+    if (note.triplet)
+    {
+        g.setFont (uiFont (grid (6.5f), true));
+        g.drawText ("3", juce::Rectangle<float> (grid (0.0f, 0.0f), grid (6.0f, 7.0f)), juce::Justification::centred, false);
+    }
+}
+
+juce::Path shapeIconPath (Shape shape, juce::Rectangle<float> area)
+{
+    const Grid g (area);
+    juce::Path p;
+    auto line = [&p, &g] (std::initializer_list<juce::Point<float>> points) {
+        bool first = true;
+        for (const auto& pt : points)
+        {
+            if (first)
+                p.startNewSubPath (g (pt.x, pt.y));
+            else
+                p.lineTo (g (pt.x, pt.y));
+            first = false;
+        }
+    };
+    switch (shape)
+    {
+        case Shape::Bell:
+            p.startNewSubPath (g (1.0f, 11.0f));
+            p.lineTo (g (4.2f, 11.0f));
+            p.cubicTo (g (6.2f, 11.0f), g (6.4f, 4.0f), g (8.0f, 4.0f));
+            p.cubicTo (g (9.6f, 4.0f), g (9.8f, 11.0f), g (11.8f, 11.0f));
+            p.lineTo (g (15.0f, 11.0f));
+            break;
+        case Shape::LowShelf:
+        case Shape::HighShelf:
+            p.startNewSubPath (g (1.0f, 4.5f));
+            p.lineTo (g (5.0f, 4.5f));
+            p.cubicTo (g (7.6f, 4.5f), g (8.4f, 11.5f), g (11.0f, 11.5f));
+            p.lineTo (g (15.0f, 11.5f));
+            break;
+        case Shape::LowCut:
+        case Shape::HighCut:
+            p.startNewSubPath (g (1.5f, 14.5f));
+            p.cubicTo (g (3.8f, 9.0f), g (5.0f, 5.0f), g (8.0f, 5.0f));
+            p.lineTo (g (15.0f, 5.0f));
+            break;
+        case Shape::Notch:
+            p.startNewSubPath (g (1.0f, 5.0f));
+            p.lineTo (g (6.2f, 5.0f));
+            p.cubicTo (g (7.4f, 5.0f), g (7.6f, 14.0f), g (8.0f, 14.0f));
+            p.cubicTo (g (8.4f, 14.0f), g (8.6f, 5.0f), g (9.8f, 5.0f));
+            p.lineTo (g (15.0f, 5.0f));
+            break;
+        case Shape::BandPass:
+            p.startNewSubPath (g (1.0f, 14.5f));
+            p.cubicTo (g (5.0f, 14.0f), g (6.0f, 4.0f), g (8.0f, 4.0f));
+            p.cubicTo (g (10.0f, 4.0f), g (11.0f, 14.0f), g (15.0f, 14.5f));
+            break;
+        case Shape::TiltShelf: line ({ { 1.0f, 12.0f }, { 4.5f, 12.0f }, { 11.5f, 4.0f }, { 15.0f, 4.0f } }); break;
+        case Shape::FlatTilt: line ({ { 1.5f, 13.0f }, { 14.5f, 3.0f } }); break;
+        case Shape::AllPass:
+            line ({ { 1.0f, 8.0f }, { 15.0f, 8.0f } });
+            p.addCentredArc (g (8.0f, 8.0f).x, g (8.0f, 8.0f).y, g (3.2f), g (3.2f), 0.0f, 0.6f, 5.6f, true);
+            break;
+    }
+    if (shape == Shape::HighShelf || shape == Shape::HighCut)
+        p.applyTransform (juce::AffineTransform::scale (-1.0f, 1.0f, area.getCentreX(), area.getCentreY()));
+    return p;
+}
+
+void drawShapeIcon (juce::Graphics& g, Shape shape, juce::Rectangle<float> area, juce::Colour colour)
+{
+    const Grid grid (area);
+    g.setColour (colour);
+    g.strokePath (shapeIconPath (shape, area),
+                  juce::PathStrokeType (juce::jmax (1.2f, grid (1.4f)), juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+}
+
+std::unique_ptr<juce::Drawable> shapeIconDrawable (Shape shape, juce::Colour colour)
+{
+    // Rendered at twice the menu's icon size, for high-density screens.
+    juce::Image image (juce::Image::ARGB, 36, 36, true);
+    {
+        juce::Graphics g (image);
+        drawShapeIcon (g, shape, image.getBounds().toFloat().reduced (3.0f), colour);
+    }
+    auto drawable = std::make_unique<juce::DrawableImage>();
+    drawable->setImage (image);
+    return drawable;
 }
 
 void drawIcon (juce::Graphics& g, Icon icon, juce::Rectangle<float> area, juce::Colour colour)
@@ -186,7 +318,9 @@ void drawIcon (juce::Graphics& g, Icon icon, juce::Rectangle<float> area, juce::
         case Icon::ChevronUp:
         case Icon::ChevronRight:
         case Icon::ChevronLeft:
-        case Icon::Close: break;
+        case Icon::Close:
+        case Icon::Delta: break;
+        case Icon::Note: drawNote (g, {}, area, colour); return;
     }
     g.strokePath (iconPath (icon, area), type);
 }
@@ -573,7 +707,7 @@ void ValueButton::setIndicator (juce::Colour colour)
 int ValueButton::getIdealWidth() const
 {
     const int captionWidth = caption.isEmpty() ? 0 : juce::GlyphArrangement::getStringWidthInt (uiFont (11.0f), caption);
-    const int valueWidth = juce::GlyphArrangement::getStringWidthInt (uiFont (13.0f), value) + 16;
+    const int valueWidth = juce::GlyphArrangement::getStringWidthInt (uiFont (13.0f), value) + 16 + (valueIcon ? 21 : 0);
     return juce::jmax (captionWidth, valueWidth) + 14;
 }
 
@@ -595,6 +729,13 @@ void ValueButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
         g.setColour (captionColour.withMultipliedAlpha (fade));
         g.setFont (uiFont (11.0f));
         g.drawFittedText (caption, captionArea, juce::Justification::bottomLeft, 1, 0.9f);
+    }
+
+    if (valueIcon)
+    {
+        auto iconArea = area.removeFromLeft (17).toFloat();
+        valueIcon (g, iconArea.withSizeKeepingCentre (17.0f, 17.0f), colours::text.withMultipliedAlpha (fade));
+        area.removeFromLeft (4);
     }
 
     // The chevron follows the value, so the pair reads as one control.

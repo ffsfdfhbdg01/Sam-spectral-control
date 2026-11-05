@@ -94,8 +94,8 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
     addChildComponent (globalAdvanced); // under the bottom bar: it slides up from behind it
     addAndMakeVisible (controlBar);
 
-    bandModel.onSoloChanged = [this] (int band) {
-        sscProcessor.setSoloBand (band);
+    bandModel.onSoloChanged = [this] (int band, bool delta) {
+        sscProcessor.setSoloBand (band, delta);
         display.repaint(); // the audible range of the soloed band
     };
     display.dynamicGainProvider = [this] (int band) { return sscProcessor.getBandDynamicGainDb (band); };
@@ -114,6 +114,7 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
     bandAdvanced.readoutProvider = readouts;
     bandPanel.sidechainConnected = [this] { return sscProcessor.isSidechainConnected(); };
     bandAdvanced.sidechainConnected = bandPanel.sidechainConnected;
+    bandPanel.tempoProvider = [this] { return sscProcessor.getHostBpm(); };
     bandPanel.onLayoutChanged = [this] {
         sscProcessor.getValueTreeState().state.setProperty (plugin::kUiBandAdvanced, bandPanel.isAdvancedOpen(), nullptr);
         layoutPanels (true);
@@ -196,7 +197,7 @@ SscEditor::SscEditor (plugin::SscAudioProcessor& p)
 SscEditor::~SscEditor()
 {
     // Solo is a monitoring aid tied to the open editor.
-    sscProcessor.setSoloBand (-1);
+    sscProcessor.setSoloBand (-1, false);
     sscProcessor.getAnalyzer().removeClient();
     sscProcessor.getReadouts().setChainWanted (false);
     sscProcessor.getReadouts().removeClient();

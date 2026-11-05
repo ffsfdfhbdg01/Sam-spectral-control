@@ -51,6 +51,8 @@ void Engine::prepare (const EngineConfig& config)
     soloProcessor->prepare (cfg.sampleRate, chunkSize);
     soloAmount.prepare (cfg.sampleRate, 0.01);
     soloAmount.setCurrentAndTarget (0.0);
+    soloDeltaAmount.prepare (cfg.sampleRate, 0.01);
+    soloDeltaAmount.setCurrentAndTarget (0.0);
     soloWasActive = false;
 
     // Input history for detection and the Max Lookahead delay of the main path (DYN-8).
@@ -557,6 +559,7 @@ void Engine::process (Sample* const* channels, int numChannels, int numSamples, 
 
     const bool soloing = params.soloBand >= 0 && params.soloBand < kNumBands && bands[static_cast<std::size_t> (params.soloBand)].active;
     soloAmount.setTarget (soloing ? 1.0 : 0.0);
+    soloDeltaAmount.setTarget (soloing && params.soloDelta ? 1.0 : 0.0);
     if (soloing)
     {
         // The band's region, on its target (channels and stereo component).
@@ -847,6 +850,7 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         mix.skip (numSamples);
         delta.skip (numSamples);
         soloAmount.skip (numSamples);
+        soloDeltaAmount.skip (numSamples);
         return;
     }
 
@@ -858,6 +862,8 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
             const double g = outputGain.next();
             const double m = mix.next();
             const double dl = delta.next();
+            // Band Delta: the band's region of what the plug-in changes, whatever the global Delta.
+            const double soloDl = dl + (1.0 - dl) * soloDeltaAmount.next();
             for (int ch = 0; ch < numChannels; ++ch)
             {
                 const auto c = static_cast<std::size_t> (ch);
@@ -866,7 +872,7 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
                 const double unadjusted = deltaSource[c][i];
                 const double changed = d - (unadjusted * m + d * (1.0 - m));
                 wet[c][i] = ((processed * m + d * (1.0 - m)) * (1.0 - dl) + changed * dl) * g;
-                solo[c][i] = ((unadjusted * m + d * (1.0 - m)) * (1.0 - dl) + changed * dl) * g;
+                solo[c][i] = ((unadjusted * m + d * (1.0 - m)) * (1.0 - soloDl) + changed * soloDl) * g;
             }
         }
         auditionSolo (numChannels, numSamples);
@@ -884,6 +890,7 @@ void Engine::processChunk (Sample* const* channels, int numChannels, int numSamp
         return;
     }
 
+    soloDeltaAmount.skip (numSamples); // no band soloed: Delta of a band starts from its target
     for (std::size_t i = 0; i < n; ++i)
     {
         const double g = outputGain.next();

@@ -29,6 +29,9 @@ struct BandValues
     bool sidechain = false;            ///< detection from the Sidechain input (Dynamic and Spectral bands)
     bool upward = false;               ///< Direction Up: the band boosts (upward compression or expansion)
     bool expand = false;               ///< Ratio under 1:1: expansion instead of compression
+    float attack = 5.0f;               ///< ms (the panel shows it in cycles of the band frequency)
+    bool releaseSync = false;          ///< rhythm mode: the Release is a note value at the host's tempo
+    int releaseNote = 7;               ///< index into ssc::dynamics::kNoteValues
     engine::SpeakerSelection speakers; ///< loudspeakers of the band (state, not a parameter; CH-4)
 
     bool active() const noexcept { return used && on; }
@@ -39,7 +42,8 @@ struct BandValues
         constexpr std::equal_to<float> same;
         return used == o.used && on == o.on && shape == o.shape && same (frequency, o.frequency) && same (gain, o.gain) && same (q, o.q)
             && slope == o.slope && mode == o.mode && target == o.target && character == o.character && autoGain == o.autoGain
-            && sidechain == o.sidechain && upward == o.upward && expand == o.expand && speakers == o.speakers;
+            && sidechain == o.sidechain && upward == o.upward && expand == o.expand && same (attack, o.attack)
+            && releaseSync == o.releaseSync && releaseNote == o.releaseNote && speakers == o.speakers;
     }
 };
 
@@ -98,9 +102,12 @@ public:
     void selectAll();
 
     // Solo (monitoring only) ---------------------------------------------------------------
-    std::function<void (int)> onSoloChanged;
+    /** Called with the soloed band (−1: none) and whether it plays its Delta (what is changed). */
+    std::function<void (int band, bool delta)> onSoloChanged;
     int getSoloBand() const noexcept { return soloBand; }
-    void setSoloBand (int band);
+    bool isSoloDelta() const noexcept { return soloDelta; }
+    /** Solo of a band (−1: none); with `delta` only what the plug-in changes in its region. */
+    void setSoloBand (int band, bool delta = false);
 
     // Editing ------------------------------------------------------------------------------
     void beginEdit (const juce::String& transactionName);
@@ -168,6 +175,7 @@ private:
     std::bitset<kNumBands> selected;
     int focused = -1;
     int soloBand = -1;
+    bool soloDelta = false;
 
     int editDepth = 0;
     juce::String editName;

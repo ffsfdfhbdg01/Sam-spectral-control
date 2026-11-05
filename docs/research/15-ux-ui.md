@@ -287,7 +287,7 @@ Krzywe: *wejście* `cubic-bezier(0, 0, 0.2, 1)`, *wyjście* `cubic-bezier(0.4, 0
 | # | Kryterium | Sprawdzenie | Wynik |
 |---|---|---|---|
 | E1 | Grupy w paskach oddzielone ≥ 16 px i linią; sekcje paneli podpisane | zrzuty `ssc_screenshot` | spełnione (`editor.png`, `editor-advanced.png`) |
-| E2 | Panel pasma pokazuje tylko parametry swojego trybu: Static ≤ 11, Dynamic i Spectral ≤ 14 kontrolek parametrów (w 1.1.0 ≤ 15: Down \| Up); żadnej listy bez podpisu | test `TestInterface` | spełnione: 8 i 15 |
+| E2 | Panel pasma pokazuje tylko parametry swojego trybu: Static ≤ 11, Dynamic i Spectral ≤ 14 kontrolek parametrów (w 1.1.0 ≤ 15: Down \| Up; po 1.1.0 ≤ 16: przełącznik ♪ trybu rytmicznego przy Release); żadnej listy bez podpisu | test `TestInterface` | spełnione: 8 i 16 |
 | E3 | Tekst ≥ 4,5:1 do swojej warstwy; wskaźniki stanu ≥ 3:1; tor gałki ≥ 2:1 | test tokenów (`contrastRatio`) | spełnione (§d10) |
 | E4 | Cele kliknięcia ≥ 24 × 24 px | przegląd, test segmentów | przyciski 28 × 28, segmenty i chipy wysokie na 26–28 px |
 | E5 | Przy 860 × 480 żadna etykieta nie jest ucięta | zrzut `editor-860x480.png` | spełnione (krótkie nazwy trybów fazy, zwarty chip statusu) |

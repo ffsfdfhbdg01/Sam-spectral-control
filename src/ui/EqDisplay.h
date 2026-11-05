@@ -93,6 +93,11 @@ public:
     /** Node centre of a band in component coordinates. */
     juce::Point<float> nodePosition (int band) const;
 
+    /** What a click on a resonance hint does: adds a narrow Bell (Q 8) at the resonance that cuts it by
+        its prominence (3–18 dB), as one undo step, and selects it. Returns the band, or −1 when none is free. */
+    static int cutResonance (BandModel& model, const analysis::ResonanceDetector::Hint& hint);
+    static constexpr float kResonanceQ = 8.0f;
+
 private:
     enum class DragMode
     {
@@ -136,6 +141,8 @@ private:
     float mainSpectrumDbAt (const plugin::SpectrumFrame&, float hz) const noexcept;
     /** Tooltip of the resonance hint under a point, or empty. */
     juce::String hintTooltipAt (juce::Point<float>) const;
+    /** The resonance hint under a point (its marker or glow), if any. */
+    std::optional<analysis::ResonanceDetector::Hint> hintAt (juce::Point<float>) const;
     /** Solo: dims what the soloed band's region filter removes and marks its audible range. */
     void paintSoloRange (juce::Graphics&);
     void paintBandCurves (juce::Graphics&) const;

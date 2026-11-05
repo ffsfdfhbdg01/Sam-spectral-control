@@ -62,9 +62,19 @@ public:
     AnalyzerService& getAnalyzer() noexcept { return analyzer; }
     double getCpuLoad() const noexcept { return loadMeasurer.getLoadAsProportion(); }
 
-    /** Band auditioned on its own (−1 = none). A monitoring aid: not a parameter, not saved. */
-    void setSoloBand (int band) noexcept { soloBand.store (band, std::memory_order_relaxed); }
+    /** Band auditioned on its own (−1 = none); with `delta` it plays only what is changed in its region.
+        A monitoring aid from the editor: not a parameter, not saved. */
+    void setSoloBand (int band, bool delta = false) noexcept
+    {
+        soloDelta.store (delta, std::memory_order_relaxed);
+        soloBand.store (band, std::memory_order_relaxed);
+    }
     int getSoloBand() const noexcept { return soloBand.load (std::memory_order_relaxed); }
+    bool isSoloDelta() const noexcept { return soloDelta.load (std::memory_order_relaxed); }
+
+    /** The host's tempo (BPM) from the play head of the last block; 120 until a host reports one.
+        Bands in rhythm mode take their Release from it. */
+    double getHostBpm() const noexcept { return hostBpm.load (std::memory_order_relaxed); }
 
     /** Channel topology of the current main bus layout (message thread). */
     engine::ChannelTopology getChannelTopology() const;
@@ -135,6 +145,8 @@ private:
     engine::Engine engine;
     engine::BandSettingsArray bandSettings {};
     std::atomic<int> soloBand { -1 };
+    std::atomic<bool> soloDelta { false };
+    std::atomic<double> hostBpm { 120.0 };
     std::array<std::atomic<std::uint64_t>, kNumBands> speakerRoles {};
     std::array<std::atomic<std::uint32_t>, kNumBands> speakerDiscrete {};
     AnalyzerService analyzer;

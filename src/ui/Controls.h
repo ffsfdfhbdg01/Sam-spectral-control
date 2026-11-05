@@ -6,6 +6,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "ssc/engine/Types.h"
 #include "ui/Motion.h"
 
 namespace ssc::ui
@@ -34,7 +35,9 @@ enum class Icon
     ChevronUp,
     ChevronRight,
     ChevronLeft,
-    Close
+    Close,
+    Delta, ///< Δ: listen to what is changed
+    Note   ///< an eighth note: rhythm (tempo-synced) values
 };
 
 /** Outline of an icon in a square area (16-unit grid). */
@@ -42,6 +45,26 @@ juce::Path iconPath (Icon icon, juce::Rectangle<float> area);
 
 /** Draws an icon in a colour; the stroke scales with the area. */
 void drawIcon (juce::Graphics&, Icon icon, juce::Rectangle<float> area, juce::Colour colour);
+
+/** A note value for its glyph: `division` 1 = whole, 2 = half, 4 = quarter … 64; dotted or triplet. */
+struct NoteGlyph
+{
+    int division = 8;
+    bool dotted = false;
+    bool triplet = false;
+};
+
+/** Draws a note (head, stem, flags, dot, a small 3 for a triplet) in a square area. */
+void drawNote (juce::Graphics&, const NoteGlyph& note, juce::Rectangle<float> area, juce::Colour colour);
+
+/** Outline of a band shape (bell, shelves, cuts, notch…) as Pro-Q draws them, in a square area. */
+juce::Path shapeIconPath (Shape shape, juce::Rectangle<float> area);
+
+/** Draws the outline of a band shape. */
+void drawShapeIcon (juce::Graphics&, Shape shape, juce::Rectangle<float> area, juce::Colour colour);
+
+/** A band shape icon for a popup menu item. */
+std::unique_ptr<juce::Drawable> shapeIconDrawable (Shape shape, juce::Colour colour);
 
 /** The "non-default" / warning dot in the top right corner of a control (nothing when transparent). */
 void drawIndicator (juce::Graphics&, juce::Rectangle<float> controlBounds, juce::Colour colour);
@@ -162,6 +185,8 @@ public:
 
     /** Fills the menu shown on click. */
     std::function<void (juce::PopupMenu&)> buildMenu;
+    /** Draws an icon before the value (e.g. the band shape), in a square area. */
+    std::function<void (juce::Graphics&, juce::Rectangle<float>, juce::Colour)> valueIcon;
 
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
 

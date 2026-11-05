@@ -11,6 +11,7 @@ target_sources(ssc_plugin_tests PRIVATE
     TestStress.cpp
     TestSidechainBus.cpp
     TestDirection.cpp
+    TestRhythmRelease.cpp
     ../AllocationCounter.cpp
     ${SSC_PLUGIN_SOURCES})
 

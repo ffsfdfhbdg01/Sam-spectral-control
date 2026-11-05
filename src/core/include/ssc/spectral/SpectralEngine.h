@@ -95,6 +95,7 @@ private:
         bool weightsValid = false;
         engine::LaneLayout lanes;
         std::vector<float> weights;              ///< per grid point, 0 … 1
+        std::vector<float> detection;            ///< per grid point (dB): the band's detection region, as a Dynamic band's
         std::vector<float> gains;                ///< per lane and grid point (dB), smoothed
         double weightedGain = 0.0, weight = 0.0; ///< energy-weighted mean of the change (AG-2)
         float makeup = 0.0f;                     ///< automatic make-up (dB) at the band's centre

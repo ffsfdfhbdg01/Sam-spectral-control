@@ -53,7 +53,9 @@ enum class BandParam
     Mix,
     Selectivity,
     Link,
-    Sidechain, ///< detection source of Dynamic and Spectral bands: the band's own signal or the sidechain input
+    Sidechain,   ///< detection source of Dynamic and Spectral bands: the band's own signal or the sidechain input
+    ReleaseSync, ///< rhythm mode: the Release lasts the note value of ReleaseNote at the host's tempo
+    ReleaseNote, ///< note value of the Release in rhythm mode (ssc::dynamics::kNoteValues)
     Count
 };
 
@@ -76,6 +78,7 @@ namespace labels
     const juce::StringArray& directions();
     const juce::StringArray& links();
     const juce::StringArray& sidechainSources(); ///< "Internal", "External"
+    const juce::StringArray& noteValues();       ///< "1/64T" … "1/1D", shortest first
     const juce::StringArray& phaseModes();
     const juce::StringArray& analogModels();
     const juce::StringArray& qualities();

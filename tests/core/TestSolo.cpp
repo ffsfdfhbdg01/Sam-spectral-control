@@ -303,3 +303,28 @@ TEST_CASE ("Solo fades in and out without a jump", "[engine][solo]")
     // A 1 kHz tone at 0.28 changes by at most 0.037 per sample: no step on top of that.
     REQUIRE (worst < 0.05);
 }
+
+TEST_CASE ("Band Delta: the soloed band plays only what the plug-in changes in its region (BAND-1, GLB-2)", "[engine][solo][GLB-2]")
+{
+    auto render = [] (double gainDb, double hz, bool soloDelta, bool globalDelta = false) {
+        SoloEngine engine;
+        BandSettingsArray bands {};
+        bands[0] = bell (1000.0, gainDb, 2.0);
+        GlobalParams params;
+        params.soloBand = 0;
+        params.soloDelta = soloDelta;
+        params.delta = globalDelta;
+        std::vector<std::vector<double>> channels { tone (hz, 0.2, kLength), tone (hz, 0.2, kLength) };
+        engine.run (channels, params, bands);
+        return levelDb (channels[0], hz, 0.2);
+    };
+    // A cut of 12 dB removes 1 − 10^(−12/20) of the tone at the band frequency; a boost of 6 dB adds 10^(6/20) − 1.
+    CHECK (render (-12.0, 1000.0, true) == Approx (gainToDb (1.0 - dbToGain (-12.0))).margin (0.05));
+    CHECK (render (6.0, 1000.0, true) == Approx (gainToDb (dbToGain (6.0) - 1.0)).margin (0.05));
+    // Without it the same solo plays the band as heard.
+    CHECK (render (-12.0, 1000.0, false) == Approx (-12.0).margin (0.05));
+    // Three octaves from the band the bell changes the tone by a few thousandths: next to nothing is heard.
+    // With the global Delta on it is the same.
+    CHECK (render (-12.0, 8000.0, true) < -40.0);
+    CHECK (render (-12.0, 1000.0, true, true) == Approx (gainToDb (1.0 - dbToGain (-12.0))).margin (0.05));
+}

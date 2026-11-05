@@ -6,6 +6,7 @@
 #include "plugin/SpeakerState.h"
 #include "plugin/StateMigration.h"
 #include "ssc/dynamics/Dynamics.h"
+#include "ssc/dynamics/NoteValues.h"
 #include "ui/PluginEditor.h"
 
 namespace ssc::plugin
@@ -170,6 +171,7 @@ engine::GlobalParams SscAudioProcessor::readGlobalParams (bool forceBypass) cons
     p.delta = isOn (params.delta);
     p.quality = choice (params.quality, Quality::Max);
     p.soloBand = soloBand.load (std::memory_order_relaxed);
+    p.soloDelta = soloDelta.load (std::memory_order_relaxed);
     p.maxLookaheadMs = params.maxLookahead->load (std::memory_order_relaxed);
     p.autoGain = isOn (params.autoGain);
     p.autoGainWeighting = choice (params.autoGainWeighting, AutoGainWeighting::Digital);
@@ -239,7 +241,11 @@ void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) cons
         d.direction = dynamics::thresholdSideFor (isOn (get (BandParam::Direction)), d.ratio);
         d.rangeDb = value (BandParam::Range);
         d.attackMs = value (BandParam::Attack);
-        d.releaseMs = value (BandParam::Release);
+        // Rhythm mode: the Release lasts a note value at the host's tempo.
+        d.releaseMs = isOn (get (BandParam::ReleaseSync))
+            ? dynamics::noteReleaseMs (juce::roundToInt (get (BandParam::ReleaseNote)->load (std::memory_order_relaxed)),
+                                       hostBpm.load (std::memory_order_relaxed))
+            : value (BandParam::Release);
         d.lookaheadMs = value (BandParam::Lookahead);
         d.kneeDb = value (BandParam::Knee);
         d.mix = 0.01 * value (BandParam::Mix);
@@ -308,6 +314,12 @@ void SscAudioProcessor::processImpl (juce::AudioBuffer<Sample>& buffer, bool for
     }
 
     pushAnalyzerTap (buffer, numChannels, false);
+
+    // The host's tempo, for bands whose Release follows it (the last one known while the host reports none).
+    if (auto* host = getPlayHead())
+        if (const auto position = host->getPosition())
+            if (const auto bpm = position->getBpm(); bpm.hasValue() && *bpm >= 10.0 && *bpm <= 999.0)
+                hostBpm.store (*bpm, std::memory_order_relaxed);
 
     readBandSettings (bandSettings);
     engine.process (buffer.getArrayOfWritePointers(), numChannels, buffer.getNumSamples(), readGlobalParams (forceBypass), bandSettings,

@@ -37,12 +37,15 @@ Pełna instrukcja obsługi: [docs/manual.md](docs/manual.md).
 | Q | kółko myszy nad węzłem |
 | Włącz / wyłącz pasmo | podwójne kliknięcie węzła |
 | Solo (odsłuch obszaru pasma z jego działaniem, tylko na jego celu; wykres pokazuje słyszalny zakres) | Alt/Option + przytrzymanie węzła albo 🎧 w panelu pasma (klik — zatrzaśnięcie, przytrzymanie — chwilowo) |
+| Delta pasma (tylko to, co pasmo tnie lub dodaje) | △ obok 🎧 w panelu pasma albo *Delta* w menu węzła (klik — zatrzaśnięcie, przytrzymanie — chwilowo) |
+| Wycięcie rezonansu (gwizdu) | kliknięcie w podpowiedź rezonansu na widmie dodaje wąski Bell, który go wycina |
 | Tryb pasma | przełącznik Static \| Dynamic \| Spectral w panelu pasma; pokrętła dynamiki pojawiają się w trybach Dynamic i Spectral |
 | Kompresja w górę | **Down \| Up** w nagłówku rzędu dynamiki: Up podnosi to, co jest poniżej progu (z Ratio < 1:1 — ekspansja w górę) |
+| Release w nutach | ♪ przy Release: wartość rytmiczna (1/64T … 1/1D) w tempie projektu z hosta; po prawej panelu pasma okres fali (**Period**) i Attack w okresach |
 | Ustawienia specjalistyczne | **Advanced ›** w panelu pasma (detektor, Sidechain Internal \| External, odczyty) i **Advanced ▴** na pasku dolnym (Quality, oversampling, Max Lookahead, Auto Gain, mierniki) |
 | Sidechain pasma | wejście **Sidechain** wtyczki (mono / stereo) kieruje się w hoście; pasmo Dynamic lub Spectral z **Sidechain: External** mierzy poziom w sidechainie, a przetwarza swój sygnał |
 | Zaznaczanie wielu pasm | prostokąt na tle, Cmd/Ctrl + klik; zaznaczone pasma przesuwają się razem |
-| Menu pasma | prawy przycisk: kształt, slope / Q, tryb, kierunek (Down/Up), cel (All/L/R/M/S), Character, Auto Gain, External Sidechain, bypass, solo, kopiuj/wklej, reset, usuń |
+| Menu pasma | prawy przycisk: kształt (z ikonami), slope / Q, tryb, kierunek (Down/Up), cel (All/L/R/M/S), Character, Auto Gain, External Sidechain, bypass, solo, delta, kopiuj/wklej, reset, usuń |
 | Usuń, Undo, Redo, zaznacz wszystko | Delete, Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z (lub Ctrl+Y), Cmd/Ctrl+A |
 | Wpisanie wartości | kliknięcie pola wartości pod pokrętłem (np. „1.5k”, „-3 dB”, „1.2 s”); podwójne kliknięcie pokrętła — wartość domyślna |
 

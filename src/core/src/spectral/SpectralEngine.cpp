@@ -108,6 +108,7 @@ void SpectralEngine::prepare (double sampleRate, int numChannels, int /*maxBlock
     for (auto& state : states)
     {
         state.weights.assign (gridSize, 0.0f);
+        state.detection.assign (gridSize, 0.0f);
         state.gains.assign (static_cast<std::size_t> (kMaxChannels) * gridSize, 0.0f);
     }
 
@@ -226,11 +227,17 @@ void SpectralEngine::updateWeights (BandState& state, const filters::BandShape& 
     auto reference = shape;
     reference.gainDb = kWeightReferenceDb;
     const auto design = filters::designBand (reference, fs);
+    // The level each point is detected at is weighted by the same region filter a Dynamic band detects
+    // through: a loud component on the skirt of a narrow band is seen as a Dynamic band sees it, not at
+    // full level, so the band acts on the region of its Q and slope and not wider.
+    const auto region = filters::designBand (engine::auditionShapeFor (shape), fs);
     for (int i = 0; i < numGrid; ++i)
     {
-        const double hz = grid[static_cast<std::size_t> (i)].hz;
-        const double db = gainToDb (std::abs (design.digitalResponse (std::min (hz, 0.49 * fs), fs)));
+        const double hz = std::min (grid[static_cast<std::size_t> (i)].hz, 0.49 * fs);
+        const double db = gainToDb (std::abs (design.digitalResponse (hz, fs)));
         state.weights[static_cast<std::size_t> (i)] = static_cast<float> (std::clamp (db / kWeightReferenceDb, 0.0, 1.0));
+        const double detectDb = gainToDb (std::max (1.0e-10, std::abs (region.digitalResponse (hz, fs))));
+        state.detection[static_cast<std::size_t> (i)] = static_cast<float> (std::max (-200.0, detectDb));
     }
 }
 
@@ -456,7 +463,7 @@ void SpectralEngine::runFrame (const engine::BandSettingsArray& bands, const eng
             for (std::size_t i = 0; i < gridSize; ++i)
             {
                 const float weight = state.weights[i];
-                const float target = weight > 1.0e-4f ? weight * static_cast<float> (computer (level[i])) : 0.0f;
+                const float target = weight > 1.0e-4f ? weight * static_cast<float> (computer (level[i] + state.detection[i])) : 0.0f;
                 float& g = gains[i];
                 const float a = (target - g) * slope > 0.0f ? attack : release; // attack: a rising level
                 g = a * g + (1.0f - a) * target;

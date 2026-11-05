@@ -152,7 +152,7 @@ Niektóre hosty przechwytują skróty klawiszowe; wtedy użyj przycisków Undo/R
 
 ### Menu pasma (prawy przycisk)
 
-*Shape*, *Slope* (dla cięć, półek i Band Pass) albo *Q* (gotowe wartości 0,5–16), *Mode*, *Direction* (*Down* / *Up*, [rozdz. 6](#kompresja-w-górę)), *Target*, *Character*, *Auto Gain*, *External Sidechain* (detekcja z wejścia sidechain, [rozdz. 6](#sidechain)), *Bypass*, *Solo*, *Copy*, *Paste*, *Reset* (wartości domyślne pasma), *Delete*. Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem; *Direction*, *Auto Gain* i *External Sidechain* — tylko w tych trybach.
+*Shape* (każdy kształt z ikoną krzywej), *Slope* (dla cięć, półek i Band Pass) albo *Q* (gotowe wartości 0,5–16), *Mode*, *Direction* (*Down* / *Up*, [rozdz. 6](#kompresja-w-górę)), *Target*, *Character*, *Auto Gain*, *External Sidechain* (detekcja z wejścia sidechain, [rozdz. 6](#sidechain)), *Bypass*, *Solo*, *Delta* (tylko to, co pasmo zmienia, [rozdz. 11](#11-ustawienia-globalne-i-odsłuch)), *Copy*, *Paste*, *Reset* (wartości domyślne pasma), *Delete*. Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem; *Direction*, *Auto Gain* i *External Sidechain* — tylko w tych trybach.
 
 ### Panel pasma
 
@@ -160,9 +160,9 @@ Kliknięcie węzła pokazuje panel pasma pod węzłem (gdy zasłaniałby węzeł
 
 | | Static | Dynamic | Spectral |
 |---|---|---|---|
-| Nagłówek | kolor i numer pasma; tryb **Static \| Dynamic \| Spectral**; **Advanced ›**; ⏻ — włączenie / wyłączenie pasma (czerwona lampka: wyłączone); 🎧 — Solo (kliknięcie: zostaje włączone, przytrzymanie: tylko na czas trzymania); ⋯ — *Copy*, *Paste*, *Reset*, *Delete* | jak Static | jak Static |
-| Rząd EQ | **Shape**, **Slope** (cięcia, półki, Band Pass), **Freq**, **Gain**, **Q**, **Target**, **Character** (w surround także **Speakers**) | jak Static | jak Static |
-| Rząd dynamiki | — | **Threshold**, **Ratio**, **Range**, **Attack**, **Release**; w jego nagłówku **Down \| Up** i **Auto Gain** | **Threshold**, **Selectivity**, **Range**, **Attack**, **Release**; w jego nagłówku **Down \| Up** i **Auto Gain** |
+| Nagłówek | kolor i numer pasma; tryb **Static \| Dynamic \| Spectral**; **Advanced ›**; ⏻ — włączenie / wyłączenie pasma (czerwona lampka: wyłączone); 🎧 — Solo; △ — Delta pasma (oba: kliknięcie — zostaje włączone, przytrzymanie — tylko na czas trzymania); ⋯ — *Copy*, *Paste*, *Reset*, *Delete* | jak Static | jak Static |
+| Rząd EQ | **Shape** (z ikoną kształtu), **Slope** (cięcia, półki, Band Pass), **Freq**, **Gain**, **Q**, **Target**, **Character** (w surround także **Speakers**); po prawej **Period** — okres fali częstotliwości pasma | jak Static, a pod **Period** także **Attack =** — Attack w okresach fali ([rozdz. 6](#okres-fali-i-attack)) | jak Dynamic |
+| Rząd dynamiki | — | **Threshold**, **Ratio**, **Range**, **Attack**, **Release** (z przełącznikiem ♪ trybu rytmicznego, [rozdz. 6](#release-w-nutach-tryb-rytmiczny)); w jego nagłówku **Down \| Up** i **Auto Gain** | **Threshold**, **Selectivity**, **Range**, **Attack**, **Release** (z ♪); w jego nagłówku **Down \| Up** i **Auto Gain** |
 | Panel **Advanced** pasma | odczyty | **Threshold Mode**, **Knee**, **Lookahead**, **Mix**, **Link**, **Sidechain**, odczyty | **Threshold Mode**, **Knee**, **Ratio**, **Mix**, **Link**, **Sidechain**, odczyty |
 
 Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem. Nagłówek rzędu dynamiki nazywa działanie pasma, gdy nie jest to zwykła kompresja (**UPWARD COMPRESSION**, **EXPANSION**, **UPWARD EXPANSION**), a gdy pasmo słucha wejścia sidechain, ma dopisek **SIDECHAIN** ([rozdz. 6](#sidechain)). **Advanced ›** wysuwa panel z boku panelu pasma — zwykle z prawej, z lewej, gdy z prawej zasłaniałby węzeł — i zostaje otwarty także dla kolejnych pasm, aż się go zamknie (**‹**). Kropka na **Advanced** oznacza ustawienie detektora inne niż domyślne dla trybu pasma (np. Threshold Mode Absolute w paśmie Spectral) albo ostrzeżenie o słyszalnym ringingu ([rozdz. 12](#odczyty-pasma)).
@@ -213,6 +213,7 @@ W panelu pasma rząd dynamiki zawiera to, czym ustawia się dany tryb (Dynamic: 
 | **Range** | 0–30 dB (12 dB) | największa zmiana wzmocnienia |
 | **Knee** | 0–24 dB (6 dB) | łagodność wejścia w działanie |
 | **Attack**, **Release** | 0,05–500 ms (5 ms), 1–5000 ms (100 ms) | stałe czasowe (63 % zmiany): Attack — reakcja na **rosnący** poziom, Release — na malejący, w każdym kierunku (kompresor w dół tnie z czasem Attack, kompresor w górę z czasem Attack zabiera podbicie przy głośnym wejściu, bramka otwiera się z czasem Attack) |
+| **Release Sync**, **Release Note** | wył. / wł. (wył.); 1/64T … 1/1D (1/16) | tryb rytmiczny: Release trwa wartość nuty w tempie hosta ([niżej](#release-w-nutach-tryb-rytmiczny)) |
 | **Lookahead** | 0–20 ms (0) | tylko Dynamic: pasmo „widzi” sygnał z wyprzedzeniem i reaguje przed transjentem |
 | **Mix** | 0–100 % (100 %) | ile działania dynamicznego trafia do wzmocnienia pasma (bez interferencji z sygnałem suchym, bo skaluje wzmocnienie, a nie miesza sygnały) |
 | **Selectivity** | 0–100 % (50 %) | tylko Spectral: jak wąsko w częstotliwości działa maska — wyżej = bardziej „chirurgicznie” |
@@ -242,6 +243,29 @@ Po przełączeniu pasma w tryb Spectral z nieruszonym progiem Dynamic (Absolute 
 
 Projekty, presety i skopiowane pasma z wersji 1.0 (gdzie zamiast Down / Up był wybór Above / Below) są przy wczytaniu przeliczane i brzmią tak samo: w pasmach, które działały poniżej progu, wartości Attack i Release zamieniają się miejscami, bo w 1.0 Attack oznaczał narastanie zmiany, a nie reakcję na rosnący poziom.
 
+### Okres fali i Attack
+
+Po prawej stronie rzędu EQ panel pokazuje **Period** — ile trwa jeden okres fali (jeden „przebieg”) częstotliwości pasma: 1000 / f ms, np. 6,67 ms dla 150 Hz, 1,00 ms dla 1 kHz, 0,317 ms dla 3,15 kHz. W pasmach Dynamic i Spectral pod spodem jest **Attack =** — ile takich okresów obejmuje ustawiony Attack, np. Attack 20 ms przy 150 Hz to *3,0 cycles*. Podpowiedź po najechaniu kursorem powtarza te wartości.
+
+To wskazówka do ustawiania Attack w danym paśmie: Attack krótszy niż kilka okresów (1–3) śledzi już kształt samej fali, a nie jej obwiednię, więc w tym paśmie zniekształca (zwłaszcza w basie), a Attack dłuższy przepuszcza pierwsze okresy dźwięku (transjent). Typowo: bas i stopa — co najmniej kilka okresów (np. 150 Hz: od ok. 20 ms), wysokie pasma i de-esser — Attack może być krótki, bo nawet 1 ms to kilka okresów fali powyżej kilku kHz.
+
+### Release w nutach (tryb rytmiczny)
+
+![Pasmo Dynamic: Release w trybie rytmicznym (ósemka), przełącznik ♪ przy Release, po prawej okres fali i Attack w okresach](images/rhythm.png)
+
+Przełącznik **♪** przy podpisie **Release** (bursztynowy, gdy włączony) przestawia Release na wartości nut: pokrętło wybiera wartość rytmiczną (z jej ikoną), a czas Release wynika z **tempa projektu**, które wtyczka odczytuje z hosta przy każdym bloku audio. Ćwierćnuta to jedno uderzenie (60 000 / BPM ms):
+
+| Wartość | długość (uderzenia) | przy 120 BPM |
+|---|---|---|
+| 1/64T, 1/64, 1/32T, 1/64D, 1/32 | 1/24 … 1/8 | 21 … 62,5 ms |
+| 1/16T, 1/32D, **1/16** (domyślnie), 1/8T, 1/16D | 1/6 … 3/8 | 83 … 188 ms |
+| 1/8, 1/4T, 1/8D, 1/4 | 1/2 … 1 | 250 … 500 ms |
+| 1/2T, 1/4D, 1/2, 1/1T, 1/2D, 1/1, 1/1D | 4/3 … 6 | 667 ms … 3 s |
+
+T — triola (2/3 nuty), D — nuta z kropką (3/2 nuty). Pokrętło jest uporządkowane od najkrótszej wartości do najdłuższej. Podpowiedź przy pokrętle i przy ♪ podaje bieżący czas, np. *1/16 = 125.0 ms at 120 BPM*. Czas jest ograniczony do zakresu Release (1–5000 ms). Gdy host nie podaje tempa (np. niektóre hosty przy zatrzymanym transporcie albo aplikacje bez transportu), wtyczka używa ostatniego znanego tempa, a przed pierwszym — 120 BPM. Zmiana tempa w trakcie utworu (automatyka tempa) od razu zmienia Release.
+
+Release dopasowany do rytmu sprawia, że pasmo „odpuszcza” w rytm utworu — np. kompresja dołu wraca przed kolejną stopą (1/8 lub 1/4), a de-esser wraca przed następną sylabą (1/16). Ponowne kliknięcie ♪ wraca do Release w milisekundach (ustawione wcześniej ms zostają zachowane).
+
 ### Lookahead i Max Lookahead
 
 Tor główny jest opóźniony o globalny parametr **Max Lookahead** (0–20 ms, w globalnym panelu **Advanced** i w parametrach hosta), a pasmo Dynamic z Lookahead *L* czyta detekcję z wyprzedzeniem *L*. Ustawienie Lookahead pasma większego niż Max Lookahead automatycznie podnosi Max Lookahead — latencja wtyczki rośnie o tę wartość i host ją kompensuje. Max Lookahead się nie obniża sam: zmniejsz go ręcznie, gdy już nie jest potrzebny.
@@ -267,6 +291,10 @@ Pasma Spectral działają w silniku STFT: wszystkie pasma Spectral danego kanał
 |---|---|---|---|---|
 | Latencja (44,1 kHz) | 46,4 ms | 92,9 ms | 185,8 ms | 185,8 ms |
 | Latencja (48–192 kHz) | 42,7 ms | 85,3 ms | 170,7 ms | 170,7 ms |
+
+**Obszar działania.** Pasmo Spectral działa na obszarze swojego kształtu — z jego Q i Slope — tak samo jak pasmo Static z tym samym kształtem i pasmo Dynamic: na zboczu kształtu część częstotliwości jest tłumiona proporcjonalnie mniej. Poziom każdej częstotliwości jest przy tym mierzony przez ten sam filtr obszaru, którego używa detekcja pasma Dynamic (dla Bell — filtr pasmowy z Q pasma, dla półek — filtr 12 dB/okt. po stronie półki), więc głośna składowa na zboczu wąskiego pasma musi przekroczyć próg o tyle, o ile filtr ją osłabia — jak w paśmie Dynamic. (Do wersji 1.1.0 próg porównywany był z pełnym poziomem częstotliwości, przez co głośne składowe na zboczach były tłumione mocniej niż w paśmie Dynamic i pasmo działało szerzej, niż wskazywały Q i Slope.)
+
+Bardzo wąskie pasma (np. Q 10–20) i pasma w basie są w środku płytsze, niż wskazuje Range, bo zbliżają się do rozdzielczości ramki STFT: przy Quality Normal np. Bell 60 Hz Q 4 tnie w środku ok. 9 dB zamiast 12 dB, Bell 1 kHz Q 20 — ok. 10,5 dB. Quality **High** (dłuższa ramka) zbliża je do pełnej głębokości (odpowiednio ok. 10,3 dB i 11 dB); do wąskich cięć w basie lepiej nadaje się pasmo Dynamic.
 
 Silne, szybkie działanie maski może dać krótkie **pre-echo** przed transjentami (rzędu połowy ramki); odczyt pasma pokazuje jego wielkość. Lookahead jest w pasmach Spectral nieaktywny — ramka STFT i tak „widzi” sygnał z wyprzedzeniem.
 
@@ -361,6 +389,7 @@ Auto Gain mierzy tylko kanały objęte co najmniej jednym pasmem, ogranicza kore
 | **Output** | −24…+24 dB, na końcu toru |
 | **Mix** | 0–100 %, proporcja sygnału przetworzonego i suchego (wyrównanego w czasie); patrz uwaga niżej |
 | **Delta** | odsłuch tylko tego, co wtyczka zmienia: wejście minus wyjście (bez korekcji Auto Gain). Pomaga usłyszeć, co dokładnie wycina pasmo Dynamic lub Spectral. Nie jest zapisywany w presetach ani w A/B |
+| **Delta** pasma | przycisk △ obok 🎧 w panelu pasma (albo *Delta* w menu węzła): odsłuch tylko tego, co wtyczka zmienia **w obszarze tego pasma** — tego, co tnie lub dodaje — na celu pasma, np. sam wycinany gwizd albo same sybilanty, które zabiera de-esser. Cięcie o 12 dB daje w Delta ok. −2,5 dB (1 − 10^(−12/20) sygnału), podbicie o 6 dB — ok. 0 dB (10^(6/20) − 1). Działa jak Solo (kliknięcie: zostaje włączone, przytrzymanie: tylko na czas trzymania); Solo i Delta pasma wykluczają się, a wykres pokazuje etykietę *Delta · Band …*. Wyłącza się po zamknięciu okna wtyczki |
 | **Solo** pasma | odsłuch obszaru, na którym pracuje pasmo — tak głośno, jak naprawdę brzmi w miksie: z wzmocnieniem pasma i działaniem Dynamic lub Spectral (podbicie słychać głośniej, cięcie ciszej), tylko na **celu** pasma (Mid — sama składowa środkowa, Side — sama boczna, Left / Right — tylko ten kanał każdej pary, w surround tylko głośniki pasma). Auto Gain nie zmienia poziomu Solo. Wykres przyciemnia to, czego nie słychać ([rozdz. 12](#solo-słyszalny-zakres)). Przycisk 🎧 w panelu (kliknięcie: zostaje włączone, przytrzymanie: tylko na czas trzymania), pozycja w menu albo *Alt/Option* + przytrzymanie węzła. Solo wyłącza się po zamknięciu okna wtyczki |
 | **Max Lookahead** | 0–20 ms, w globalnym panelu **Advanced** (i w parametrach hosta); patrz [rozdz. 6](#lookahead-i-max-lookahead) |
 
@@ -394,7 +423,7 @@ Podczas **Solo** pasma wykres pokazuje, co słychać: częstotliwości poza obsz
 
 ### Podpowiedzi rezonansów
 
-Fioletowa poświata z kółkiem nad szczytem oznacza rezonans: wąski szczyt, który utrzymuje się w widmie. Podpowiedź po najechaniu kursorem podaje częstotliwość, o ile wystaje ponad otoczenie, od ilu sekund trwa i pewność wykrycia. To tylko wskazówka — nie zmienia dźwięku; dobrym narzędziem na taki rezonans jest pasmo Bell w trybie Dynamic lub Spectral. Podpowiedzi są wiarygodne powyżej ok. 400 Hz (w testach 85 % wyraźnych rezonansów wykrytych, 87 % podpowiedzi trafnych); niżej rezonanse giną w gęstym widmie basu i podpowiedzi są rzadkie.
+Fioletowa poświata z kółkiem nad szczytem oznacza rezonans: wąski szczyt, który utrzymuje się w widmie. Podpowiedź po najechaniu kursorem podaje częstotliwość, o ile wystaje ponad otoczenie, od ilu sekund trwa i pewność wykrycia. Podpowiedź sama nie zmienia dźwięku. **Kliknięcie** w podpowiedź (kółko albo poświatę; kursor zmienia się wtedy w rączkę) dodaje pasmo, które wycina rezonans: Bell o Q 8 (ok. 1/6 oktawy) na jego częstotliwości, obniżone o tyle, o ile rezonans wystaje ponad otoczenie (3–18 dB), od razu zaznaczone — jeden krok Undo. Takie pasmo można potem przełączyć w tryb Dynamic lub Spectral, żeby cięło tylko wtedy, gdy gwizd się pojawia, i dostroić Q oraz głębokość; **Delta** pasma pozwala posłuchać, co dokładnie wycina. Podpowiedzi są wiarygodne powyżej ok. 400 Hz (w testach 85 % wyraźnych rezonansów wykrytych, 87 % podpowiedzi trafnych); niżej rezonanse giną w gęstym widmie basu i podpowiedzi są rzadkie.
 
 ### Nakładka fazy
 

@@ -4,6 +4,7 @@
 
 #include "plugin/Parameters.h"
 #include "ssc/engine/BandProcessor.h"
+#include "ui/Controls.h"
 #include "ui/Theme.h"
 
 namespace ssc::ui
@@ -323,7 +324,10 @@ void EqDisplay::updateHover (juce::Point<float> p)
 void EqDisplay::mouseMove (const juce::MouseEvent& e)
 {
     updateHover (e.position);
-    setTooltip (hoveredBand < 0 && ! hoverOnCurve ? hintTooltipAt (e.position) : juce::String());
+    const auto hint = hoveredBand < 0 ? hintTooltipAt (e.position) : juce::String();
+    setTooltip (hint);
+    if (hint.isNotEmpty())
+        setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
 
 void EqDisplay::mouseExit (const juce::MouseEvent&)
@@ -369,6 +373,14 @@ void EqDisplay::mouseDown (const juce::MouseEvent& e)
         model.beginEdit ("Move Band");
         dragEditOpen = true;
         startBandDrag (band, p);
+        return;
+    }
+
+    // A click on a resonance hint adds a band that cuts it.
+    if (const auto hint = hintAt (p); hint.has_value() && model.numUsedBands() < kNumBands)
+    {
+        cutResonance (model, *hint);
+        dragMode = DragMode::None;
         return;
     }
 
@@ -652,8 +664,11 @@ void EqDisplay::showBandMenu (int band)
     for (int i = 0; i < plugin::labels::shapes().size(); ++i)
     {
         const auto shape = static_cast<Shape> (i);
-        shapes.addItem (plugin::labels::shapes()[i], true, v.shape == shape,
-                        forTargets ("Change Shape", [shape] (BandModel& m, int b) { m.setShape (b, shape); }));
+        juce::PopupMenu::Item item (plugin::labels::shapes()[i]);
+        item.setTicked (v.shape == shape)
+            .setImage (shapeIconDrawable (shape, colours::text))
+            .setAction (forTargets ("Change Shape", [shape] (BandModel& m, int b) { m.setShape (b, shape); }));
+        shapes.addItem (std::move (item));
     }
     menu.addSubMenu ("Shape", shapes);
 
@@ -728,9 +743,13 @@ void EqDisplay::showBandMenu (int band)
     menu.addSeparator();
     menu.addItem ("Bypass", true, ! v.on,
                   forTargets ("Toggle Band", [on = ! v.on] (BandModel& m, int b) { m.setValue (b, BandParam::On, on ? 1.0f : 0.0f); }));
-    menu.addItem ("Solo", v.on, model.getSoloBand() == band, [safe, band] {
+    menu.addItem ("Solo", v.on, model.getSoloBand() == band && ! model.isSoloDelta(), [safe, band] {
         if (safe != nullptr)
-            safe->model.setSoloBand (safe->model.getSoloBand() == band ? -1 : band);
+            safe->model.setSoloBand (safe->model.getSoloBand() == band && ! safe->model.isSoloDelta() ? -1 : band);
+    });
+    menu.addItem ("Delta (only what the band changes)", v.on, model.getSoloBand() == band && model.isSoloDelta(), [safe, band] {
+        if (safe != nullptr)
+            safe->model.setSoloBand (safe->model.getSoloBand() == band && safe->model.isSoloDelta() ? -1 : band, true);
     });
     menu.addSeparator();
     menu.addItem ("Copy", [safe, band] {
@@ -885,7 +904,7 @@ void EqDisplay::paintSoloRange (juce::Graphics& g)
     if (! v.speakers.isDefault())
         target << " (selected speakers)";
     const auto dot = juce::String::fromUTF8 ("   \xc2\xb7   ");
-    juce::String text = "Solo" + dot + "Band " + juce::String (band + 1) + dot + target;
+    juce::String text = juce::String (model.isSoloDelta() ? "Delta" : "Solo") + dot + "Band " + juce::String (band + 1) + dot + target;
     if (range.isNotEmpty())
         text << dot << range;
     const auto font = uiFont (12.0f);
@@ -1213,10 +1232,10 @@ void EqDisplay::paintHints (juce::Graphics& g, const plugin::SpectrumFrame& fram
     }
 }
 
-juce::String EqDisplay::hintTooltipAt (juce::Point<float> p) const
+std::optional<analysis::ResonanceDetector::Hint> EqDisplay::hintAt (juce::Point<float> p) const
 {
     if (! hasFrame || ! analyzerSettings.resonanceHints)
-        return {};
+        return std::nullopt;
     const auto& frame = analyzer.frames().read();
     for (int i = 0; i < frame.numHints; ++i)
     {
@@ -1224,10 +1243,31 @@ juce::String EqDisplay::hintTooltipAt (juce::Point<float> p) const
         const float x = xForFrequency (hint.hz);
         const float y = yForAnalyzerDb (mainSpectrumDbAt (frame, hint.hz));
         if (std::abs (p.x - x) < 10.0f && p.y > y - 60.0f && p.y < y + 20.0f)
-            return "Resonance " + plugin::format::frequency (hint.hz) + "  +" + juce::String (hint.prominenceDb, 1) + " dB  "
-                + juce::String (hint.seconds, 1) + " s  confidence " + juce::String (juce::roundToInt (100.0f * hint.confidence)) + " %";
+            return hint;
     }
-    return {};
+    return std::nullopt;
+}
+
+juce::String EqDisplay::hintTooltipAt (juce::Point<float> p) const
+{
+    const auto hint = hintAt (p);
+    if (! hint.has_value())
+        return {};
+    return "Resonance " + plugin::format::frequency (hint->hz) + "  +" + juce::String (hint->prominenceDb, 1) + " dB  "
+        + juce::String (hint->seconds, 1) + " s  confidence " + juce::String (juce::roundToInt (100.0f * hint->confidence))
+        + " %\nClick: add a band that cuts it";
+}
+
+int EqDisplay::cutResonance (BandModel& model, const analysis::ResonanceDetector::Hint& hint)
+{
+    // A narrow Bell at the resonance, as deep as it stands out (3–18 dB): the spectrum there
+    // becomes level with its surroundings. One undo step; the new band is selected.
+    BandModel::ScopedEdit edit (model, "Cut Resonance");
+    const float depth = juce::jlimit (3.0f, 18.0f, hint.prominenceDb);
+    const int band = model.createBand (Shape::Bell, juce::jlimit (kMinFrequency, kMaxFrequency, hint.hz), -depth);
+    if (band >= 0)
+        model.setValue (band, BandParam::Q, kResonanceQ);
+    return band;
 }
 
 juce::Path EqDisplay::curvePath (const std::vector<float>& db) const

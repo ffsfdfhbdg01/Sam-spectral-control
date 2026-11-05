@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "plugin/Parameters.h"
+#include "ssc/dynamics/NoteValues.h"
 #include "ui/BandLogic.h"
 #include "ui/SpeakerPanel.h"
 #include "ui/Theme.h"
@@ -23,12 +24,13 @@ namespace
     constexpr int kChoiceHeight = 36;
     constexpr int kChoiceWidth = 108;
     constexpr int kKnobCell = 66;
-    constexpr int kRightWidth = 130;
+    constexpr int kRightWidth = 100;
     constexpr int kSpeakersWidth = 104;
     constexpr int kSectionGap = 6;
     constexpr int kSectionHeight = 22;
     constexpr int kDynamicsRowHeight = 68;
-    constexpr int kStereoWidth = 488;
+    constexpr int kPeriodWidth = 60; ///< wave period readout at the right of the EQ row
+    constexpr int kPeriodGap = 8;
     constexpr int kDirectionWidth = 92; ///< Down | Up on the dynamics title line
 
     // Advanced flyout.
@@ -54,6 +56,7 @@ namespace
             { BandParam::Direction, plugin::labels::directions },
             { BandParam::Link, plugin::labels::links },
             { BandParam::Sidechain, plugin::labels::sidechainSources },
+            { BandParam::ReleaseNote, plugin::labels::noteValues },
         };
         for (const auto& [param, labels] : table)
             if (param == p)
@@ -189,6 +192,76 @@ void BandKnob::resized()
     slider.setBounds (area);
 }
 
+void BandKnob::paintOverChildren (juce::Graphics& g)
+{
+    if (! valueGlyph || band < 0)
+        return;
+    // Left of the value text, which is centred in the text box below the knob.
+    for (auto* child : slider.getChildren())
+        if (auto* text = dynamic_cast<juce::Label*> (child); text != nullptr && ! text->isBeingEdited())
+        {
+            const auto box = text->getBounds().translated (slider.getX(), slider.getY()).toFloat();
+            const float textWidth = juce::GlyphArrangement::getStringWidth (text->getFont(), text->getText());
+            const auto glyph =
+                juce::Rectangle<float> (15.0f, 15.0f).withCentre ({ box.getCentreX() - 0.5f * textWidth - 9.0f, box.getCentreY() });
+            valueGlyph (g, glyph, static_cast<float> (slider.getValue()),
+                        colours::textSecondary.withMultipliedAlpha (isEnabled() ? 1.0f : 0.4f));
+        }
+}
+
+// PeriodReadout -------------------------------------------------------------------------------
+
+juce::String PeriodReadout::periodText (float hz)
+{
+    const double ms = 1000.0 / juce::jmax (1.0, static_cast<double> (hz));
+    return juce::String (ms, ms >= 10.0 ? 1 : (ms >= 1.0 ? 2 : 3)) + " ms";
+}
+
+juce::String PeriodReadout::cyclesText (float attackMs, float hz)
+{
+    const double cycles = static_cast<double> (attackMs) * static_cast<double> (hz) / 1000.0;
+    if (cycles >= 9.95)
+        return juce::String (juce::roundToInt (cycles)) + " cycles";
+    const auto text = juce::String (cycles, 1);
+    return text + (text == "1.0" || cycles < 1.0 ? " cycle" : " cycles");
+}
+
+void PeriodReadout::setValues (float hz, float attackMs)
+{
+    auto newPeriod = periodText (hz);
+    auto newCycles = attackMs >= 0.0f ? cyclesText (attackMs, hz) : juce::String();
+    if (newPeriod == period && newCycles == cycles)
+        return;
+    period = std::move (newPeriod);
+    cycles = std::move (newCycles);
+    juce::String tip;
+    tip << "One cycle of " << plugin::format::frequency (hz) << " lasts " << period << ".";
+    if (cycles.isNotEmpty())
+        tip << "\nThe attack spans " << cycles << " of it. An attack of a few cycles or less follows the waveform "
+            << "itself and distorts at this frequency; longer attacks let the first cycles through.";
+    setTooltip (tip);
+    repaint();
+}
+
+void PeriodReadout::paint (juce::Graphics& g)
+{
+    auto area = getLocalBounds().reduced (2, 0);
+    auto line = [&g, &area] (const juce::String& caption, const juce::String& value) {
+        auto row = area.removeFromTop (36);
+        auto top = row.removeFromTop (15).withTrimmedTop (2);
+        g.setColour (colours::textDim);
+        g.setFont (uiFont (11.0f));
+        g.drawFittedText (caption, top, juce::Justification::bottomLeft, 1, 0.9f);
+        g.setColour (colours::textSecondary);
+        g.setFont (uiFont (12.5f));
+        g.drawFittedText (value, row, juce::Justification::centredLeft, 1, 0.8f);
+        area.removeFromTop (4);
+    };
+    line ("Period", period);
+    if (cycles.isNotEmpty())
+        line ("Attack =", cycles);
+}
+
 // BandChoiceButton ----------------------------------------------------------------------------
 
 BandChoiceButton::BandChoiceButton (BandModel& m, BandParam p, const juce::String& captionText)
@@ -213,11 +286,22 @@ BandChoiceButton::BandChoiceButton (BandModel& m, BandParam p, const juce::Strin
         const int forBand = band;
         juce::Component::SafePointer<BandChoiceButton> safe (this);
         for (const int i : indices)
-            menu.addItem (labels[i], isItemEnabled == nullptr || isItemEnabled (i), i == current, [safe, i, forBand] {
+        {
+            juce::PopupMenu::Item item (labels[i]);
+            item.setEnabled (isItemEnabled == nullptr || isItemEnabled (i)).setTicked (i == current);
+            item.setAction ([safe, i, forBand] {
                 if (safe != nullptr && safe->band == forBand)
                     safe->choose (i);
             });
+            if (param == BandParam::Shape)
+                item.setImage (shapeIconDrawable (static_cast<Shape> (i), colours::text)); // as in Pro-Q
+            menu.addItem (std::move (item));
+        }
     };
+    if (param == BandParam::Shape)
+        valueIcon = [this] (juce::Graphics& g, juce::Rectangle<float> area, juce::Colour colour) {
+            drawShapeIcon (g, static_cast<Shape> (getIndex()), area, colour);
+        };
 }
 
 int BandChoiceButton::getIndex() const
@@ -264,13 +348,23 @@ BandPanel::BandPanel (BandModel& m)
       range (m, BandParam::Range, "Range"),
       attack (m, BandParam::Attack, "Attack"),
       release (m, BandParam::Release, "Release"),
-      selectivity (m, BandParam::Selectivity, "Selectivity")
+      selectivity (m, BandParam::Selectivity, "Selectivity"),
+      releaseNote (m, BandParam::ReleaseNote, "Release")
 {
     setOpaque (false);
-    for (auto* c : std::initializer_list<juce::Component*> {
-             &modeSelector, &advancedButton, &bypassButton, &soloButton, &moreButton, &shape,       &slope,
-             &target,       &character,      &speakers,     &freq,       &gain,       &q,           &autoGainButton,
-             &threshold,    &ratio,          &range,        &attack,     &release,    &selectivity, &directionSelector })
+    for (auto* c : std::initializer_list<juce::Component*> { &modeSelector,   &advancedButton,
+                                                             &bypassButton,   &soloButton,
+                                                             &deltaButton,    &moreButton,
+                                                             &shape,          &slope,
+                                                             &target,         &character,
+                                                             &speakers,       &freq,
+                                                             &gain,           &q,
+                                                             &autoGainButton, &threshold,
+                                                             &ratio,          &range,
+                                                             &attack,         &release,
+                                                             &selectivity,    &directionSelector,
+                                                             &releaseNote,    &rhythmButton,
+                                                             &periodReadout })
         addAndMakeVisible (c);
     speakers.setVisible (false);
 
@@ -303,22 +397,23 @@ BandPanel::BandPanel (BandModel& m)
     // Solo: a click latches it, holding the button listens only while pressed (FabFilter style).
     soloButton.setTooltip ("Solo: listen to the region of the band. Click to latch; hold to listen while pressed "
                            "(also Alt/Option + hold its node)");
-    soloButton.onStateChange = [this] {
-        const bool down = soloButton.getState() == juce::Button::buttonDown;
-        if (down == soloHeld || band < 0)
+    soloButton.onStateChange = [this] { listenButtonChanged (soloButton, soloPress, false); };
+    deltaButton.setTooltip ("Delta: listen only to what the plug-in changes in the region of the band (what it cuts "
+                            "or adds). Click to latch; hold to listen while pressed");
+    deltaButton.onStateChange = [this] { listenButtonChanged (deltaButton, deltaPress, true); };
+
+    // Rhythm mode of the Release: note values at the host's tempo.
+    rhythmButton.setOnColour (colours::accent);
+    rhythmButton.onClick = [this] {
+        if (band < 0)
             return;
-        soloHeld = down;
-        if (down)
-        {
-            soloPressMs = motion::now();
-            soloWasOn = model.getSoloBand() == band;
-            if (! soloWasOn)
-                model.setSoloBand (band);
-        }
-        else if (soloWasOn || motion::now() - soloPressMs > 400.0)
-        {
-            model.setSoloBand (-1);
-        }
+        BandModel::ScopedEdit edit (model, "Toggle Rhythm Release");
+        model.setValue (band, BandParam::ReleaseSync, model.band (band).releaseSync ? 0.0f : 1.0f);
+    };
+    releaseNote.valueGlyph = [] (juce::Graphics& g, juce::Rectangle<float> area, float value, juce::Colour colour) {
+        const auto& note = dynamics::kNoteValues[static_cast<std::size_t> (
+            juce::jlimit (0, static_cast<int> (dynamics::kNoteValues.size()) - 1, juce::roundToInt (value)))];
+        drawNote (g, { note.division, note.dotted, note.triplet }, area, colour);
     };
 
     moreButton.setTooltip ("Copy, paste, reset or delete the band");
@@ -369,6 +464,26 @@ BandPanel::BandPanel (BandModel& m)
 BandPanel::~BandPanel()
 {
     model.removeListener (this);
+}
+
+void BandPanel::listenButtonChanged (juce::Button& button, ListenPress& press, bool delta)
+{
+    // A click latches Solo (or Delta), holding the button listens only while pressed (FabFilter style).
+    const bool down = button.getState() == juce::Button::buttonDown;
+    if (down == press.held || band < 0)
+        return;
+    press.held = down;
+    if (down)
+    {
+        press.pressMs = motion::now();
+        press.wasOn = model.getSoloBand() == band && model.isSoloDelta() == delta;
+        if (! press.wasOn)
+            model.setSoloBand (band, delta);
+    }
+    else if (press.wasOn || motion::now() - press.pressMs > 400.0)
+    {
+        model.setSoloBand (-1);
+    }
 }
 
 void BandPanel::setAdvancedOpen (bool open)
@@ -459,7 +574,7 @@ void BandPanel::bandsChanged()
 void BandPanel::bindBand()
 {
     const auto colour = bandColour (band);
-    for (auto* k : { &freq, &gain, &q, &threshold, &ratio, &range, &attack, &release, &selectivity })
+    for (auto* k : { &freq, &gain, &q, &threshold, &ratio, &range, &attack, &release, &selectivity, &releaseNote })
     {
         k->setBand (band);
         k->setColour (colour);
@@ -493,14 +608,16 @@ void BandPanel::updateFromModel()
     bypassButton.setIndicator (v.on ? juce::Colours::transparentBlack : colours::lamp);
     bypassButton.setTooltip (v.on ? "Band on: click to bypass it (or double-click its node)"
                                   : "Band bypassed: click to switch it on (or double-click its node)");
-    soloButton.setToggleState (model.getSoloBand() == band, juce::dontSendNotification);
+    soloButton.setToggleState (model.getSoloBand() == band && ! model.isSoloDelta(), juce::dontSendNotification);
     soloButton.setEnabled (v.on);
+    deltaButton.setToggleState (model.getSoloBand() == band && model.isSoloDelta(), juce::dontSendNotification);
+    deltaButton.setEnabled (v.on);
     autoGainButton.setToggleState (v.autoGain, juce::dontSendNotification);
     speakers.setValueText (SpeakerPanel::summary (v.speakers, topology));
 
     for (auto* c : { &shape, &slope, &target, &character })
         c->refresh();
-    for (auto* k : { &freq, &gain, &q, &threshold, &ratio, &range, &attack, &release, &selectivity })
+    for (auto* k : { &freq, &gain, &q, &threshold, &ratio, &range, &attack, &release, &selectivity, &releaseNote })
         k->refresh();
     gain.setEnabled (gainShape);
     q.setEnabled (shapeUsesQ (v.shape));
@@ -510,8 +627,14 @@ void BandPanel::updateFromModel()
     shownMode = v.mode;
     slopeShown = slopeNow;
     const bool dynamics = shownMode != BandMode::Static;
-    for (auto* k : { &threshold, &range, &attack, &release })
+    for (auto* k : { &threshold, &range, &attack })
         k->setVisible (dynamics);
+    release.setVisible (dynamics && ! v.releaseSync);
+    releaseNote.setVisible (dynamics && v.releaseSync);
+    rhythmButton.setVisible (dynamics);
+    rhythmButton.setToggleState (v.releaseSync, juce::dontSendNotification);
+    periodReadout.setValues (v.frequency, dynamics ? v.attack : -1.0f);
+    updateRhythm();
     ratio.setVisible (shownMode == BandMode::Dynamic);
     selectivity.setVisible (shownMode == BandMode::Spectral);
     autoGainButton.setVisible (dynamics);
@@ -564,6 +687,7 @@ void BandPanel::updateIndicator()
 void BandPanel::pollReadout()
 {
     updateSidechainState();
+    updateRhythm();
     if (band < 0 || ! readoutProvider || ! isVisible())
         return;
     const bool warns = BandAdvancedPanel::readoutWarns (readoutProvider (band));
@@ -586,6 +710,28 @@ void BandPanel::updateSidechainState()
     }
 }
 
+juce::String BandPanel::rhythmReleaseText (int noteIndex, double bpm)
+{
+    const auto& note =
+        dynamics::kNoteValues[static_cast<std::size_t> (juce::jlimit (0, static_cast<int> (dynamics::kNoteValues.size()) - 1, noteIndex))];
+    const double ms = dynamics::noteReleaseMs (noteIndex, bpm);
+    return juce::String (note.label) + " = " + plugin::format::milliseconds (static_cast<float> (ms)) + " at "
+        + juce::String (dynamics::validBpm (bpm), 1).trimCharactersAtEnd ("0").trimCharactersAtEnd (".") + " BPM";
+}
+
+void BandPanel::updateRhythm()
+{
+    if (band < 0)
+        return;
+    const double bpm = tempoProvider ? tempoProvider() : dynamics::kDefaultBpm;
+    const auto& v = model.band (band);
+    rhythmButton.setTooltip (v.releaseSync ? "Rhythm mode on: the Release is a note value at the host's tempo ("
+                                     + rhythmReleaseText (v.releaseNote, bpm) + "). Click for milliseconds"
+                                           : "Rhythm mode: set the Release in note values at the host's tempo");
+    releaseNote.getSlider().setTooltip ("Release in rhythm mode: " + rhythmReleaseText (v.releaseNote, bpm)
+                                        + " (host tempo). Double-click: 1/16");
+}
+
 juce::String BandPanel::dynamicsKind (bool upward, bool expand)
 {
     return juce::String (upward ? "UPWARD " : "") + (expand ? "EXPANSION" : "COMPRESSION");
@@ -599,13 +745,17 @@ std::vector<BandParam> BandPanel::visibleParameters() const
     for (const auto* c : { &shape, &slope, &target, &character })
         if (c->isVisible())
             params.push_back (c->getParam());
-    for (const auto* k : { &freq, &gain, &q, &threshold, &ratio, &range, &attack, &release, &selectivity })
+    for (const auto* k : { &freq, &gain, &q, &threshold, &ratio, &range, &attack, &release, &selectivity, &releaseNote })
         if (k->isVisible())
             params.push_back (k->getParam());
+    if (rhythmButton.isVisible())
+        params.push_back (BandParam::ReleaseSync);
     if (autoGainButton.isVisible())
         params.push_back (BandParam::AutoGain);
     return params;
 }
+
+static_assert (BandPanel::kStereoWidth == kPad + kChoiceWidth + 14 + 3 * kKnobCell + 14 + kRightWidth + kPeriodGap + kPeriodWidth + kPad);
 
 juce::Point<int> BandPanel::getPreferredSize() const
 {
@@ -620,6 +770,8 @@ void BandPanel::resized()
     auto header = area.removeFromTop (kHeaderHeight);
     header.removeFromLeft (kTitleWidth); // dot and title (painted)
     moreButton.setBounds (header.removeFromRight (28));
+    header.removeFromRight (2);
+    deltaButton.setBounds (header.removeFromRight (28));
     header.removeFromRight (2);
     soloButton.setBounds (header.removeFromRight (28));
     header.removeFromRight (2);
@@ -652,6 +804,8 @@ void BandPanel::resized()
         eq.removeFromLeft (8);
         speakers.setBounds (eq.removeFromLeft (kSpeakersWidth).removeFromTop (kChoiceHeight));
     }
+    eq.removeFromLeft (kPeriodGap);
+    periodReadout.setBounds (eq.removeFromLeft (kPeriodWidth));
 
     // Dynamics (Dynamic and Spectral bands): the knobs follow the mode.
     area.removeFromTop (kSectionGap);
@@ -665,6 +819,9 @@ void BandPanel::resized()
     const int cell = row.getWidth() / 5;
     for (auto* k : { &threshold, &second, &range, &attack, &release })
         k->setBounds (row.removeFromLeft (cell).withSizeKeepingCentre (juce::jmin (cell, 80), kDynamicsRowHeight));
+    // Rhythm mode shares the Release cell; its switch sits right of the caption, like a tab.
+    releaseNote.setBounds (release.getBounds());
+    rhythmButton.setBounds (juce::Rectangle<int> (20, 18).withPosition (release.getRight() - 6, release.getY() - 3));
 }
 
 void BandPanel::paint (juce::Graphics& g)

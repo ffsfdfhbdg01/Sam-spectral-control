@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "ssc/dynamics/NoteValues.h"
+
 namespace ssc::plugin
 {
 namespace
@@ -36,6 +38,8 @@ namespace
             case BandParam::Selectivity: return "selectivity";
             case BandParam::Link: return "link";
             case BandParam::Sidechain: return "sidechain";
+            case BandParam::ReleaseSync: return "release_sync";
+            case BandParam::ReleaseNote: return "release_note";
             case BandParam::Count: break;
         }
         jassertfalse;
@@ -163,6 +167,9 @@ namespace
             floatParam (bandId (BandParam::Selectivity), prefix + "Selectivity", linearRange (0.0f, 100.0f, 0.1), 50.0f, format::percent));
         group.addChild (choiceParam (bandId (BandParam::Link), prefix + "Link", labels::links(), static_cast<int> (DetectorLink::Group)));
         group.addChild (choiceParam (bandId (BandParam::Sidechain), prefix + "Sidechain", labels::sidechainSources(), 0));
+        group.addChild (boolParam (bandId (BandParam::ReleaseSync), prefix + "Release Sync", false));
+        group.addChild (
+            choiceParam (bandId (BandParam::ReleaseNote), prefix + "Release Note", labels::noteValues(), dynamics::kDefaultNoteValue));
     }
 } // namespace
 
@@ -260,6 +267,16 @@ namespace labels
     const juce::StringArray& sidechainSources()
     {
         static const juce::StringArray s { "Internal", "External" };
+        return s;
+    }
+    const juce::StringArray& noteValues()
+    {
+        static const juce::StringArray s = [] {
+            juce::StringArray names;
+            for (const auto& note : dynamics::kNoteValues)
+                names.add (note.label);
+            return names;
+        }();
         return s;
     }
     const juce::StringArray& phaseModes()

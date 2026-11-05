@@ -3,9 +3,12 @@
 #include <catch2/generators/catch_generators.hpp>
 
 #include <cmath>
+#include <limits>
 #include <random>
+#include <string>
 
 #include "ssc/dynamics/Dynamics.h"
+#include "ssc/dynamics/NoteValues.h"
 #include "ssc/util/Math.h"
 
 using Catch::Approx;
@@ -169,4 +172,36 @@ TEST_CASE ("RMS detector reads a sine in dBFS", "[dynamics]")
     REQUIRE (silent.levelDb() == kSilenceDb);
     REQUIRE (detectorTimeFor (50.0) == Approx (0.04));
     REQUIRE (detectorTimeFor (5000.0) == Approx (0.002));
+}
+
+TEST_CASE ("Rhythm mode: note values are ordered by length and set the Release at the host's tempo (DYN-6)", "[dynamics][DYN-6]")
+{
+    using dynamics::kNoteValues;
+    using dynamics::noteReleaseMs;
+    for (std::size_t i = 1; i < kNoteValues.size(); ++i)
+    {
+        CAPTURE (kNoteValues[i].label);
+        CHECK (kNoteValues[i].beats() > kNoteValues[i - 1].beats());
+    }
+    CHECK (std::string (kNoteValues[static_cast<std::size_t> (dynamics::kDefaultNoteValue)].label) == "1/16");
+
+    auto index = [] (const char* label) {
+        for (std::size_t i = 0; i < kNoteValues.size(); ++i)
+            if (std::string (kNoteValues[i].label) == label)
+                return static_cast<int> (i);
+        return -1;
+    };
+    // A quarter note is one beat.
+    CHECK (noteReleaseMs (index ("1/4"), 120.0) == Approx (500.0));
+    CHECK (noteReleaseMs (index ("1/16"), 120.0) == Approx (125.0));
+    CHECK (noteReleaseMs (index ("1/8D"), 120.0) == Approx (375.0));
+    CHECK (noteReleaseMs (index ("1/8T"), 120.0) == Approx (1000.0 / 6.0));
+    CHECK (noteReleaseMs (index ("1/4"), 90.0) == Approx (666.6667).epsilon (1.0e-6));
+    // Held to the Release range; a tempo the host does not report (or nonsense) counts as 120 BPM.
+    CHECK (noteReleaseMs (index ("1/1D"), 40.0) == Approx (5000.0));
+    CHECK (noteReleaseMs (index ("1/64T"), 999.0) == Approx (2.5025).epsilon (1.0e-3));
+    CHECK (noteReleaseMs (index ("1/4"), 0.0) == Approx (500.0));
+    CHECK (noteReleaseMs (index ("1/4"), std::numeric_limits<double>::quiet_NaN()) == Approx (500.0));
+    CHECK (noteReleaseMs (-5, 120.0) == noteReleaseMs (0, 120.0));
+    CHECK (noteReleaseMs (99, 120.0) == noteReleaseMs (static_cast<int> (kNoteValues.size()) - 1, 120.0));
 }

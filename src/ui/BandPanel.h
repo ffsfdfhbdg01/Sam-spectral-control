@@ -30,7 +30,11 @@ public:
     void setColour (juce::Colour colour);
     juce::Slider& getSlider() noexcept { return slider; }
 
+    /** Draws a glyph left of the value text (e.g. the note of a Release in rhythm mode). */
+    std::function<void (juce::Graphics&, juce::Rectangle<float>, float value, juce::Colour)> valueGlyph;
+
     void resized() override;
+    void paintOverChildren (juce::Graphics&) override;
 
 private:
     BandModel& model;
@@ -41,6 +45,30 @@ private:
     bool updating = false;
     juce::Label label;
     juce::Slider slider { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow };
+};
+
+/**
+    Readout at the right of the band's EQ row: how long one cycle (period) of the band frequency
+    lasts and, for Dynamic and Spectral bands, how many cycles the attack spans. An attack of a few
+    cycles or less follows the waveform itself and distorts at that frequency.
+*/
+class PeriodReadout final : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    /** attackMs < 0 hides the attack line. */
+    void setValues (float hz, float attackMs);
+    const juce::String& getPeriodText() const noexcept { return period; }
+    const juce::String& getCyclesText() const noexcept { return cycles; }
+
+    /** "0.317 ms", "2.27 ms", "41.7 ms" */
+    static juce::String periodText (float hz);
+    /** Attack in cycles of the band frequency: "16 cycles", "1.6 cycles", "1 cycle", "0.4 cycle". */
+    static juce::String cyclesText (float attackMs, float hz);
+
+    void paint (juce::Graphics&) override;
+
+private:
+    juce::String period, cycles;
 };
 
 /** ValueButton bound to a choice parameter of a band (Shape, Slope, Target, Character, Link);
@@ -108,6 +136,14 @@ public:
     std::function<analysis::BandReadout (int band)> readoutProvider;
     /** Whether the host feeds the Sidechain input (polled with the readouts). */
     std::function<bool()> sidechainConnected;
+    /** The host's tempo (BPM), for the Release in rhythm mode (polled with the readouts). */
+    std::function<double()> tempoProvider;
+
+    /** The wave period readout at the right of the EQ row (tests). */
+    const PeriodReadout& getPeriodReadout() const noexcept { return periodReadout; }
+
+    /** Release of a band in rhythm mode as its tooltip shows it: "1/16 = 125 ms at 120 BPM". */
+    static juce::String rhythmReleaseText (int noteIndex, double bpm);
 
     /** Band parameters with a control in the panel (research §15 e, E2). */
     std::vector<plugin::BandParam> visibleParameters() const;
@@ -122,6 +158,7 @@ public:
         1:1), "UPWARD COMPRESSION" (Up), "EXPANSION" (Down, ratio under 1:1) or "UPWARD EXPANSION". */
     static juce::String dynamicsKind (bool upward, bool expand);
 
+    static constexpr int kStereoWidth = 526; ///< mono and stereo; surround adds the Speakers choice
     static constexpr int kStaticHeight = 132;
     static constexpr int kDynamicHeight = 232;
 
@@ -145,19 +182,30 @@ private:
     int numPairs = 1;
     bool readoutWarning = false;
     bool sidechainMissing = false; ///< the band is set to External, the host feeds no Sidechain input
-    bool soloHeld = false;
-    bool soloWasOn = false;
-    double soloPressMs = 0.0;
+    /** Click latches, holding listens while pressed (Solo, or the band's Delta). */
+    struct ListenPress
+    {
+        bool held = false;
+        bool wasOn = false;
+        double pressMs = 0.0;
+    };
+    void listenButtonChanged (juce::Button& button, ListenPress& press, bool delta);
+    ListenPress soloPress, deltaPress;
 
     SegmentedControl modeSelector { { "Static", "Dynamic", "Spectral" } };
     ChipButton advancedButton { "Advanced", Icon::ChevronRight };
-    IconButton bypassButton { Icon::Power, "Bypass" }, soloButton { Icon::Solo, "Solo" }, moreButton { Icon::More, "More" };
+    IconButton bypassButton { Icon::Power, "Bypass" }, soloButton { Icon::Solo, "Solo" }, deltaButton { Icon::Delta, "Delta" },
+        moreButton { Icon::More, "More" };
     BandChoiceButton shape, slope, target, character;
     ValueButton speakers { "Speakers" };
     BandKnob freq, gain, q;
     ChipButton autoGainButton { "Auto Gain" };
     SegmentedControl directionSelector { { "Down", "Up" } };
     BandKnob threshold, ratio, range, attack, release, selectivity;
+    BandKnob releaseNote; ///< the Release in rhythm mode (note values), in place of the Release knob
+    IconButton rhythmButton { Icon::Note, "Rhythm" };
+    PeriodReadout periodReadout;
+    void updateRhythm();
     juce::TimedCallback readoutTimer { [this] { pollReadout(); } };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BandPanel)

@@ -7,6 +7,7 @@
 #include "plugin/PluginProcessor.h"
 #include "ui/BandLogic.h"
 #include "ui/BandModel.h"
+#include "ui/EqDisplay.h"
 
 using Catch::Approx;
 using namespace ssc;
@@ -192,7 +193,7 @@ TEST_CASE ("Band slots, selection, delete and shape rules", "[ui][BAND-1][BAND-6
 
     // Solo follows the band: switching it off releases the solo.
     int soloReported = -2;
-    model.onSoloChanged = [&soloReported] (int b) { soloReported = b; };
+    model.onSoloChanged = [&soloReported] (int b, bool) { soloReported = b; };
     model.setSoloBand (7);
     REQUIRE (soloReported == 7);
     {
@@ -201,6 +202,63 @@ TEST_CASE ("Band slots, selection, delete and shape rules", "[ui][BAND-1][BAND-6
     }
     REQUIRE (model.getSoloBand() == -1);
     REQUIRE (soloReported == -1);
+
+    // Delta of a band: the same solo, reported with its kind; no band means no Delta.
+    bool deltaReported = false;
+    model.onSoloChanged = [&] (int b, bool delta) {
+        soloReported = b;
+        deltaReported = delta;
+    };
+    model.setSoloBand (3, true);
+    CHECK (model.getSoloBand() == 3);
+    CHECK (model.isSoloDelta());
+    CHECK (soloReported == 3);
+    CHECK (deltaReported);
+    model.setSoloBand (3, false); // Delta → Solo of the same band
+    CHECK_FALSE (model.isSoloDelta());
+    CHECK_FALSE (deltaReported);
+    model.setSoloBand (-1, true);
+    CHECK (model.getSoloBand() == -1);
+    CHECK_FALSE (model.isSoloDelta());
+}
+
+TEST_CASE ("A click on a resonance hint adds a narrow Bell that cuts it, as one undo step (VIS-4, BAND-5)", "[ui][VIS-4]")
+{
+    JuceEnvironment env;
+    plugin::SscAudioProcessor processor;
+    BandModel model (processor.getValueTreeState(), processor.getUndoManager());
+
+    analysis::ResonanceDetector::Hint hint;
+    hint.hz = 3150.0f;
+    hint.prominenceDb = 9.5f;
+    processor.getUndoManager().beginNewTransaction();
+    const int band = EqDisplay::cutResonance (model, hint);
+    REQUIRE (band == 0);
+    CHECK (model.band (band).used);
+    CHECK (model.band (band).shape == Shape::Bell);
+    CHECK (model.band (band).frequency == Approx (3150.0f).epsilon (0.001));
+    CHECK (model.band (band).gain == Approx (-9.5f).margin (0.05));
+    CHECK (model.band (band).q == Approx (EqDisplay::kResonanceQ).epsilon (0.01));
+    CHECK (model.isSelected (band));
+
+    // As deep as the resonance stands out, within 3 … 18 dB.
+    hint.prominenceDb = 40.0f;
+    CHECK (model.band (EqDisplay::cutResonance (model, hint)).gain == Approx (-18.0f).margin (0.05));
+    hint.prominenceDb = 1.0f;
+    CHECK (model.band (EqDisplay::cutResonance (model, hint)).gain == Approx (-3.0f).margin (0.05));
+
+    // One undo step removes the band again.
+    processor.getUndoManager().beginNewTransaction();
+    REQUIRE (processor.getUndoManager().undo());
+    model.refresh();
+    CHECK_FALSE (model.band (2).used);
+    CHECK (model.band (1).used);
+
+    // No free band: nothing happens.
+    while (model.createBand (Shape::Bell, 500.0f, 1.0f) >= 0)
+    {
+    }
+    CHECK (EqDisplay::cutResonance (model, hint) == -1);
 }
 
 TEST_CASE ("Typed values are parsed in display units (BAND-6)", "[ui][BAND-6]")

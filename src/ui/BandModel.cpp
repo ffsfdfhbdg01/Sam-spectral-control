@@ -14,7 +14,10 @@ using plugin::kNumBandParams;
 
 namespace
 {
-    constexpr const char* kClipboardPrefix = "SamSpectralControl.band.v2:";
+    constexpr const char* kClipboardPrefix = "SamSpectralControl.band.v3:";
+    /** Texts copied by 1.1: the parameters before the rhythm mode of the Release, then the speakers. */
+    constexpr const char* kClipboardPrefixV2 = "SamSpectralControl.band.v2:";
+    constexpr int kNumBandParamsV2 = static_cast<int> (BandParam::ReleaseSync);
     /** Texts copied by 1.0: the parameters before Sidechain, then the speakers; Direction and the
         times as version 1 of the state had them. */
     constexpr const char* kClipboardPrefixV1 = "SamSpectralControl.band.v1:";
@@ -150,6 +153,9 @@ BandValues BandModel::read (int band) const noexcept
     v.sidechain = get (BandParam::Sidechain) >= 0.5f;
     v.upward = get (BandParam::Direction) >= 0.5f;
     v.expand = get (BandParam::Ratio) < 1.0f;
+    v.attack = get (BandParam::Attack);
+    v.releaseSync = get (BandParam::ReleaseSync) >= 0.5f;
+    v.releaseNote = juce::roundToInt (get (BandParam::ReleaseNote));
     v.speakers = plugin::readSpeakers (state.state, band);
     return v;
 }
@@ -264,13 +270,15 @@ void BandModel::selectAll()
     notifySelectionChanged();
 }
 
-void BandModel::setSoloBand (int band)
+void BandModel::setSoloBand (int band, bool delta)
 {
-    if (band == soloBand)
+    delta = delta && band >= 0;
+    if (band == soloBand && delta == soloDelta)
         return;
     soloBand = band;
+    soloDelta = delta;
     if (onSoloChanged)
-        onSoloChanged (band);
+        onSoloChanged (band, delta);
     listeners.call ([] (Listener& l) { l.bandsChanged(); });
 }
 
@@ -479,7 +487,7 @@ juce::String BandModel::bandText (int band) const
 bool BandModel::canPaste() const
 {
     const auto text = juce::SystemClipboard::getTextFromClipboard();
-    return text.startsWith (kClipboardPrefix) || text.startsWith (kClipboardPrefixV1);
+    return text.startsWith (kClipboardPrefix) || text.startsWith (kClipboardPrefixV2) || text.startsWith (kClipboardPrefixV1);
 }
 
 bool BandModel::pasteToBand (int band)
@@ -490,12 +498,13 @@ bool BandModel::pasteToBand (int band)
 bool BandModel::pasteBandText (int band, const juce::String& text)
 {
     const bool v1 = text.startsWith (kClipboardPrefixV1);
-    if (! v1 && ! text.startsWith (kClipboardPrefix))
+    const bool v2 = text.startsWith (kClipboardPrefixV2);
+    if (! v1 && ! v2 && ! text.startsWith (kClipboardPrefix))
         return false;
 
     juce::StringArray items;
     items.addTokens (text.fromFirstOccurrenceOf (":", false, false), ",", {});
-    const int numParams = v1 ? kNumBandParamsV1 : kNumBandParams;
+    const int numParams = v1 ? kNumBandParamsV1 : (v2 ? kNumBandParamsV2 : kNumBandParams);
     if (items.size() != numParams && items.size() != numParams + 1)
         return false;
 

@@ -209,6 +209,8 @@ TEST_CASE ("A 1.0 preset and a band copied by 1.0 keep their sound too (GLB-3, D
     auto text = model.bandText (band);
     juce::StringArray items;
     items.addTokens (text.fromFirstOccurrenceOf (":", false, false), ",", {});
+    items.remove (static_cast<int> (BandParam::ReleaseNote)); // newer than 1.0
+    items.remove (static_cast<int> (BandParam::ReleaseSync));
     items.remove (static_cast<int> (BandParam::Sidechain));
     auto normalised = [&model, band] (BandParam param, float plain) {
         return juce::String (model.parameter (band, param).convertTo0to1 (plain), 9);
