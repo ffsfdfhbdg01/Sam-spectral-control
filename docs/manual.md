@@ -1,4 +1,4 @@
-# Sam Spectral Control 1.1 — instrukcja obsługi
+# Sam Spectral Control 1.2 — instrukcja obsługi
 
 Sam Spectral Control to korektor (EQ) z 24 pasmami, z których każde może działać statycznie, dynamicznie albo spektralnie. Ma trzy tryby fazy (Minimum Phase, Natural Phase, Analog Feel), oversampling, Auto Gain, nasycenie pasm (Character), obsługę stereo M/S oraz układów surround i Atmos (m.in. 7.1.4 i 9.1.6, do 32 kanałów), a także analizator widma, odczyty fazy i ringingu oraz mierniki zniekształceń.
 
@@ -35,7 +35,7 @@ Interfejs wtyczki jest po angielsku — nazwy przycisków i parametrów podajemy
 
 ### macOS
 
-Uruchom `SamSpectralControl-1.1.0-macOS.pkg`. W kroku *Customize* można wybrać komponenty:
+Uruchom `SamSpectralControl-1.2.0-macOS.pkg`. W kroku *Customize* można wybrać komponenty:
 
 | Komponent | Miejsce instalacji |
 |---|---|
@@ -47,11 +47,11 @@ Deinstalacja: uruchom `Uninstall Sam Spectral Control.command` z folderu `/Libra
 
 ### Windows
 
-Uruchom `SamSpectralControl-1.1.0-Windows.exe`. Wtyczka trafia do `C:\Program Files\Common Files\VST3\Sam Spectral Control.vst3`, a licencje i (opcjonalnie) instrukcja do `C:\Program Files\Sam Audio\Sam Spectral Control`. Deinstalacja: *Ustawienia → Aplikacje → Zainstalowane aplikacje → Sam Spectral Control*.
+Uruchom `SamSpectralControl-1.2.0-Windows.exe`. Wtyczka trafia do `C:\Program Files\Common Files\VST3\Sam Spectral Control.vst3`, a licencje i (opcjonalnie) instrukcja do `C:\Program Files\Sam Audio\Sam Spectral Control`. Deinstalacja: *Ustawienia → Aplikacje → Zainstalowane aplikacje → Sam Spectral Control*.
 
 ### Ostrzeżenia systemu przy instalatorach bez podpisu
 
-Wydanie 1.1.0 nie jest podpisane cyfrowo (wydanie wstępne), więc systemy ostrzegają przed pierwszym uruchomieniem instalatora. Sumę SHA-256 pobranego pliku można porównać z `SHA256SUMS.txt` ze strony wydania (macOS: `shasum -a 256 <plik>`, Windows: `certutil -hashfile <plik> SHA256`).
+Wydanie 1.2.0 nie jest podpisane cyfrowo (wydanie wstępne), więc systemy ostrzegają przed pierwszym uruchomieniem instalatora. Sumę SHA-256 pobranego pliku można porównać z `SHA256SUMS.txt` ze strony wydania (macOS: `shasum -a 256 <plik>`, Windows: `certutil -hashfile <plik> SHA256`).
 
 - **macOS**: po dwukliku pojawia się komunikat, że Apple nie może sprawdzić pliku. Zamknij go, otwórz *Ustawienia systemowe → Prywatność i ochrona*, w sekcji *Ochrona* kliknij *Otwórz mimo to* przy nazwie instalatora i potwierdź hasłem. W macOS 15 i nowszych otwieranie przez Control-klik już nie omija tej blokady.
 - **Windows**: SmartScreen pokazuje okno „System Windows ochronił ten komputer” — wybierz *Więcej informacji → Uruchom mimo to*. Także podpisane instalatory nowego wydawcy mogą przez pierwsze tygodnie wywoływać to ostrzeżenie, zanim zbudują reputację.
@@ -292,7 +292,7 @@ Pasma Spectral działają w silniku STFT: wszystkie pasma Spectral danego kanał
 | Latencja (44,1 kHz) | 46,4 ms | 92,9 ms | 185,8 ms | 185,8 ms |
 | Latencja (48–192 kHz) | 42,7 ms | 85,3 ms | 170,7 ms | 170,7 ms |
 
-**Obszar działania.** Pasmo Spectral działa na obszarze swojego kształtu — z jego Q i Slope — tak samo jak pasmo Static z tym samym kształtem i pasmo Dynamic: na zboczu kształtu część częstotliwości jest tłumiona proporcjonalnie mniej. Poziom każdej częstotliwości jest przy tym mierzony przez ten sam filtr obszaru, którego używa detekcja pasma Dynamic (dla Bell — filtr pasmowy z Q pasma, dla półek — filtr 12 dB/okt. po stronie półki), więc głośna składowa na zboczu wąskiego pasma musi przekroczyć próg o tyle, o ile filtr ją osłabia — jak w paśmie Dynamic. (Do wersji 1.1.0 próg porównywany był z pełnym poziomem częstotliwości, przez co głośne składowe na zboczach były tłumione mocniej niż w paśmie Dynamic i pasmo działało szerzej, niż wskazywały Q i Slope.)
+**Obszar działania.** Pasmo Spectral działa na obszarze swojego kształtu — z jego Q i Slope — tak samo jak pasmo Static z tym samym kształtem i pasmo Dynamic: na zboczu kształtu część częstotliwości jest tłumiona proporcjonalnie mniej. Poziom każdej częstotliwości jest przy tym mierzony przez ten sam filtr obszaru, którego używa detekcja pasma Dynamic (dla Bell — filtr pasmowy z Q pasma, dla półek — filtr 12 dB/okt. po stronie półki), więc głośna składowa na zboczu wąskiego pasma musi przekroczyć próg o tyle, o ile filtr ją osłabia — jak w paśmie Dynamic. (Do wersji 1.1.0 włącznie próg porównywany był z pełnym poziomem częstotliwości, przez co głośne składowe na zboczach były tłumione mocniej niż w paśmie Dynamic i pasmo działało szerzej, niż wskazywały Q i Slope.)
 
 Bardzo wąskie pasma (np. Q 10–20) i pasma w basie są w środku płytsze, niż wskazuje Range, bo zbliżają się do rozdzielczości ramki STFT: przy Quality Normal np. Bell 60 Hz Q 4 tnie w środku ok. 9 dB zamiast 12 dB, Bell 1 kHz Q 20 — ok. 10,5 dB. Quality **High** (dłuższa ramka) zbliża je do pełnej głębokości (odpowiednio ok. 10,3 dB i 11 dB); do wąskich cięć w basie lepiej nadaje się pasmo Dynamic.
 

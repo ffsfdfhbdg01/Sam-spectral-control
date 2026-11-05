@@ -4,6 +4,10 @@ Wszystkie istotne zmiany Sam Spectral Control. Format: [Keep a Changelog](https:
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-05
+
+Delta pasma obok Solo, ikony kształtów pasm, wycinanie rezonansu (gwizdu) kliknięciem w podpowiedź, okres fali i Attack w okresach w panelu pasma oraz Release w wartościach nut w tempie projektu. Pasmo Spectral działa teraz tylko w obszarze swojego Q i Slope, jak pasmo Dynamic — projekty z pasmami Spectral mogą przez to brzmieć nieco inaczej (słabsze działanie na zboczach pasm). Projekty i presety z 1.0.0 i 1.1.0 wczytują się bez zmian ustawień. Instalatory nadal nie są podpisane cyfrowo — to wydanie wstępne.
+
 ### Dodane
 - **Delta pasma**: przycisk △ obok słuchawek (Solo) w panelu pasma i pozycja *Delta* w menu węzła — odsłuch tylko tego, co wtyczka zmienia w obszarze pasma (to, co tnie lub dodaje), na celu pasma; kliknięcie zostawia włączone, przytrzymanie działa tylko na czas trzymania. Solo i Delta pasma wykluczają się; etykieta na wykresie: *Delta · Band …*.
 - **Ikony kształtów** pasm (Bell, półki, cięcia, Notch, Band Pass, Tilt Shelf, Flat Tilt, All Pass) w wyborze **Shape** panelu, w jego menu i w podmenu *Shape* menu węzła.

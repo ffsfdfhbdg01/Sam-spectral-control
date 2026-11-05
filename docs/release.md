@@ -20,9 +20,9 @@ Dla tagu workflow odmawia wydania, dopóki:
 ## Kroki wydania
 
 1. Decyzje (od 1.0.0 podjęte, 2026-10-10): licencja AGPLv3 ([ADR-0002](decisions/0002-licencja-juce.md)) — `LICENSE` (pełny tekst), `packaging/LICENSE.txt` (nota, adres kodu źródłowego i pełny tekst; pokazywany i instalowany przez instalatory), sekcja JUCE w `THIRD-PARTY-NOTICES.txt` odsyła do niego i do kodu źródłowego; identyfikatory zamrożone ([ADR-0016](decisions/0016-identyfikatory-nazwy.md)).
-2. Testy w hostach według [testing.md](testing.md) (TST-3) — przed wydaniem zwykłym; 1.0.0 i 1.1.0 są wstępne i ich jeszcze nie ma.
+2. Testy w hostach według [testing.md](testing.md) (TST-3) — przed wydaniem zwykłym; 1.0.0, 1.1.0 i 1.2.0 są wstępne i ich jeszcze nie ma.
 3. Wersja w `CMakeLists.txt` i sekcja w `CHANGELOG.md` z datą: `## [X.Y.Z] - RRRR-MM-DD`.
-4. `git tag vX.Y.Z && git push origin vX.Y.Z` albo *Actions → Release → Run workflow* z zaznaczonym **publish** (workflow sam tworzy tag `vX.Y.Z` na tym commicie — tak powstały 1.0.0 i 1.1.0) → workflow „Release” (bramka, build, testy, pluginval, walidator VST3, instalatory, archiwum źródeł) → opublikowane wydanie GitHub → sprawdzenie instalatorów (instalacja, deinstalacja, `spctl`/właściwości pliku). Wydanie można potem edytować albo cofnąć do szkicu na GitHubie. Ręczne uruchomienie bez **publish** buduje i sprawdza instalatory (artefakty przebiegu) bez wydania.
+4. `git tag vX.Y.Z && git push origin vX.Y.Z` albo *Actions → Release → Run workflow* z zaznaczonym **publish** (workflow sam tworzy tag `vX.Y.Z` na tym commicie — tak powstały 1.0.0, 1.1.0 i 1.2.0) → workflow „Release” (bramka, build, testy, pluginval, walidator VST3, instalatory, archiwum źródeł) → opublikowane wydanie GitHub → sprawdzenie instalatorów (instalacja, deinstalacja, `spctl`/właściwości pliku). Wydanie można potem edytować albo cofnąć do szkicu na GitHubie. Ręczne uruchomienie bez **publish** buduje i sprawdza instalatory (artefakty przebiegu) bez wydania.
 
 Archiwum źródeł to kod odpowiadający binarkom w rozumieniu AGPLv3 (§6): wszystkie pliki z `git ls-files --recurse-submodules` (wtyczka, JUCE, pffft, Catch2), w katalogu `SamSpectralControl-X.Y.Z/`; buduje się z niego tak samo jak z repozytorium (`cmake -S SamSpectralControl-X.Y.Z -B build`).
 
@@ -84,6 +84,12 @@ ssc_screenshot docs/images/editor-advanced.png 1100 660 $BANDS select=3 advanced
 ssc_screenshot docs/images/editor-860x480.png 860 480 $BANDS select=3
 ssc_screenshot docs/images/rhythm.png 1100 660 b01_used=1 b01_mode=1 b01_freq=150 b01_q=1.4 b01_threshold=-40 b01_range=9 \
     b01_attack=20 b01_release_sync=1 b01_release_note=10 b02_used=1 b02_shape=3 b02_freq=30 b02_slope=3 select=1 seconds=3
+ssc_screenshot docs/images/solo.png 1100 660 b01_used=1 b01_freq=2500 b01_gain=6 b01_q=1.5 b01_target=3 b02_used=1 b02_shape=4 \
+    b02_freq=60 b03_used=1 b03_freq=300 b03_gain=-4 b03_q=1 select=1 solo=1 seconds=3
+ssc_screenshot docs/images/sidechain.png 1100 660 sidechain=2 b01_used=1 b01_mode=1 b01_freq=1000 b01_q=2 b01_threshold=-40 \
+    b01_sidechain=1 select=1 advanced=1 seconds=3
+ssc_screenshot docs/images/upward.png 1100 660 b01_used=1 b01_mode=1 b01_freq=9000 b01_q=0.8 b01_threshold=-15 b01_ratio=2 \
+    b01_direction=1 b01_range=9 b01_attack=5 b01_release=200 select=1 seconds=3
 ```
 
 `advanced=1` otwiera panel Advanced pasma, `globaladvanced=1` globalny, `motion=0|1|2` ustawia animacje (Full / Reduced / Off). `docs/images/ui-1.0-*.png` to zrzuty interfejsu 1.0 do porównania w research §15 — nie odświeża się ich.
