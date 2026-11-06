@@ -44,8 +44,15 @@ enum class BandMode : std::uint8_t
 {
     Static,
     Dynamic,
-    Spectral
+    Spectral,
+    Gate ///< the band's region is attenuated by Range while its level stays under the threshold
 };
+
+/** Modes with a time-domain level detector on the band's region (BandProcessor): Dynamic and Gate. */
+constexpr bool usesDetector (BandMode mode) noexcept
+{
+    return mode == BandMode::Dynamic || mode == BandMode::Gate;
+}
 
 enum class StereoComponent : std::uint8_t
 {

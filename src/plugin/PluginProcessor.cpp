@@ -224,7 +224,7 @@ void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) cons
         s.shape.gainDb = get (BandParam::Gain)->load (std::memory_order_relaxed);
         s.shape.q = get (BandParam::Q)->load (std::memory_order_relaxed);
         s.shape.slope = choice (get (BandParam::Slope), Slope::Brickwall);
-        s.mode = choice (get (BandParam::Mode), BandMode::Spectral);
+        s.mode = choice (get (BandParam::Mode), BandMode::Gate);
         s.component = choice (get (BandParam::Target), StereoComponent::Side);
         // Speakers are stored by role: map them onto the current layout (CH-4); the selection
         // decides about LFE as well.
@@ -247,6 +247,8 @@ void SscAudioProcessor::readBandSettings (engine::BandSettingsArray& bands) cons
                                        hostBpm.load (std::memory_order_relaxed))
             : value (BandParam::Release);
         d.lookaheadMs = value (BandParam::Lookahead);
+        d.holdMs = value (BandParam::Hold);
+        d.hysteresisDb = value (BandParam::Hysteresis);
         d.kneeDb = value (BandParam::Knee);
         d.mix = 0.01 * value (BandParam::Mix);
         d.selectivity = 0.01 * value (BandParam::Selectivity);

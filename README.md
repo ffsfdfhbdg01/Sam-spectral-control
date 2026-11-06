@@ -40,7 +40,8 @@ Pełna instrukcja obsługi: [docs/manual.md](docs/manual.md).
 | Solo (odsłuch obszaru pasma z jego działaniem, tylko na jego celu; wykres pokazuje słyszalny zakres) | Alt/Option + przytrzymanie węzła albo 🎧 w panelu pasma (klik — zatrzaśnięcie, przytrzymanie — chwilowo) |
 | Delta pasma (tylko to, co pasmo tnie lub dodaje) | △ obok 🎧 w panelu pasma albo *Delta* w menu węzła (klik — zatrzaśnięcie, przytrzymanie — chwilowo) |
 | Wycięcie rezonansu (gwizdu) | kliknięcie w podpowiedź rezonansu na widmie dodaje wąski Bell, który go wycina |
-| Tryb pasma | przełącznik Static \| Dynamic \| Spectral w panelu pasma; pokrętła dynamiki pojawiają się w trybach Dynamic i Spectral |
+| Tryb pasma | przełącznik Static \| Dynamic \| Spectral \| Gate w panelu pasma; pokrętła dynamiki pojawiają się w trybach Dynamic, Spectral i Gate |
+| Bramka w paśmie (Gate) | tryb **Gate**: obszar pasma ściszany o Range, gdy jego poziom jest pod progiem (przesłuchy, dzwonienie, szum w przerwach); Hold i Hysteresis, sidechain do bramki kluczowanej |
 | Kompresja w górę | **Down \| Up** w nagłówku rzędu dynamiki: Up podnosi to, co jest poniżej progu (z Ratio < 1:1 — ekspansja w górę) |
 | Release w nutach | ♪ przy Release: wartość rytmiczna (1/64T … 1/1D) w tempie projektu z hosta; po prawej panelu pasma okres fali (**Period**) i Attack w okresach |
 | Ustawienia specjalistyczne | **Advanced ›** w panelu pasma (detektor, Sidechain Internal \| External, odczyty) i **Advanced ▴** na pasku dolnym (Quality, oversampling, Max Lookahead, Auto Gain, mierniki) |

@@ -14,7 +14,12 @@ using plugin::kNumBandParams;
 
 namespace
 {
-    constexpr const char* kClipboardPrefix = "SamSpectralControl.band.v3:";
+    constexpr const char* kClipboardPrefix = "SamSpectralControl.band.v4:";
+    /** Texts copied by 1.2: the parameters before Hold, then the speakers; Mode out of three modes. */
+    constexpr const char* kClipboardPrefixV3 = "SamSpectralControl.band.v3:";
+    constexpr int kNumBandParamsV3 = static_cast<int> (BandParam::Hold);
+    /** Number of band modes before Gate: texts up to v3 store Mode normalised over three choices. */
+    constexpr int kNumModesV3 = 3;
     /** Texts copied by 1.1: the parameters before the rhythm mode of the Release, then the speakers. */
     constexpr const char* kClipboardPrefixV2 = "SamSpectralControl.band.v2:";
     constexpr int kNumBandParamsV2 = static_cast<int> (BandParam::ReleaseSync);
@@ -146,7 +151,7 @@ BandValues BandModel::read (int band) const noexcept
     v.gain = get (BandParam::Gain);
     v.q = get (BandParam::Q);
     v.slope = toEnum (get (BandParam::Slope), Slope::Brickwall);
-    v.mode = toEnum (get (BandParam::Mode), BandMode::Spectral);
+    v.mode = toEnum (get (BandParam::Mode), BandMode::Gate);
     v.target = toEnum (get (BandParam::Target), StereoComponent::Side);
     v.character = toEnum (get (BandParam::Character), Character::Sharp);
     v.autoGain = get (BandParam::AutoGain) >= 0.5f;
@@ -309,7 +314,7 @@ void BandModel::setValue (int band, BandParam p, float plainValue)
     // A Dynamic band's lookahead beyond the global Max Lookahead raises it (DYN-8); the latency
     // follows. Spectral bands do not use it (their STFT frame already sees ahead).
     auto& mode = parameter (band, BandParam::Mode);
-    const bool dynamic = static_cast<BandMode> (juce::roundToInt (mode.convertFrom0to1 (mode.getValue()))) == BandMode::Dynamic;
+    const bool dynamic = usesDetector (static_cast<BandMode> (juce::roundToInt (mode.convertFrom0to1 (mode.getValue()))));
     if (p == BandParam::Lookahead && dynamic)
         if (auto* maxLookahead = state.getParameter (plugin::id::maxLookahead))
             if (maxLookahead->convertFrom0to1 (maxLookahead->getValue()) < plainValue)
@@ -428,34 +433,49 @@ void BandModel::setShape (int band, Shape shape)
 
 void BandModel::setMode (int band, BandMode mode)
 {
+    // Detector defaults of each mode; the parameter defaults are Dynamic's (a Static band has them).
     struct Defaults
     {
         ThresholdMode mode;
         float threshold;
+        float range;
     };
-    constexpr Defaults dynamicDefaults { ThresholdMode::Absolute, -20.0f };
-    constexpr Defaults spectralDefaults { ThresholdMode::Relative, 6.0f };
+    auto defaultsFor = [] (BandMode m) -> Defaults {
+        switch (m)
+        {
+            case BandMode::Spectral: return { ThresholdMode::Relative, 6.0f, 12.0f };
+            case BandMode::Gate: return { ThresholdMode::Absolute, -40.0f, 24.0f };
+            case BandMode::Static:
+            case BandMode::Dynamic: break;
+        }
+        return { ThresholdMode::Absolute, -20.0f, 12.0f };
+    };
 
     const auto& v = values[static_cast<std::size_t> (band)];
     if (mode != BandMode::Static && ! shapeUsesGain (v.shape))
         return;
 
     ScopedEdit edit (*this, "Change Mode");
+    const auto previous = v.mode;
     setValue (band, BandParam::Mode, static_cast<float> (mode));
 
-    if (mode == BandMode::Static || v.mode == mode)
+    // Settings still at the defaults of the previous mode move to those of the new one; settings
+    // the user changed stay.
+    if (mode == BandMode::Static || previous == mode)
         return;
-    const auto& from = mode == BandMode::Spectral ? dynamicDefaults : spectralDefaults;
-    const auto& to = mode == BandMode::Spectral ? spectralDefaults : dynamicDefaults;
-    auto& thresholdMode = parameter (band, BandParam::ThresholdMode);
-    auto& threshold = parameter (band, BandParam::Threshold);
-    const auto currentMode = static_cast<ThresholdMode> (juce::roundToInt (thresholdMode.convertFrom0to1 (thresholdMode.getValue())));
-    const float currentThreshold = threshold.convertFrom0to1 (threshold.getValue());
-    if (currentMode == from.mode && std::abs (currentThreshold - from.threshold) < 0.05f)
+    const auto from = defaultsFor (previous), to = defaultsFor (mode);
+    auto plain = [this, band] (BandParam p) {
+        const auto& param = parameter (band, p);
+        return param.convertFrom0to1 (param.getValue());
+    };
+    if (static_cast<ThresholdMode> (juce::roundToInt (plain (BandParam::ThresholdMode))) == from.mode
+        && std::abs (plain (BandParam::Threshold) - from.threshold) < 0.05f)
     {
         setValue (band, BandParam::ThresholdMode, static_cast<float> (to.mode));
         setValue (band, BandParam::Threshold, to.threshold);
     }
+    if (std::abs (plain (BandParam::Range) - from.range) < 0.05f)
+        setValue (band, BandParam::Range, to.range);
 }
 
 engine::SpeakerSelection BandModel::speakers (int band) const
@@ -487,7 +507,8 @@ juce::String BandModel::bandText (int band) const
 bool BandModel::canPaste() const
 {
     const auto text = juce::SystemClipboard::getTextFromClipboard();
-    return text.startsWith (kClipboardPrefix) || text.startsWith (kClipboardPrefixV2) || text.startsWith (kClipboardPrefixV1);
+    return text.startsWith (kClipboardPrefix) || text.startsWith (kClipboardPrefixV3) || text.startsWith (kClipboardPrefixV2)
+        || text.startsWith (kClipboardPrefixV1);
 }
 
 bool BandModel::pasteToBand (int band)
@@ -499,12 +520,13 @@ bool BandModel::pasteBandText (int band, const juce::String& text)
 {
     const bool v1 = text.startsWith (kClipboardPrefixV1);
     const bool v2 = text.startsWith (kClipboardPrefixV2);
-    if (! v1 && ! v2 && ! text.startsWith (kClipboardPrefix))
+    const bool v3 = text.startsWith (kClipboardPrefixV3);
+    if (! v1 && ! v2 && ! v3 && ! text.startsWith (kClipboardPrefix))
         return false;
 
     juce::StringArray items;
     items.addTokens (text.fromFirstOccurrenceOf (":", false, false), ",", {});
-    const int numParams = v1 ? kNumBandParamsV1 : (v2 ? kNumBandParamsV2 : kNumBandParams);
+    const int numParams = v1 ? kNumBandParamsV1 : (v2 ? kNumBandParamsV2 : (v3 ? kNumBandParamsV3 : kNumBandParams));
     if (items.size() != numParams && items.size() != numParams + 1)
         return false;
 
@@ -515,6 +537,12 @@ bool BandModel::pasteBandText (int band, const juce::String& text)
         auto& target = parameter (band, static_cast<BandParam> (p));
         const float normalised = p < numParams ? juce::jlimit (0.0f, 1.0f, items[p].getFloatValue()) : target.getDefaultValue();
         plain[static_cast<std::size_t> (p)] = target.convertFrom0to1 (normalised);
+    }
+    if (v1 || v2 || v3)
+    {
+        // Mode was normalised over Static, Dynamic and Spectral (Gate came later).
+        const float normalised = juce::jlimit (0.0f, 1.0f, items[static_cast<int> (BandParam::Mode)].getFloatValue());
+        plain[static_cast<std::size_t> (BandParam::Mode)] = static_cast<float> (juce::roundToInt (normalised * (kNumModesV3 - 1)));
     }
     if (v1)
     {

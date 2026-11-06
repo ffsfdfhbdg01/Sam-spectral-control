@@ -40,6 +40,8 @@ namespace
             case BandParam::Sidechain: return "sidechain";
             case BandParam::ReleaseSync: return "release_sync";
             case BandParam::ReleaseNote: return "release_note";
+            case BandParam::Hold: return "hold";
+            case BandParam::Hysteresis: return "hysteresis";
             case BandParam::Count: break;
         }
         jassertfalse;
@@ -170,6 +172,11 @@ namespace
         group.addChild (boolParam (bandId (BandParam::ReleaseSync), prefix + "Release Sync", false));
         group.addChild (
             choiceParam (bandId (BandParam::ReleaseNote), prefix + "Release Note", labels::noteValues(), dynamics::kDefaultNoteValue));
+        group.addChild (floatParam (bandId (BandParam::Hold), prefix + "Hold", linearRange (0.0f, 500.0f, 0.1), 10.0f, format::milliseconds,
+                                    {}, format::parseMilliseconds));
+        group.addChild (floatParam (
+            bandId (BandParam::Hysteresis), prefix + "Hysteresis", linearRange (0.0f, 24.0f, 0.1), 4.0f,
+            [] (float v) { return format::decibels (v, false); }, "dB"));
     }
 } // namespace
 
@@ -236,7 +243,7 @@ namespace labels
     }
     const juce::StringArray& bandModes()
     {
-        static const juce::StringArray s { "Static", "Dynamic", "Spectral" };
+        static const juce::StringArray s { "Static", "Dynamic", "Spectral", "Gate" };
         return s;
     }
     const juce::StringArray& targets()

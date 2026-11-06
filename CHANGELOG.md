@@ -4,6 +4,12 @@ Wszystkie istotne zmiany Sam Spectral Control. Format: [Keep a Changelog](https:
 
 ## [Unreleased]
 
+### Dodane
+- **Tryb pasma Gate** — czwarta zakładka obok Static, Dynamic i Spectral: bramka działająca tylko w obszarze pasma (z jego kształtem, Q i Slope). Gdy poziom w obszarze pasma spada pod **Threshold**, obszar jest ściszany o **Range**; bramka otwiera się z czasem **Attack**, a po spadku pod próg − **Hysteresis** zostaje otwarta przez **Hold** i zamyka się z czasem **Release** (także w nutach, ♪). Działa z Sidechain External (bramka kluczowana innym śladem), Lookahead, Link i Mix pasma; bez latencji. Panel pasma: Threshold, Range, Attack, Hold, Release i nagłówek **GATE**; panel Advanced: Threshold Mode, Hysteresis, Lookahead, Mix, Link, Sidechain. Po przełączeniu w Gate nieruszone ustawienia stają się Threshold −40 dB i Range 24 dB. Nowe parametry pasma **Hold** (0–500 ms) i **Hysteresis** (0–24 dB).
+
+### Zmienione
+- Schowek pasma ma format w wersji 4; teksty z 1.0–1.2 wklejają się z tym samym trybem pasma. Projekty i presety z 1.0–1.2 wczytują się bez zmian (Hold i Hysteresis z wartościami domyślnymi).
+
 ## [1.2.0] - 2026-11-05
 
 Delta pasma obok Solo, ikony kształtów pasm, wycinanie rezonansu (gwizdu) kliknięciem w podpowiedź, okres fali i Attack w okresach w panelu pasma oraz Release w wartościach nut w tempie projektu. Pasmo Spectral działa teraz tylko w obszarze swojego Q i Slope, jak pasmo Dynamic — projekty z pasmami Spectral mogą przez to brzmieć nieco inaczej (słabsze działanie na zboczach pasm). Projekty i presety z 1.0.0 i 1.1.0 wczytują się bez zmian ustawień. Instalatory nadal nie są podpisane cyfrowo — to wydanie wstępne.

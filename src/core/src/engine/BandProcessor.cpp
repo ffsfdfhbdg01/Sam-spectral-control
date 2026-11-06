@@ -323,6 +323,10 @@ void BandProcessor::runDetection (const BandSettings& settings, const Instance& 
 {
     const auto& dyn = settings.dynamics;
     const auto computer = dynamics::GainComputer::make (dyn.thresholdDb, dyn.ratio, dyn.kneeDb, dyn.rangeDb, dyn.direction);
+    const bool gate = settings.mode == BandMode::Gate;
+    const bool autoGain = dyn.autoGain && ! gate; // a gate's make-up would lift what it closes on
+    const int holdSteps = static_cast<int> (std::lround (0.001 * std::max (0.0, dyn.holdMs) * sampleRate / dynamicStep));
+    const double closeDb = dyn.thresholdDb - std::max (0.0, dyn.hysteresisDb);
     const bool relative = dyn.thresholdMode == ThresholdMode::Relative;
     const double relativeOffset = contextDesign.numSections > 0 ? 10.0 * std::log10 (kContextWidth) : 0.0;
     const int numLanes = inst.lanes.numLanes;
@@ -391,11 +395,32 @@ void BandProcessor::runDetection (const BandSettings& settings, const Instance& 
             {
                 auto& d = dynLanes[static_cast<std::size_t> (l)];
                 const double linked = levels[static_cast<std::size_t> (representative[static_cast<std::size_t> (l)])];
-                const double target = d.smoother.process (computer (linked), computer.slope);
+                double target = 0.0;
+                if (gate)
+                {
+                    // Opens at the threshold; stays open while over the closing threshold, then for
+                    // the hold time; opens with the attack (the gain rises) and closes with the release.
+                    if (! d.gateOpen && linked >= dyn.thresholdDb)
+                        d.gateOpen = true;
+                    if (d.gateOpen)
+                    {
+                        if (linked >= closeDb)
+                            d.holdSteps = holdSteps;
+                        else if (d.holdSteps > 0)
+                            --d.holdSteps;
+                        else
+                            d.gateOpen = false;
+                    }
+                    target = d.smoother.process (d.gateOpen ? 0.0 : -std::max (0.0, dyn.rangeDb), 1.0);
+                }
+                else
+                {
+                    target = d.smoother.process (computer (linked), computer.slope);
+                }
 
                 // Automatic make-up (AG-2): the energy-weighted mean of the change, averaged with the
                 // Auto Gain speed and frozen in silence (below −70 dBFS), is given back.
-                if (dyn.autoGain)
+                if (autoGain)
                 {
                     const double energy = d.level.meanSquare;
                     if (energy > kMakeupGate)
@@ -663,7 +688,7 @@ void BandProcessor::process (const BandSettings& settings, const ChannelTopology
                              int numSamples, int controlBlock, const DetectionInput& detection) noexcept
 {
     const int block = std::clamp (controlBlock, 1, kMaxControlBlock);
-    const bool dynamicMode = settings.mode == BandMode::Dynamic && shapeHasGain (settings.shape.shape);
+    const bool dynamicMode = usesDetector (settings.mode) && shapeHasGain (settings.shape.shape);
     dynamicMix = std::clamp (settings.dynamics.mix, 0.0, 1.0);
 
     // A band that is off and fully faded out costs nothing; it snaps to its settings when it returns.

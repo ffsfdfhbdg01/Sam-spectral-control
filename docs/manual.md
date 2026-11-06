@@ -13,7 +13,7 @@ Interfejs wtyczki jest po angielsku — nazwy przycisków i parametrów podajemy
 3. [Okno wtyczki](#3-okno-wtyczki)
 4. [Pasma: tworzenie i edycja](#4-pasma-tworzenie-i-edycja)
 5. [Kształty i parametry pasma](#5-kształty-i-parametry-pasma)
-6. [Tryby pasma: Static, Dynamic, Spectral](#6-tryby-pasma-static-dynamic-spectral)
+6. [Tryby pasma: Static, Dynamic, Spectral, Gate](#6-tryby-pasma-static-dynamic-spectral-gate)
 7. [Character](#7-character)
 8. [Tryby fazy i Quality](#8-tryby-fazy-i-quality)
 9. [Oversampling i render offline](#9-oversampling-i-render-offline)
@@ -152,20 +152,20 @@ Niektóre hosty przechwytują skróty klawiszowe; wtedy użyj przycisków Undo/R
 
 ### Menu pasma (prawy przycisk)
 
-*Shape* (każdy kształt z ikoną krzywej), *Slope* (dla cięć, półek i Band Pass) albo *Q* (gotowe wartości 0,5–16), *Mode*, *Direction* (*Down* / *Up*, [rozdz. 6](#kompresja-w-górę)), *Target*, *Character*, *Auto Gain*, *External Sidechain* (detekcja z wejścia sidechain, [rozdz. 6](#sidechain)), *Bypass*, *Solo*, *Delta* (tylko to, co pasmo zmienia, [rozdz. 11](#11-ustawienia-globalne-i-odsłuch)), *Copy*, *Paste*, *Reset* (wartości domyślne pasma), *Delete*. Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem; *Direction*, *Auto Gain* i *External Sidechain* — tylko w tych trybach.
+*Shape* (każdy kształt z ikoną krzywej), *Slope* (dla cięć, półek i Band Pass) albo *Q* (gotowe wartości 0,5–16), *Mode*, *Direction* (*Down* / *Up*, [rozdz. 6](#kompresja-w-górę)), *Target*, *Character*, *Auto Gain*, *External Sidechain* (detekcja z wejścia sidechain, [rozdz. 6](#sidechain)), *Bypass*, *Solo*, *Delta* (tylko to, co pasmo zmienia, [rozdz. 11](#11-ustawienia-globalne-i-odsłuch)), *Copy*, *Paste*, *Reset* (wartości domyślne pasma), *Delete*. Tryby Dynamic, Spectral i Gate są dostępne tylko dla kształtów ze wzmocnieniem; *External Sidechain* — tylko w tych trybach, *Direction* i *Auto Gain* — tylko w Dynamic i Spectral.
 
 ### Panel pasma
 
 Kliknięcie węzła pokazuje panel pasma pod węzłem (gdy zasłaniałby węzeł — u góry wykresu albo obok niego). Panel pokazuje tylko to, co w trybie pasma działa:
 
-| | Static | Dynamic | Spectral |
-|---|---|---|---|
-| Nagłówek | kolor i numer pasma; tryb **Static \| Dynamic \| Spectral**; **Advanced ›**; ⏻ — włączenie / wyłączenie pasma (czerwona lampka: wyłączone); 🎧 — Solo; △ — Delta pasma (oba: kliknięcie — zostaje włączone, przytrzymanie — tylko na czas trzymania); ⋯ — *Copy*, *Paste*, *Reset*, *Delete* | jak Static | jak Static |
-| Rząd EQ | **Shape** (z ikoną kształtu), **Slope** (cięcia, półki, Band Pass), **Freq**, **Gain**, **Q**, **Target**, **Character** (w surround także **Speakers**); po prawej **Period** — okres fali częstotliwości pasma | jak Static, a pod **Period** także **Attack =** — Attack w okresach fali ([rozdz. 6](#okres-fali-i-attack)) | jak Dynamic |
-| Rząd dynamiki | — | **Threshold**, **Ratio**, **Range**, **Attack**, **Release** (z przełącznikiem ♪ trybu rytmicznego, [rozdz. 6](#release-w-nutach-tryb-rytmiczny)); w jego nagłówku **Down \| Up** i **Auto Gain** | **Threshold**, **Selectivity**, **Range**, **Attack**, **Release** (z ♪); w jego nagłówku **Down \| Up** i **Auto Gain** |
-| Panel **Advanced** pasma | odczyty | **Threshold Mode**, **Knee**, **Lookahead**, **Mix**, **Link**, **Sidechain**, odczyty | **Threshold Mode**, **Knee**, **Ratio**, **Mix**, **Link**, **Sidechain**, odczyty |
+| | Static | Dynamic | Spectral | Gate |
+|---|---|---|---|---|
+| Nagłówek | kolor i numer pasma; tryb **Static \| Dynamic \| Spectral \| Gate**; **Advanced ›**; ⏻ — włączenie / wyłączenie pasma (czerwona lampka: wyłączone); 🎧 — Solo; △ — Delta pasma (oba: kliknięcie — zostaje włączone, przytrzymanie — tylko na czas trzymania); ⋯ — *Copy*, *Paste*, *Reset*, *Delete* | jak Static | jak Static | jak Static |
+| Rząd EQ | **Shape** (z ikoną kształtu), **Slope** (cięcia, półki, Band Pass), **Freq**, **Gain**, **Q**, **Target**, **Character** (w surround także **Speakers**); po prawej **Period** — okres fali częstotliwości pasma | jak Static, a pod **Period** także **Attack =** — Attack w okresach fali ([rozdz. 6](#okres-fali-i-attack)) | jak Dynamic | jak Dynamic |
+| Rząd dynamiki | — | **Threshold**, **Ratio**, **Range**, **Attack**, **Release** (z przełącznikiem ♪ trybu rytmicznego, [rozdz. 6](#release-w-nutach-tryb-rytmiczny)); w jego nagłówku **Down \| Up** i **Auto Gain** | **Threshold**, **Selectivity**, **Range**, **Attack**, **Release** (z ♪); w jego nagłówku **Down \| Up** i **Auto Gain** | **Threshold**, **Range**, **Attack**, **Hold**, **Release** (z ♪); nagłówek **GATE** |
+| Panel **Advanced** pasma | odczyty | **Threshold Mode**, **Knee**, **Lookahead**, **Mix**, **Link**, **Sidechain**, odczyty | **Threshold Mode**, **Knee**, **Ratio**, **Mix**, **Link**, **Sidechain**, odczyty | **Threshold Mode**, **Hysteresis**, **Lookahead**, **Mix**, **Link**, **Sidechain**, odczyty |
 
-Tryby Dynamic i Spectral są dostępne tylko dla kształtów ze wzmocnieniem. Nagłówek rzędu dynamiki nazywa działanie pasma, gdy nie jest to zwykła kompresja (**UPWARD COMPRESSION**, **EXPANSION**, **UPWARD EXPANSION**), a gdy pasmo słucha wejścia sidechain, ma dopisek **SIDECHAIN** ([rozdz. 6](#sidechain)). **Advanced ›** wysuwa panel z boku panelu pasma — zwykle z prawej, z lewej, gdy z prawej zasłaniałby węzeł — i zostaje otwarty także dla kolejnych pasm, aż się go zamknie (**‹**). Kropka na **Advanced** oznacza ustawienie detektora inne niż domyślne dla trybu pasma (np. Threshold Mode Absolute w paśmie Spectral) albo ostrzeżenie o słyszalnym ringingu ([rozdz. 12](#odczyty-pasma)).
+Tryby Dynamic, Spectral i Gate są dostępne tylko dla kształtów ze wzmocnieniem. Nagłówek rzędu dynamiki nazywa działanie pasma, gdy nie jest to zwykła kompresja (**UPWARD COMPRESSION**, **EXPANSION**, **UPWARD EXPANSION**), a gdy pasmo słucha wejścia sidechain, ma dopisek **SIDECHAIN** ([rozdz. 6](#sidechain)). **Advanced ›** wysuwa panel z boku panelu pasma — zwykle z prawej, z lewej, gdy z prawej zasłaniałby węzeł — i zostaje otwarty także dla kolejnych pasm, aż się go zamknie (**‹**). Kropka na **Advanced** oznacza ustawienie detektora inne niż domyślne dla trybu pasma (np. Threshold Mode Absolute w paśmie Spectral) albo ostrzeżenie o słyszalnym ringingu ([rozdz. 12](#odczyty-pasma)).
 
 Pokrętła reagują na przeciąganie (z *Shift* — precyzyjnie); **dwuklik** przywraca wartość domyślną; wartość pod pokrętłem można kliknąć i wpisać. Częstotliwość przyjmuje zapisy `1500`, `1.5k`, `1.5 kHz`; czasy — `12`, `12 ms`, `1.2 s`.
 
@@ -188,15 +188,16 @@ Parametry statyczne: **Freq** 10 Hz – 30 kHz (domyślnie 1 kHz), **Gain** ±30
 
 Filtry są projektowane tak, by ich amplituda odpowiadała prototypom analogowym także w pobliżu częstotliwości Nyquista (bez typowego „ściskania” krzywych przy wysokich częstotliwościach) — najdokładniej w Natural Phase oraz w Minimum Phase przy Quality High i Max.
 
-## 6. Tryby pasma: Static, Dynamic, Spectral
+## 6. Tryby pasma: Static, Dynamic, Spectral, Gate
 
 | Tryb | Co robi | Latencja |
 |---|---|---|
 | **Static** | stałe wzmocnienie (zwykły EQ) | 0 |
 | **Dynamic** | wzmocnienie pasma zmienia się z poziomem sygnału w obszarze pasma | 0 (plus Lookahead, jeśli ustawiony) |
 | **Spectral** | w obszarze pasma działa tylko na te częstotliwości, które przekraczają próg (np. pojedyncze rezonanse), resztę zostawia | ramka STFT, patrz niżej |
+| **Gate** | bramka w obszarze pasma: gdy poziom w nim spada pod próg, obszar jest ściszany o Range; gdy go przekracza — otwiera się ([niżej](#gate)) | 0 (plus Lookahead, jeśli ustawiony) |
 
-Dynamic i Spectral są dostępne dla kształtów ze wzmocnieniem (Bell, półki, Tilt Shelf, Flat Tilt). Pasmo dynamiczne pokazuje na wykresie bieżące wzmocnienie, a jego obszar świeci, gdy pracuje.
+Dynamic, Spectral i Gate są dostępne dla kształtów ze wzmocnieniem (Bell, półki, Tilt Shelf, Flat Tilt). Pasmo dynamiczne (Dynamic, Gate) pokazuje na wykresie bieżące wzmocnienie, a jego obszar świeci, gdy pracuje.
 
 W panelu pasma rząd dynamiki zawiera to, czym ustawia się dany tryb (Dynamic: Threshold, Ratio, Range, Attack, Release; Spectral: Threshold, Selectivity, Range, Attack, Release), a w jego nagłówku jest kierunek **Down | Up** i **Auto Gain**; pozostałe parametry z tabeli niżej są w panelu **Advanced** pasma ([rozdz. 4](#panel-pasma)).
 
@@ -219,6 +220,8 @@ W panelu pasma rząd dynamiki zawiera to, czym ustawia się dany tryb (Dynamic: 
 | **Selectivity** | 0–100 % (50 %) | tylko Spectral: jak wąsko w częstotliwości działa maska — wyżej = bardziej „chirurgicznie” |
 | **Link** | Independent / Pair / Group / All (Group) | czy kanały (lub składowe M/S) dzielą detekcję: wspólny poziom = maksimum poziomów w zbiorze |
 | **Sidechain** | Internal / External (Internal) | skąd detekcja bierze poziom: Internal — z sygnału pasma, External — z wejścia sidechain wtyczki ([niżej](#sidechain)) |
+| **Hold** | 0–500 ms (10 ms) | tylko Gate: jak długo bramka zostaje otwarta, gdy poziom spadnie pod próg zamknięcia, zanim zacznie się zamykać z czasem Release |
+| **Hysteresis** | 0–24 dB (4 dB) | tylko Gate: bramka otwiera się na progu, a zamyka dopiero o tyle niżej — poziom krążący wokół progu nie „terkocze” |
 
 Po przełączeniu pasma w tryb Spectral z nieruszonym progiem Dynamic (Absolute −20 dB) wtyczka ustawia Relative +6 dB — i odwrotnie.
 
@@ -298,9 +301,32 @@ Bardzo wąskie pasma (np. Q 10–20) i pasma w basie są w środku płytsze, ni�
 
 Silne, szybkie działanie maski może dać krótkie **pre-echo** przed transjentami (rzędu połowy ramki); odczyt pasma pokazuje jego wielkość. Lookahead jest w pasmach Spectral nieaktywny — ramka STFT i tak „widzi” sygnał z wyprzedzeniem.
 
+### Gate
+
+![Pasmo Gate: zakładka Gate w przełączniku trybu, rząd Threshold, Range, Attack, Hold, Release, w panelu Advanced Hysteresis](images/gate.png)
+
+Tryb **Gate** to bramka (*gate*) działająca tylko w obszarze pasma — z jego kształtem, Q i Slope — a nie na całym sygnale. Gdy poziom w obszarze pasma (mierzony tak samo jak w paśmie Dynamic, przez filtr obszaru pasma) jest poniżej **Threshold**, obszar jest ściszany o **Range**; gdy próg przekroczy, bramka się otwiera i pasmo przepuszcza sygnał bez zmian. Reszta widma zostaje nietknięta. Przykłady:
+
+- **przesłuchy perkusji**: bramka na obszarze werbla (Bell 200 Hz–5 kHz) w ścieżce, w której między uderzeniami słychać hi-hat lub stopę — zamyka tylko to pasmo, a nie cały ślad;
+- **dzwonienie tomów i werbla** po uderzeniu: Low Shelf lub Bell na obszarze rezonansu z krótkim Hold i Release w rytm utworu (♪);
+- **szum i syk** w przerwach: High Shelf od kilku kHz, który zamyka się, gdy wokal lub instrument milknie;
+- **pogłos i przydźwięk w basie** między dźwiękami: Low Shelf z bramką;
+- **bramka kluczowana** (**Sidechain: External**): obszar otwiera się tylko wtedy, gdy gra inny ślad — np. dół basu otwiera stopa, dół werbla — ścieżka z triggerem.
+
+Jak działa:
+
+- **Otwarcie**: gdy poziom osiągnie **Threshold**, bramka się otwiera z czasem **Attack**.
+- **Zamknięcie**: dopóki poziom jest powyżej Threshold − **Hysteresis** (panel **Advanced**), bramka zostaje otwarta. Gdy spadnie niżej, przez czas **Hold** jeszcze jest otwarta, potem zamyka się z czasem **Release**, aż do −Range.
+- **Range** to głębokość zamknięcia: 6–12 dB łagodnie przycisza, 24–30 dB prawie wycina. Po przełączeniu pasma w Gate z nieruszonymi ustawieniami wtyczka ustawia Threshold Absolute −40 dB i Range 24 dB (powrót do Dynamic przywraca −20 dB i 12 dB).
+- **Gain** pasma działa jak w Dynamic: stała część wzmocnienia, do której bramka dodaje swoją zmianę (np. Gain +2 dB podbija obszar, gdy bramka jest otwarta).
+- **Mix** pasma skaluje działanie bramki (50 % — połowa Range), **Link** decyduje, czy kanały zamykają się razem, **Lookahead** pozwala otworzyć bramkę przed transjentem (z latencją Max Lookahead).
+- Gate nie ma kierunku **Down \| Up**, **Ratio**, **Knee** ani **Auto Gain** (wyrównanie podniosłoby to, co bramka ścisza).
+- **Attack** krótszy niż jeden okres fali częstotliwości pasma (odczyt **Attack =** po prawej stronie panelu) może przy otwarciu dać trzask w niskich pasmach — przy bramce na basie zacznij od kilku okresów. **Release** można ustawić w nutach (♪), żeby bramka zamykała się w rytm utworu.
+- **Delta** pasma pozwala posłuchać, co bramka zabiera.
+
 ### Auto Gain pasma
 
-Przycisk **Auto Gain** w rzędzie dynamiki panelu (lub w menu) pasma Dynamic albo Spectral oddaje średnią zmianę wzmocnienia tego pasma (ważoną energią sygnału) — pasmo zmienia brzmienie, ale nie średni poziom. Pasmo Static go nie ma (w menu pozycja jest nieaktywna).
+Przycisk **Auto Gain** w rzędzie dynamiki panelu (lub w menu) pasma Dynamic albo Spectral oddaje średnią zmianę wzmocnienia tego pasma (ważoną energią sygnału) — pasmo zmienia brzmienie, ale nie średni poziom. Pasma Static i Gate go nie mają (w menu pozycja jest nieaktywna).
 
 ## 7. Character
 
@@ -538,6 +564,7 @@ Najwięcej kosztują: liczba kanałów, oversampling, pasma Dynamic i Spectral o
 | Wtyczki nie ma w hoście | ponowne skanowanie wtyczek; czy host skanuje folder VST3 z [rozdz. 1](#1-instalacja); czy host jest 64-bitowy |
 | macOS blokuje instalator | używaj pakietu podpisanego i notaryzowanego; kompilacje testowe bez podpisu są blokowane przez Gatekeeper |
 | Cisza lub dziwny dźwięk | czy nie jest włączona **Delta** albo **Solo** pasma; czy **Mix** nie jest na 0 %; czy pasma mają właściwy **Target** / głośniki |
+| Bramka pasma terkocze albo trzaska | **Hysteresis** w panelu Advanced (np. 6 dB) i dłuższy **Hold**, gdy bramka otwiera się i zamyka na wybrzmieniu; **Attack** dłuższy niż kilka okresów fali (odczyt **Attack =**) przy trzaskach w basie ([rozdz. 6](#gate)) |
 | Kompresja w górę podbija szum w pauzach | to jej natura: poniżej progu pasmo podnosi wszystko, najwyżej o Range — zmniejsz Range; dłuższy Release zmniejsza „oddychanie” szumu w krótkich przerwach ([rozdz. 6](#kompresja-w-górę)) |
 | Pasmo z Sidechain External nie działa | czy host kieruje sygnał na wejście Sidechain wtyczki (bursztynowe **SIDECHAIN: NO INPUT** w panelu pasma oznacza, że wejście jest wyłączone); czy sidechain ma energię w obszarze pasma i przekracza próg |
 | Nieoczekiwane wcięcia przy Mix < 100 % | interferencje suchego i przetworzonego sygnału — użyj Mix pasma albo zmniejsz Gain pasm ([rozdz. 11](#11-ustawienia-globalne-i-odsłuch)) |

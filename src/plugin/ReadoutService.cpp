@@ -11,7 +11,7 @@ namespace
     {
         constexpr std::equal_to<double> same;
         return a.direction == b.direction && same (a.thresholdDb, b.thresholdDb) && same (a.ratio, b.ratio) && same (a.rangeDb, b.rangeDb)
-            && same (a.kneeDb, b.kneeDb) && same (a.mix, b.mix);
+            && same (a.kneeDb, b.kneeDb) && same (a.mix, b.mix) && same (a.hysteresisDb, b.hysteresisDb);
     }
 
     bool sameContext (const engine::GlobalParams& a, const engine::GlobalParams& b) noexcept
@@ -57,7 +57,7 @@ bool ReadoutService::changed (int band, const engine::BandSettings& s, float dyn
     const auto& last = lastBands[static_cast<std::size_t> (band)];
     if (! haveLast || s.used != last.used || s.active != last.active || ! (s.shape == last.shape) || s.mode != last.mode)
         return true;
-    if (s.mode == BandMode::Dynamic
+    if (usesDetector (s.mode)
         && (! sameDynamics (s.dynamics, last.dynamics) || std::abs (dynamicGainDb - lastGains[static_cast<std::size_t> (band)]) >= 0.5f))
         return true;
     return false;
@@ -75,7 +75,7 @@ bool ReadoutService::chainChanged (const engine::GlobalParams& params, const eng
         if (s.used != last.used || s.active != last.active || ! (s.shape == last.shape) || s.mode != last.mode
             || s.component != last.component)
             return true;
-        if (s.mode == BandMode::Dynamic && std::abs (dynamicGainsDb[b] - chainGains[b]) >= 0.5f)
+        if (usesDetector (s.mode) && std::abs (dynamicGainsDb[b] - chainGains[b]) >= 0.5f)
             return true;
     }
     return false;

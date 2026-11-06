@@ -192,7 +192,7 @@ private:
     void listenButtonChanged (juce::Button& button, ListenPress& press, bool delta);
     ListenPress soloPress, deltaPress;
 
-    SegmentedControl modeSelector { { "Static", "Dynamic", "Spectral" } };
+    SegmentedControl modeSelector { { "Static", "Dynamic", "Spectral", "Gate" } };
     ChipButton advancedButton { "Advanced", Icon::ChevronRight };
     IconButton bypassButton { Icon::Power, "Bypass" }, soloButton { Icon::Solo, "Solo" }, deltaButton { Icon::Delta, "Delta" },
         moreButton { Icon::More, "More" };
@@ -203,6 +203,7 @@ private:
     SegmentedControl directionSelector { { "Down", "Up" } };
     BandKnob threshold, ratio, range, attack, release, selectivity;
     BandKnob releaseNote; ///< the Release in rhythm mode (note values), in place of the Release knob
+    BandKnob hold;        ///< Gate
     IconButton rhythmButton { Icon::Note, "Rhythm" };
     PeriodReadout periodReadout;
     void updateRhythm();
@@ -265,7 +266,7 @@ private:
     bool sidechainHint = false;
 
     SegmentedControl thresholdMode { { "Absolute", "Relative" } };
-    BandKnob knee, lookahead, ratio, mix;
+    BandKnob knee, lookahead, ratio, mix, hysteresis;
     BandChoiceButton link, sidechain;
     juce::TimedCallback readoutTimer { [this] { pollReadout(); } };
 

@@ -84,7 +84,8 @@ cp "$repo/packaging/LICENSE.txt" "$repo/THIRD-PARTY-NOTICES.txt" "$work/root-uni
 cp "$repo/docs/manual.md" "$work/root-uninstaller/Manual.md"
 mkdir -p "$work/root-uninstaller/images"
 cp "$repo/docs/images/editor.png" "$repo/docs/images/editor-advanced.png" "$repo/docs/images/sidechain.png" \
-    "$repo/docs/images/solo.png" "$repo/docs/images/upward.png" "$repo/docs/images/rhythm.png" "$work/root-uninstaller/images/"
+    "$repo/docs/images/solo.png" "$repo/docs/images/upward.png" "$repo/docs/images/rhythm.png" \
+    "$repo/docs/images/gate.png" "$work/root-uninstaller/images/"
 
 # Code signature of the bundles: Developer ID, hardened runtime, secure timestamp.
 for component in "${components[@]}"; do

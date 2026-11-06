@@ -25,6 +25,8 @@ struct DynamicSettings
     double rangeDb = 12.0;
     double attackMs = 5.0;
     double releaseMs = 100.0;
+    double holdMs = 10.0;      ///< Gate: how long it stays open after the level falls under the closing threshold
+    double hysteresisDb = 4.0; ///< Gate: it opens at the threshold and closes this far under it
     double lookaheadMs = 0.0;
     double kneeDb = 6.0;
     double mix = 1.0;         ///< 0 … 1, scales the gain change (DYN-7)
@@ -115,6 +117,9 @@ int linkKey (const Lane& lane, int laneIndex, DetectorLink link, const ChannelTo
     detector feeds the gain computer and attack/release smoothing, and the band gain is modulated
     per sample through a gain table of SVF parameters, so the response at every gain equals the
     static design (research §6c).
+    Gate: the same detection; the band's region opens (0 dB) when its level reaches the threshold
+    and closes (−Range) once it has stayed under threshold − hysteresis for the hold time; it opens
+    with the attack and closes with the release.
     Changes of filter topology (shape, slope, on/off, target) crossfade between two instances.
     Real-time safe after prepare().
 */
@@ -174,6 +179,8 @@ private:
         double gainStep = 0.0;                   ///< per-sample increment towards the latest smoothed value
         double weightedGain = 0.0, weight = 0.0; ///< energy-weighted mean of the change (AG-2)
         double makeup = 0.0;                     ///< automatic make-up (dB), applied with the change
+        bool gateOpen = false;                   ///< Gate mode: open (0 dB) or closed (−Range)
+        int holdSteps = 0;                       ///< Gate mode: dynamics steps left before it closes
     };
 
     enum class ParamSource

@@ -344,7 +344,7 @@ void Engine::updateCorrector (const BandSettingsArray& bands) noexcept
         auto& c = target[bi];
         c.brickwall = firBrickwall[bi];
         c.shape = band.shape;
-        if (band.mode == BandMode::Dynamic && shapeHasGain (band.shape.shape))
+        if (usesDetector (band.mode) && shapeHasGain (band.shape.shape))
             c.shape.gainDb += (*bandProcessors)[bi].getDynamicGainDb();
         c.active = band.active && (c.brickwall || ! filters::isIdentity (c.shape));
         c.lanes = c.active ? makeLanes (band.component, band.channelMask, band.includeLfe, cfg.topology) : LaneLayout {};
@@ -438,7 +438,7 @@ void Engine::configure (const GlobalParams& params, const BandSettingsArray& ban
         std::clamp (static_cast<int> (std::lround (0.001 * params.maxLookaheadMs * cfg.sampleRate)), 0, maxLookaheadSamples);
     const bool wantSpectral = std::any_of (bands.begin(), bands.end(), [] (const BandSettings& b) { return b.isSpectral(); });
     const bool wantSidechain = std::any_of (bands.begin(), bands.end(), [] (const BandSettings& b) {
-        return b.active && b.dynamics.sidechain && (b.mode == BandMode::Dynamic || b.isSpectral());
+        return b.active && b.dynamics.sidechain && (usesDetector (b.mode) || b.isSpectral());
     });
 
     bool spectralChanged = wantSpectral != spectralEnabled;

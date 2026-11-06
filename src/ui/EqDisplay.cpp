@@ -82,7 +82,7 @@ void EqDisplay::refreshFromAnalyzer()
             const auto& v = model.band (b);
             if (v.mode == BandMode::Spectral)
                 continue; // drawn from the spectral view below
-            const float gain = v.active() && v.mode == BandMode::Dynamic ? dynamicGainProvider (b) : 0.0f;
+            const float gain = v.active() && usesDetector (v.mode) ? dynamicGainProvider (b) : 0.0f;
             changed = curves.setDynamicGain (b, gain) || changed;
         }
         if (changed)
@@ -707,7 +707,7 @@ void EqDisplay::showBandMenu (int band)
         directions.addItem (
             juce::String (up ? "Up (boost)" : "Down (cut)"), true, v.upward == up,
             forTargets ("Change Direction", [up] (BandModel& m, int b) { m.setValue (b, BandParam::Direction, up ? 1.0f : 0.0f); }));
-    menu.addSubMenu ("Direction", directions, v.mode != BandMode::Static);
+    menu.addSubMenu ("Direction", directions, v.mode == BandMode::Dynamic || v.mode == BandMode::Spectral);
 
     juce::PopupMenu targetMenu;
     for (int i = 0; i < plugin::labels::targets().size(); ++i)
@@ -733,7 +733,7 @@ void EqDisplay::showBandMenu (int band)
     }
     menu.addSubMenu ("Character", characters);
 
-    menu.addItem ("Auto Gain", v.mode != BandMode::Static, v.autoGain,
+    menu.addItem ("Auto Gain", v.mode == BandMode::Dynamic || v.mode == BandMode::Spectral, v.autoGain,
                   forTargets ("Toggle Auto Gain",
                               [on = ! v.autoGain] (BandModel& m, int b) { m.setValue (b, BandParam::AutoGain, on ? 1.0f : 0.0f); }));
     menu.addItem ("External Sidechain", v.mode != BandMode::Static, v.sidechain,

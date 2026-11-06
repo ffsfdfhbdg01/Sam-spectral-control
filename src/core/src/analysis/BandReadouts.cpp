@@ -296,7 +296,7 @@ ChainResponse BandReadouts::computeChain (const engine::BandSettingsArray& bands
         auto& band = chain[b];
         if (band.isSpectral())
             band.active = false;
-        if (band.mode == BandMode::Dynamic)
+        if (usesDetector (band.mode))
         {
             if (shapeHasGain (band.shape.shape))
                 band.shape.gainDb += dynamicGainsDb[b];
@@ -353,7 +353,7 @@ BandReadout BandReadouts::compute (const engine::BandSettings& band, const engin
         return r;
     }
 
-    const bool dynamic = band.mode == BandMode::Dynamic && shapeHasGain (band.shape.shape);
+    const bool dynamic = usesDetector (band.mode) && shapeHasGain (band.shape.shape);
     auto current = band;
     if (dynamic)
         current.shape.gainDb += dynamicGainDb;
@@ -367,11 +367,12 @@ BandReadout BandReadouts::compute (const engine::BandSettings& band, const engin
 
     if (dynamic)
     {
-        // The full range: the gain change far past the threshold, in the band's direction.
+        // The full range: the gain change far past the threshold, in the band's direction (a gate: closed).
         const auto& d = band.dynamics;
         const auto computer = dynamics::GainComputer::make (d.thresholdDb, d.ratio, d.kneeDb, d.rangeDb, d.direction);
         auto full = band;
-        full.shape.gainDb += d.mix * computer (d.direction == Direction::Above ? 300.0 : -300.0);
+        full.shape.gainDb += d.mix
+            * (band.mode == BandMode::Gate ? -std::max (0.0, d.rangeDb) : computer (d.direction == Direction::Above ? 300.0 : -300.0));
         const auto worst = measure (full, params);
         if (aborted())
             return {};

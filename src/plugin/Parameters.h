@@ -56,6 +56,8 @@ enum class BandParam
     Sidechain,   ///< detection source of Dynamic and Spectral bands: the band's own signal or the sidechain input
     ReleaseSync, ///< rhythm mode: the Release lasts the note value of ReleaseNote at the host's tempo
     ReleaseNote, ///< note value of the Release in rhythm mode (ssc::dynamics::kNoteValues)
+    Hold,        ///< Gate: how long it stays open after the level falls under the closing threshold
+    Hysteresis,  ///< Gate: it opens at the threshold and closes this far under it
     Count
 };
 

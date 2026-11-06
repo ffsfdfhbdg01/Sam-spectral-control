@@ -403,7 +403,9 @@ TEST_CASE ("Sidechain: External is shown, a missing Sidechain input is pointed o
     juce::StringArray items;
     items.addTokens (text.fromFirstOccurrenceOf (":", false, false), ",", {});
     REQUIRE (items.size() == plugin::kNumBandParams + 1);
-    items.remove (static_cast<int> (BandParam::ReleaseNote)); // newer than 1.0
+    items.remove (static_cast<int> (BandParam::Hysteresis)); // newer than 1.0
+    items.remove (static_cast<int> (BandParam::Hold));
+    items.remove (static_cast<int> (BandParam::ReleaseNote));
     items.remove (static_cast<int> (BandParam::ReleaseSync));
     items.remove (static_cast<int> (BandParam::Sidechain));
     const auto old = "SamSpectralControl.band.v1:" + items.joinIntoString (",");
